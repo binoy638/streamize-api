@@ -129,7 +129,7 @@ app.get('/video/:id', async (req, res) => {
     } else {
       const videoListParsed = JSON.parse(videoList);
 
-      const videoData = videoListParsed.find(v => v.id === id);
+      const videoData = videoListParsed.find((vid: any) => vid.id === id);
       //!Hanle exception and do typing
       const videoPath = videoData.path;
       const videoSize = fs.statSync(videoPath).size;
