@@ -1,0 +1,23 @@
+version: "3.7"
+ 
+services:
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cloud-torrent-downloader-dev
+    volumes:
+      # - /app/node_modules
+      - ./src:/home/app/src
+      # - ./:/home/app
+      - ./src/tmp:/home/app/src/tmp
+    ports:
+      - "8000:3000"
+      - "8181:8181"
+    command: npm run dev
+    depends_on:
+      - redis
+  redis:
+    image: redis:6.2.6-alpine
+    ports:
+      - "6380:6379"
