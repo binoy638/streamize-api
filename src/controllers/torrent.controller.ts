@@ -45,11 +45,12 @@ export const addTorrent = async (req: Request, res: Response): Promise<void> => 
   if (!magnet) {
     throw boom.badRequest('magnet link is required');
   }
+
+  const exist = client.get(magnet);
+  if (exist) {
+    throw boom.badRequest('torrent already exist');
+  }
   try {
-    const exist = client.get(magnet);
-    if (exist) {
-      throw boom.badRequest('torrent already exist');
-    }
     const torrent = await createTorrentWithMagnet(magnet);
     console.log(torrent);
     rabbitMqPublisher.sendToQueue('download-torrent', Buffer.from(JSON.stringify(torrent)));

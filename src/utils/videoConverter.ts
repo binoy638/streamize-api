@@ -20,7 +20,7 @@ export const convertMKVtoMp4 = (
       .on('end', async () => {
         console.log('conversion done');
         updateTorrentInfo(torrentId, { status: 'done' });
-        reject(slug);
+        resolve(slug);
       })
       .on('error', err => () => {
         updateTorrentInfo(torrentId, { status: 'error' });
@@ -30,7 +30,6 @@ export const convertMKVtoMp4 = (
       .on('progress', async progress => {
         console.log(`${progress.percent}%`);
         await updateFileConvertProgress(torrentId, slug, progress.percent, 'processing');
-        resolve(slug);
       })
       .run();
   });

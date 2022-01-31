@@ -1,6 +1,7 @@
 /* eslint-disable unicorn/no-useless-undefined */
 import amqp from 'amqplib';
 import path from 'path';
+import fs from 'fs-extra';
 import { ITorrent, IVideo, QueueName, TorrentPath } from '../@types';
 import client from '../config/webtorrent';
 import { allowedExt, convertableExt } from '../utils/misc';
@@ -15,6 +16,8 @@ const connectConsumer = async (rabbitMqPublisher: amqp.Channel): Promise<void> =
     channel.prefetch(5);
     await channel.assertQueue(QueueName.DOWNLOAD_TORRENT, { durable: false });
     await channel.assertQueue(QueueName.CONVERT_VIDEO, { durable: false });
+    await channel.assertQueue(QueueName.MOVE_VIDEO, { durable: false });
+    //! another job for move and delete file
     console.log('connected to rabbitmq consumer');
 
     channel.consume(QueueName.DOWNLOAD_TORRENT, message => {
@@ -49,6 +52,7 @@ const connectConsumer = async (rabbitMqPublisher: amqp.Channel): Promise<void> =
 
           if (videofiles.length === 0) {
             torrent.destroy({ destroyStore: true });
+            console.log('no video files found torrent destroyed');
             // eslint-disable-next-line no-underscore-dangle
             updateNoMediaTorrent(addedTorrent._id);
             channel.ack(message);
@@ -63,9 +67,11 @@ const connectConsumer = async (rabbitMqPublisher: amqp.Channel): Promise<void> =
               files: videofiles,
               status: 'downloading',
             });
-            const convertableVideoFiles = SavedTorrent.files.filter(file => file && file?.isConvertable);
-            if (convertableVideoFiles.length > 0) {
-              torrent.on('done', () => {
+
+            torrent.on('done', async () => {
+              const convertableVideoFiles = SavedTorrent.files.filter(file => file.isConvertable);
+              const nonConvertableVideoFiles = SavedTorrent.files.filter(file => !file.isConvertable);
+              if (convertableVideoFiles.length > 0) {
                 //* sending all convertable files to convert-video queue
                 convertableVideoFiles.map(file =>
                   rabbitMqPublisher.sendToQueue(
@@ -73,10 +79,16 @@ const connectConsumer = async (rabbitMqPublisher: amqp.Channel): Promise<void> =
                     Buffer.from(JSON.stringify({ torrentId: SavedTorrent._id, videofile: file }))
                   )
                 );
-                channel.ack(message);
-                torrent.destroy();
-              });
-            }
+              }
+              await Promise.all(
+                nonConvertableVideoFiles.map(file =>
+                  rabbitMqPublisher.sendToQueue(QueueName.MOVE_VIDEO, Buffer.from(JSON.stringify({ videofile: file })))
+                )
+              );
+              channel.ack(message);
+              console.log('download complete torrent destroyed');
+              torrent.destroy();
+            });
           }
         });
       } catch (error) {
@@ -99,11 +111,30 @@ const connectConsumer = async (rabbitMqPublisher: amqp.Channel): Promise<void> =
         const done = await convertMKVtoMp4(videofile.path, outputPath, videofile.slug, torrentId);
         if (done) {
           console.log('acknowledged');
+          rabbitMqPublisher.sendToQueue(QueueName.MOVE_VIDEO, Buffer.from(JSON.stringify(videofile)));
           channel.ack(message);
         } else {
           console.log('inside not done');
           channel.ack(message);
         }
+      } catch (error) {
+        console.log(error);
+        channel.ack(message);
+      }
+    });
+
+    channel.consume(QueueName.MOVE_VIDEO, async message => {
+      if (!message) return;
+      console.log('Received new video file to move..');
+      const videofile = JSON.parse(message.content.toString());
+
+      const fileNameWithoutExt = path.parse(videofile.name).name;
+      const dest = `${TorrentPath.DOWNLOAD}/${fileNameWithoutExt}.mp4`;
+      const src = videofile.path;
+      try {
+        await fs.move(src, dest);
+        console.log('file moved successfully!');
+        channel.ack(message);
       } catch (error) {
         console.log(error);
         channel.ack(message);
