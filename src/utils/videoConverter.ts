@@ -1,5 +1,4 @@
 import ffmpeg from 'fluent-ffmpeg';
-import redisClient from '../config/redis';
 import client from '../config/webtorrent';
 
 export const convertMKVtoMp4 = (
@@ -10,7 +9,8 @@ export const convertMKVtoMp4 = (
 ): Promise<void> => {
   return new Promise<void>((resolve, reject) => {
     ffmpeg(filePath)
-      .audioCodec('copy')
+      .format('mp4')
+      .audioCodec('libmp3lame')
       .videoCodec('copy')
       .output(outputPath)
       .on('start', () => {
@@ -29,6 +29,7 @@ export const convertMKVtoMp4 = (
         if (typeof videoList === 'string') {
           videoList = JSON.parse(videoList);
         }
+        // eslint-disable-next-line unicorn/prefer-spread
         const filenameWithExt = filename.concat('.mp4');
         const video = { id: torrentID, name: filenameWithExt, path: outputPath };
         if (typeof videoList === 'object') {

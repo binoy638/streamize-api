@@ -28,6 +28,8 @@ module.exports = {
     'import/extensions': 'off',
     'import/no-unresolved': 'error',
     'unicorn/prevent-abbreviations': 'off',
+    'unicorn/prefer-node-protocol': 'off',
+    'unicorn/filename-case': 'off',
     'no-console': 'off',
     'import/order': [
       'error',

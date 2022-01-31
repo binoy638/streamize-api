@@ -1,6 +1,31 @@
 version: "3.7"
  
 services:
+  mongo:
+    container_name: cloud-torrent-mongo
+    image: mongo
+    logging:
+      driver: "none"
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo mongo:27017/test --quiet
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    ports:
+      - '27018:27017'
+  rabbitmq:
+    image: rabbitmq:3.8-management-alpine
+    logging:
+      driver: "none"
+    container_name: rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    ports:
+        - 5673:5672
+        - 15673:15672
   app-dev:
     build:
       context: .
@@ -10,14 +35,15 @@ services:
       # - /app/node_modules
       - ./src:/home/app/src
       # - ./:/home/app
-      - ./src/tmp:/home/app/src/tmp
+      # - ./src/tmp:/home/app/src/tmp
     ports:
       - "8000:3000"
-      - "8181:8181"
     command: npm run dev
     depends_on:
-      - redis
-  redis:
-    image: redis:6.2.6-alpine
-    ports:
-      - "6380:6379"
+      # [mongo, rabbitmq]
+      mongo:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+     
+
