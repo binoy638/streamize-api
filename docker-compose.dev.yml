@@ -32,15 +32,13 @@ services:
       dockerfile: Dockerfile.dev
     container_name: cloud-torrent-downloader-dev
     volumes:
-      # - /app/node_modules
       - ./src:/home/app/src
-      # - ./:/home/app
-      # - ./src/tmp:/home/app/src/tmp
+      - ./tmp:/home/app/tmp
+      - ./downloads:/home/app/downloads
     ports:
       - "8000:3000"
     command: npm run dev
     depends_on:
-      # [mongo, rabbitmq]
       mongo:
         condition: service_healthy
       rabbitmq:

@@ -1,8 +1,10 @@
 import { model, Schema } from 'mongoose';
+import { nanoid } from 'nanoid';
 import { ITorrent } from '../@types';
 
 const torrentSchema: Schema = new Schema<ITorrent>(
   {
+    slug: { type: String, default: () => nanoid(5).toLowerCase() },
     magnet: {
       type: String,
       required: true,
@@ -17,11 +19,15 @@ const torrentSchema: Schema = new Schema<ITorrent>(
     files: [
       {
         name: { type: String },
+        slug: { type: String, default: () => nanoid().toLowerCase() },
         path: { type: String },
         size: { type: Number },
         ext: { type: String },
         isConvertable: { type: String },
-        downloadStatus: { type: Number },
+        status: {
+          type: String,
+          enum: ['downloading', 'paused', 'done', 'error', 'waiting', 'converting', 'added'],
+        },
         convertStatus: {
           progress: { type: Number },
           state: { type: String, enum: ['processing', 'done', 'error', 'waiting'] },
@@ -33,8 +39,9 @@ const torrentSchema: Schema = new Schema<ITorrent>(
     },
     isMedia: {
       type: Boolean,
+      default: true,
     },
-    downloadStatus: {
+    status: {
       type: String,
       enum: ['downloading', 'paused', 'done', 'error', 'waiting', 'converting', 'added'],
     },

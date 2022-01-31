@@ -10,11 +10,11 @@ client.on('error', err => {
   console.log({ err });
 });
 
-const graceful = () => {
-  client.destroy(() => process.exit(0));
-};
+// const graceful = () => {
+//   client.destroy();
+// };
 
-process.on('SIGTERM', graceful);
-process.on('SIGINT', graceful);
+// process.on('SIGTERM', graceful);
+// process.on('SIGINT', graceful);
 
 export default client;

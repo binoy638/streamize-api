@@ -1,15 +1,20 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
 import express from 'express';
 import morgan from 'morgan';
 import amqp from 'amqplib';
 import cors from 'cors';
 import helmet from 'helmet';
+import fs from 'fs-extra';
+// eslint-disable-next-line import/no-cycle
 import torrentRouter from './routers/torrent.router';
-import videoRouter from './routers/video.router';
+// import videoRouter from './routers/video.router';
 import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
 import connectPublisher from './rabbitmq/publish';
 import connectConsumer from './rabbitmq/consumer';
+import { TorrentPath } from './@types';
+import { clearTorrents } from './utils/query';
 import { TorrentModel } from './models/torrent.schema';
 
 // eslint-disable-next-line import/no-mutable-exports
@@ -28,19 +33,21 @@ app.use('/torrent', torrentRouter);
 // app.use('/video', videoRouter);
 
 app.get('/test', async (req, res) => {
-  try {
-  } catch (error) {
-    console.log(error);
-  }
-  res.send({ msg: 'ok' });
+  // rabbitMqPublisher.sendToQueue('download-torrent', Buffer.from('hello'));
+  // const doc =
+  const doc = await TorrentModel.find({});
+  res.send(doc);
 });
 
 app.listen(PORT, async () => {
   try {
+    await fs.emptyDir(TorrentPath.DOWNLOAD);
+    await fs.emptyDir(TorrentPath.TMP);
     await connectMongo();
+    await clearTorrents();
     rabbitMqPublisher = await connectPublisher();
     await connectConsumer(rabbitMqPublisher);
-    console.log(`Example app listening on ports ${PORT}`);
+    console.log(`Example app listening on port ${PORT}`);
   } catch (error) {
     console.error(error);
   }
@@ -48,4 +55,3 @@ app.listen(PORT, async () => {
 
 app.use(notFoundHandler);
 app.use(errorHandler);
-   // "pre-commit": "npm run typecheck && lint-staged"

@@ -27,9 +27,12 @@ module.exports = {
     'import/prefer-default-export': 'off',
     'import/extensions': 'off',
     'import/no-unresolved': 'error',
+    'no-unused-vars': 'off',
+    '@typescript-eslint/no-unused-vars': ['error'],
     'unicorn/prevent-abbreviations': 'off',
     'unicorn/prefer-node-protocol': 'off',
     'unicorn/filename-case': 'off',
+    'no-underscore-dangle': 'off',
     'no-console': 'off',
     'import/order': [
       'error',

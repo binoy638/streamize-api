@@ -3,8 +3,9 @@ import boom from '@hapi/boom';
 import 'express-async-errors';
 import { getDataFromTorrent } from '../utils/torrentHelper';
 import client from '../config/webtorrent';
-import { TorrentModel } from '../models/torrent.schema';
-import { rabbitMqPublisher } from '..';
+// eslint-disable-next-line import/no-cycle
+import { rabbitMqPublisher } from '../index';
+import { createTorrentWithMagnet } from '../utils/query';
 
 export const getAllTorrents = async (req: Request, res: Response): Promise<void> => {
   const torrents = client.torrents.map(torrent => torrent.infoHash);
@@ -19,17 +20,6 @@ export const getTorrentInfoFromId = async (req: Request, res: Response): Promise
     res.send(getDataFromTorrent(torrent));
   } else {
     res.status(404).send({ message: 'torrent not found with given id' });
-  }
-};
-
-export const getTorrentConvertFromId = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const data = 'asdad';
-  // const data = await redisClient.get(id);
-  if (data) {
-    res.send(JSON.parse(data));
-  } else {
-    res.status(404).send({ message: 'torrent not found' });
   }
 };
 
@@ -56,11 +46,16 @@ export const addTorrent = async (req: Request, res: Response): Promise<void> => 
     throw boom.badRequest('magnet link is required');
   }
   try {
-    const doc = new TorrentModel({ magnet });
-    const addedTorrent = await doc.save();
-    rabbitMqPublisher.sendToQueue('download-torrent', Buffer.from(JSON.stringify(addedTorrent)));
-    res.send({ message: 'torrent added successfully', torrent: addedTorrent });
-  } catch {
+    const exist = client.get(magnet);
+    if (exist) {
+      throw boom.badRequest('torrent already exist');
+    }
+    const torrent = await createTorrentWithMagnet(magnet);
+    console.log(torrent);
+    rabbitMqPublisher.sendToQueue('download-torrent', Buffer.from(JSON.stringify(torrent)));
+    res.send({ message: 'torrent added successfully', torrent });
+  } catch (error) {
+    console.error(error);
     throw boom.internal('something went wrong');
   }
 };

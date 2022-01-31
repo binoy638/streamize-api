@@ -1,60 +1,36 @@
 import ffmpeg from 'fluent-ffmpeg';
-import client from '../config/webtorrent';
+import { updateFileConvertProgress, updateTorrentInfo } from './query';
 
 export const convertMKVtoMp4 = (
   filePath: string,
   outputPath: string,
-  torrentID: string,
-  filename: string
-): Promise<void> => {
-  return new Promise<void>((resolve, reject) => {
+  slug: string,
+  torrentId: string
+): Promise<string> => {
+  return new Promise<string>((resolve, reject) => {
     ffmpeg(filePath)
       .format('mp4')
       .audioCodec('libmp3lame')
       .videoCodec('copy')
       .output(outputPath)
       .on('start', () => {
+        updateTorrentInfo(torrentId, { status: 'converting' });
         console.log('started..');
       })
       .on('end', async () => {
-        const torrent = client.get(torrentID);
-        if (torrent) {
-          torrent.destroy({ destroyStore: true });
-        }
-        const data = { progress: 100, done: true };
-        redisClient.set(torrentID, JSON.stringify(data));
-        const key = 'VideoList';
-        let videoList = (await redisClient.get(key)) || [];
-
-        if (typeof videoList === 'string') {
-          videoList = JSON.parse(videoList);
-        }
-        // eslint-disable-next-line unicorn/prefer-spread
-        const filenameWithExt = filename.concat('.mp4');
-        const video = { id: torrentID, name: filenameWithExt, path: outputPath };
-        if (typeof videoList === 'object') {
-          videoList.push(video as never);
-        }
-        console.log(videoList);
-        redisClient.set(key, JSON.stringify(videoList));
-
-        console.log('ended..');
-        resolve();
+        console.log('conversion done');
+        updateTorrentInfo(torrentId, { status: 'done' });
+        reject(slug);
       })
       .on('error', err => () => {
-        const torrent = client.get(torrentID);
-        if (torrent) {
-          torrent.destroy({ destroyStore: true });
-        }
-        redisClient.del(torrentID);
-        console.log({ err });
+        updateTorrentInfo(torrentId, { status: 'error' });
+        console.log(err);
         reject(err);
       })
-      .on('progress', progress => {
-        console.log('insode progress');
-        const data = { progress: progress.percent, done: false };
-        redisClient.set(torrentID, JSON.stringify(data));
-        console.log(`Processing: ${progress.percent}% done`);
+      .on('progress', async progress => {
+        console.log(`${progress.percent}%`);
+        await updateFileConvertProgress(torrentId, slug, progress.percent, 'processing');
+        resolve(slug);
       })
       .run();
   });

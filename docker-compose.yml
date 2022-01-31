@@ -6,11 +6,23 @@ services:
     image: mongo
     logging:
       driver: "none"
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo mongo:27017/test --quiet
+      interval: 30s
+      timeout: 30s
+      retries: 3
     ports:
       - '27018:27017'
   rabbitmq:
     image: rabbitmq:3.8-management-alpine
+    logging:
+      driver: "none"
     container_name: rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
     ports:
         - 5673:5672
         - 15673:15672
@@ -20,13 +32,15 @@ services:
       dockerfile: Dockerfile
     container_name: cloud-torrent-downloader
     volumes:
-      # - /app/node_modules
       - ./src:/home/app/src
-      # - ./:/home/app
-      # - ./src/tmp:/home/app/src/tmp
+      - ./tmp:/home/app/tmp
+      - ./downloads:/home/app/downloads
     ports:
       - "8000:3000"
     command: npm start
     depends_on:
-      - mongo
-      - rabbitmq
+      mongo:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+     

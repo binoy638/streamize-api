@@ -1,9 +1,9 @@
 import { Router } from 'express';
+// eslint-disable-next-line import/no-cycle
 import {
   addTorrent,
   deleteTorrentFromId,
   getAllTorrents,
-  getTorrentConvertFromId,
   getTorrentInfoFromId,
 } from '../controllers/torrent.controller';
 
@@ -14,8 +14,6 @@ torrentRouter.get('/', getAllTorrents);
 torrentRouter.delete('/:id', deleteTorrentFromId);
 
 torrentRouter.get('/:id', getTorrentInfoFromId);
-
-torrentRouter.get('/convert/:id', getTorrentConvertFromId);
 
 torrentRouter.post('/', addTorrent);
 
