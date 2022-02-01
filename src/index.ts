@@ -5,14 +5,13 @@ import amqp from 'amqplib';
 import cors from 'cors';
 import helmet from 'helmet';
 import fs from 'fs-extra';
-// eslint-disable-next-line import/no-cycle
 import torrentRouter from './routers/torrent.router';
 // import videoRouter from './routers/video.router';
 import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
-import connectPublisher from './rabbitmq/publish';
-import connectConsumer from './rabbitmq/consumer';
+// import connectPublisher from './rabbitmq/publisher.channel';
+// import connectConsumer from './rabbitmq/consumer.torrent.channel';
 import { TorrentPath } from './@types';
 import { clearTorrents } from './utils/query';
 import { TorrentModel } from './models/torrent.schema';
@@ -45,8 +44,7 @@ app.listen(PORT, async () => {
     await fs.emptyDir(TorrentPath.TMP);
     await connectMongo();
     await clearTorrents();
-    rabbitMqPublisher = await connectPublisher();
-    await connectConsumer(rabbitMqPublisher);
+
     console.log(`Example app listening on port ${PORT}`);
   } catch (error) {
     console.error(error);

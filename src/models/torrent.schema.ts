@@ -19,7 +19,7 @@ const torrentSchema: Schema = new Schema<ITorrent>(
     files: [
       {
         name: { type: String },
-        slug: { type: String, default: () => nanoid().toLowerCase() },
+        slug: { type: String, default: () => nanoid(5).toLowerCase() },
         path: { type: String },
         size: { type: Number },
         ext: { type: String },

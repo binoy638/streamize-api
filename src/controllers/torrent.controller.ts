@@ -3,9 +3,8 @@ import boom from '@hapi/boom';
 import 'express-async-errors';
 import { getDataFromTorrent } from '../utils/torrentHelper';
 import client from '../config/webtorrent';
-// eslint-disable-next-line import/no-cycle
-import { rabbitMqPublisher } from '../index';
 import { createTorrentWithMagnet } from '../utils/query';
+import { publisherChannel } from '../rabbitmq';
 
 export const getAllTorrents = async (req: Request, res: Response): Promise<void> => {
   const torrents = client.torrents.map(torrent => torrent.infoHash);
@@ -52,9 +51,16 @@ export const addTorrent = async (req: Request, res: Response): Promise<void> => 
   }
   try {
     const torrent = await createTorrentWithMagnet(magnet);
-    console.log(torrent);
-    rabbitMqPublisher.sendToQueue('download-torrent', Buffer.from(JSON.stringify(torrent)));
-    res.send({ message: 'torrent added successfully', torrent });
+
+    publisherChannel
+      .sendToQueue('download-torrent', torrent)
+      .then(() => {
+        res.send({ message: 'torrent added successfully', torrent });
+      })
+      .catch(error => {
+        console.log(error);
+        throw boom.internal('something went wrong');
+      });
   } catch (error) {
     console.error(error);
     throw boom.internal('something went wrong');
