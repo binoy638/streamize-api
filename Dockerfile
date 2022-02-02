@@ -10,11 +10,10 @@ RUN apt-get -y update
 
 RUN apt-get install -y ffmpeg
 
-COPY package*.json ./
+COPY . ./
 
 RUN npm install 
 
-COPY . ./
 
 RUN npm run build
 
