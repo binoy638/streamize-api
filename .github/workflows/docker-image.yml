@@ -1,0 +1,14 @@
+name: Docker image runner
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Rebuild Image and start container
+        run: sudo docker-compose up -d --build
