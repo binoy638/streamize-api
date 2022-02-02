@@ -31,6 +31,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: cloud-torrent-downloader
+    restart: unless-stopped
     # volumes:
     #   - ./src:/home/app/src
     #   - ./tmp:/home/app/tmp
