@@ -45,6 +45,14 @@ const torrentSchema: Schema = new Schema<ITorrent>(
       type: String,
       enum: ['downloading', 'paused', 'done', 'error', 'waiting', 'converting', 'added'],
     },
+    downloadInfo: {
+      downloadSpeed: { type: Number },
+      uploadSpeed: { type: Number },
+      progress: { type: Number },
+      timeRemaining: { type: Number },
+      paused: { type: Boolean },
+      completed: { type: Boolean },
+    },
   },
   { timestamps: true }
 );

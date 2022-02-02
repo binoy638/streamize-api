@@ -7,6 +7,7 @@ import { convertVideo } from './tasks/task.convertVideo';
 import { deleteFiles } from './tasks/task.deleteFiles';
 import { downloadTorrent } from './tasks/task.downloadtorrent';
 import { moveFiles } from './tasks/task.moveFiles';
+import { trackDownload } from './tasks/task.trackTorrentDownloadStatus';
 
 const connection = amqp.connect(['amqp://rabbitmq:5672']);
 
@@ -35,7 +36,9 @@ export const torrentChannel = connection.createChannel({
     return Promise.all([
       channel.prefetch(5),
       channel.assertQueue(QueueName.DOWNLOAD_TORRENT, { durable: true }),
+      channel.assertQueue(QueueName.TRACK_TORRENT, { durable: true }),
       channel.consume(QueueName.DOWNLOAD_TORRENT, downloadTorrent(channel, publisherChannel)),
+      channel.consume(QueueName.TRACK_TORRENT, trackDownload(channel)),
     ]);
   },
 });

@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { getAllAvailableVideos, getVideo } from '../controllers/video.controller';
+import { getTorrentVideos, getVideo } from '../controllers/video.controller';
 
 const videoRouter = Router();
 
-videoRouter.get('/:id', getVideo);
+videoRouter.get('/play/:torrentID/:videoSlug', getVideo);
 
-videoRouter.get('/', getAllAvailableVideos);
+videoRouter.get('/:slug', getTorrentVideos);
 
 export default videoRouter;

@@ -1,20 +1,13 @@
 import { Torrent } from 'webtorrent';
-import prettyBytes from 'pretty-bytes';
+import { IDownloadInfo } from '../@types';
 
-interface TorrentInfo {
-  downloadSpeed: string;
-  uploadSpeed: string;
-  progress: string;
-  paused: boolean;
-  done: boolean;
-}
-
-export const getDataFromTorrent = (torrent: Torrent): TorrentInfo => {
+export const getDataFromTorrent = (torrent: Torrent): IDownloadInfo => {
   return {
-    downloadSpeed: prettyBytes(torrent.downloadSpeed),
-    uploadSpeed: prettyBytes(torrent.uploadSpeed),
-    progress: `${torrent.progress * 100} %`,
+    downloadSpeed: torrent.downloadSpeed,
+    uploadSpeed: torrent.uploadSpeed,
+    progress: torrent.progress,
+    timeRemaining: torrent.timeRemaining,
     paused: torrent.paused,
-    done: torrent.done,
+    completed: torrent.done,
   };
 };

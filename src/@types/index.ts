@@ -4,6 +4,7 @@ export interface IDownloadInfo {
   downloadSpeed: number;
   uploadSpeed: number;
   progress: number;
+  timeRemaining: number;
   paused: boolean;
   completed: boolean;
 }
@@ -36,6 +37,7 @@ export interface ITorrent {
   isMultiVideos: boolean;
   status: TorrentStatus;
   isMedia: boolean;
+  downloadInfo: IDownloadInfo;
 }
 
 export enum TorrentPath {
@@ -45,6 +47,7 @@ export enum TorrentPath {
 
 export enum QueueName {
   DOWNLOAD_TORRENT = 'download-torrent',
+  TRACK_TORRENT = 'track-torrent',
   CONVERT_VIDEO = 'convert-video',
   FILE_MOVE = 'move-files',
   FILE_DELETE = 'delete-files',

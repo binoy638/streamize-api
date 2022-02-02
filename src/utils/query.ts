@@ -1,6 +1,7 @@
 /* eslint-disable unicorn/no-null */
 import { Document } from 'mongoose';
-import { ITorrent, IVideo } from '../@types';
+import { ConvertState, IDownloadInfo, ITorrent, IVideo, TorrentStatus } from '../@types';
+import logger from '../config/logger';
 import { TorrentModel } from '../models/torrent.schema';
 import { allowedExt } from './misc';
 
@@ -39,7 +40,7 @@ export const updateTorrentInfo = async (_id: string, data: Partial<ITorrent>): P
   return doc;
 };
 
-export const updateTorrentFileStatus = async (_id: string, slug: string, status: string): Promise<void> => {
+export const updateTorrentFileStatus = async (_id: string, slug: string, status: TorrentStatus): Promise<void> => {
   await TorrentModel.updateOne({ _id, 'files.slug': slug }, { $set: { 'files.$.status': status } });
 };
 
@@ -47,16 +48,89 @@ export const updateFileConvertProgress = async (
   _id: string,
   slug: string,
   progress: number,
-  state: string
+  state: ConvertState
 ): Promise<void> => {
-  await TorrentModel.updateOne(
-    { _id, 'files.slug': slug },
-    { $set: { 'files.$.progress': progress, 'files.$.state': state } }
-  );
+  try {
+    await TorrentModel.updateOne(
+      { _id, 'files.slug': slug },
+      { $set: { 'files.$.convertStatus': { progress, state } } }
+    );
+  } catch (error) {
+    logger.error(error);
+  }
 };
 
 export const doesTorrentAlreadyExist = async (magnet: string): Promise<boolean> => {
   const doc = await TorrentModel.findOne({ magnet });
   if (!doc) return false;
   return true;
+};
+
+export const updateTorrentDownloadInfo = async (_id: string, downloadInfo: IDownloadInfo): Promise<void> => {
+  try {
+    await TorrentModel.findByIdAndUpdate(_id, { $set: { downloadInfo } });
+  } catch (error) {
+    logger.error(error);
+  }
+};
+
+export const updateFilePath = async (_id: string, slug: string, path: string): Promise<void> => {
+  try {
+    await TorrentModel.updateOne({ _id, 'files.slug': slug }, { $set: { 'files.$.path': path } });
+  } catch (error) {
+    logger.error(error);
+  }
+};
+
+export const getTorrentBySlug = async (slug: string): Promise<ITorrent | null> => {
+  try {
+    const doc = await TorrentModel.findOne({ slug });
+    if (!doc) return null;
+    return doc;
+  } catch (error) {
+    logger.error(error);
+    throw new Error('something went wrong while fetching torrent by slug');
+  }
+};
+
+export const getTorrentByMagnet = async (magnet: string): Promise<ITorrent | null> => {
+  try {
+    const doc = await TorrentModel.findOne({ magnet });
+    if (!doc) return null;
+    return doc;
+  } catch (error) {
+    logger.error(error);
+    throw new Error('something went wrong while fetching torrent by magnet');
+  }
+};
+
+export const deleteTorrentByID = async (_id: string): Promise<void> => {
+  try {
+    await TorrentModel.deleteOne({ _id });
+  } catch (error) {
+    logger.error(error);
+  }
+};
+
+//! need pagination later
+export const getAllTorrentsFromDB = async (): Promise<ITorrent[]> => {
+  try {
+    const docs = await TorrentModel.find({}).limit(20);
+    if (!docs) return [];
+    return docs;
+  } catch (error) {
+    logger.error(error);
+    throw new Error('something went wrong while fetching all torrents');
+  }
+};
+
+export const getVideoFile = async (_id: string, slug: string): Promise<IVideo | null | undefined> => {
+  try {
+    const doc = await TorrentModel.findOne({ _id, 'files.slug': slug });
+    if (!doc) return null;
+    return doc.files.find(file => file.slug === slug);
+  } catch (error) {
+    logger.error(error);
+    throw new Error('something went wrong while fetching video file');
+  }
 };

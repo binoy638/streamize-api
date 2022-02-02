@@ -4,6 +4,7 @@ import { TorrentPath, QueueName } from '../../@types';
 import { IConvertVideoMessageContent, IDeleteFilesMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
 import { getFileOutputPath, getMessageContent } from '../../utils/misc';
+import { updateFilePath } from '../../utils/query';
 import { convertMKVtoMp4 } from '../../utils/videoConverter';
 
 export const convertVideo =
@@ -21,7 +22,9 @@ export const convertVideo =
         publisherChannel
           .sendToQueue(QueueName.FILE_DELETE, { src: file.path } as IDeleteFilesMessageContent)
           .then(() => {
-            channel.ack(message);
+            updateFilePath(file.torrentID, file.slug, outputPath).then(() => {
+              channel.ack(message);
+            });
           });
       } else {
         logger.error('something went wrong while converting file:%o', file);

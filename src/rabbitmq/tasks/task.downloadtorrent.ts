@@ -1,7 +1,11 @@
 import { Channel, ChannelWrapper } from 'amqp-connection-manager';
 import { ConsumeMessage } from 'amqplib';
 import { ITorrent, TorrentPath, IVideo, QueueName } from '../../@types';
-import { IConvertVideoMessageContent, IMoveFilesMessageContent } from '../../@types/message';
+import {
+  IConvertVideoMessageContent,
+  IMoveFilesMessageContent,
+  ITorrentDownloadStatusMessageContent,
+} from '../../@types/message';
 import logger from '../../config/logger';
 import client from '../../config/webtorrent';
 import { allowedExt, convertableExt, getFileOutputPath, getMessageContent } from '../../utils/misc';
@@ -54,7 +58,16 @@ export const downloadTorrent =
             files: videofiles,
             status: 'downloading',
           });
+
+          //* publish a message to track this torrent's download status and save td db
+          publisherChannel.sendToQueue(QueueName.TRACK_TORRENT, {
+            torrentID: SavedTorrent._id,
+            torrentInfoHash: SavedTorrent.infoHash,
+          } as ITorrentDownloadStatusMessageContent);
           torrent.on('done', async () => {
+            await updateTorrentInfo(addedTorrent._id, {
+              status: 'done',
+            });
             const convertableVideoFiles = SavedTorrent.files.filter(file => file.isConvertable);
             const nonConvertableVideoFiles = SavedTorrent.files.filter(file => !file.isConvertable);
             if (convertableVideoFiles.length > 0) {
@@ -71,6 +84,8 @@ export const downloadTorrent =
                 publisherChannel.sendToQueue(QueueName.FILE_MOVE, {
                   src: file.path,
                   dest: getFileOutputPath(file.name, TorrentPath.DOWNLOAD),
+                  torrentID: SavedTorrent._id,
+                  fileSlug: file.slug,
                 } as IMoveFilesMessageContent)
               )
             );

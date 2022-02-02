@@ -1,4 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg';
+import logger from '../config/logger';
 import { updateFileConvertProgress, updateTorrentInfo } from './query';
 
 export const convertMKVtoMp4 = (
@@ -15,20 +16,22 @@ export const convertMKVtoMp4 = (
       .output(outputPath)
       .on('start', () => {
         updateTorrentInfo(torrentId, { status: 'converting' });
-        console.log('started..');
+        logger.info('converting video started');
       })
       .on('end', async () => {
-        console.log('conversion done');
-        updateTorrentInfo(torrentId, { status: 'done' });
+        logger.info('cconversion done');
+        await updateTorrentInfo(torrentId, { status: 'done' });
+        await updateFileConvertProgress(torrentId, slug, 100, 'done');
         resolve(slug);
       })
-      .on('error', err => () => {
-        updateTorrentInfo(torrentId, { status: 'error' });
-        console.log(err);
+      .on('error', err => async () => {
+        await updateTorrentInfo(torrentId, { status: 'error' });
+        await updateFileConvertProgress(torrentId, slug, 0, 'error');
+        logger.error(err);
         reject(err);
       })
       .on('progress', async progress => {
-        console.log(`${progress.percent}%`);
+        logger.debug(`converting video progress: ${progress.percent}`);
         await updateFileConvertProgress(torrentId, slug, progress.percent, 'processing');
       })
       .run();
