@@ -22,12 +22,17 @@ export const downloadTorrent =
       client.add(addedTorrent.magnet, { path: TorrentPath.TMP }, async torrent => {
         const videofiles = torrent.files
           .map(file => {
+            console.log(file.name);
+
             const ext = file.name.split('.').pop() || '';
+            console.log(ext);
             const isVideoFile = allowedExt.has(ext);
+            console.log(isVideoFile);
             const isConvertable = convertableExt.has(ext);
+            console.log(isConvertable);
             if (!isVideoFile) {
-              logger.info({ message: "found file that's not video file", file });
-              file.deselect();
+              logger.info(`found file that's not video file ${file.name}`);
+              // file.deselect();
             }
             return {
               name: file.name,
@@ -37,10 +42,11 @@ export const downloadTorrent =
               isConvertable,
               status: 'downloading',
             } as IVideo;
+
             // return addVideoFiles(addedTorrent._id, torrentfile);
           })
           .filter(file => allowedExt.has(file.ext));
-
+        console.log(videofiles);
         if (videofiles.length === 0) {
           torrent.destroy({ destroyStore: true });
           logger.info({ message: 'no video files found, deleting torrent', addedTorrent });
