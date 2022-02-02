@@ -1,33 +1,34 @@
 import { ChannelWrapper } from 'amqp-connection-manager';
 import { Channel, ConsumeMessage } from 'amqplib';
-import path from 'path';
 import { TorrentPath, QueueName } from '../../@types';
+import { IConvertVideoMessageContent, IDeleteFilesMessageContent } from '../../@types/message';
+import logger from '../../config/logger';
+import { getFileOutputPath, getMessageContent } from '../../utils/misc';
 import { convertMKVtoMp4 } from '../../utils/videoConverter';
 
 export const convertVideo =
   (channel: Channel, publisherChannel: ChannelWrapper) =>
   async (message: ConsumeMessage | null): Promise<void> => {
     if (!message) return;
-    console.log('Received new video file to convert..');
-    console.log(message.content.toString());
-    const fileInfo = JSON.parse(message.content.toString());
 
-    const { videofile, torrentId } = fileInfo;
-    console.log(videofile);
-    const fileNameWithoutExt = path.parse(videofile.name).name;
-    const outputPath = `${TorrentPath.TMP}/${fileNameWithoutExt}.mp4`;
+    const file = getMessageContent<IConvertVideoMessageContent>(message);
+    logger.info('Received new video file to convert.. file:%o', file);
+    const outputPath = getFileOutputPath(file.name, TorrentPath.DOWNLOAD);
     try {
-      const done = await convertMKVtoMp4(videofile.path, outputPath, videofile.slug, torrentId);
+      const done = await convertMKVtoMp4(file.path, outputPath, file.slug, file.torrentID);
       if (done) {
-        console.log('acknowledged');
-        publisherChannel.sendToQueue(QueueName.FILE_MANAGER, JSON.stringify(videofile));
-        channel.ack(message);
+        logger.info('file converted successfully file:%o', file);
+        publisherChannel
+          .sendToQueue(QueueName.FILE_DELETE, { src: file.path } as IDeleteFilesMessageContent)
+          .then(() => {
+            channel.ack(message);
+          });
       } else {
-        console.log('inside not done');
+        logger.error('something went wrong while converting file:%o', file);
         channel.ack(message);
       }
     } catch (error) {
-      console.log(error);
+      logger.error('something went wrong while converting file:%o error:%o', file, error);
       channel.ack(message);
     }
   };

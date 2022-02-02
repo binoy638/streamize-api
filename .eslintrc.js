@@ -31,6 +31,7 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': ['error'],
     'unicorn/prevent-abbreviations': 'off',
     'unicorn/prefer-node-protocol': 'off',
+    'no-shadow': 'off',
     'unicorn/filename-case': 'off',
     'no-underscore-dangle': 'off',
     'no-console': 'off',

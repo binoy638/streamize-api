@@ -1,5 +1,7 @@
 FROM node:latest
 
+ENV NODE_ENV=development
+
 WORKDIR /home/app
 
 USER root
@@ -8,7 +10,7 @@ RUN apt-get -y update
 
 RUN apt-get install -y ffmpeg
 
-ADD package*.json ./
+COPY package*.json ./
 
 RUN npm i
 

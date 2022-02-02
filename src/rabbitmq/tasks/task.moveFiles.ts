@@ -1,23 +1,21 @@
 import fs from 'fs-extra';
 import { Channel, ConsumeMessage } from 'amqplib';
-import path from 'path';
-import { TorrentPath } from '../../@types';
+import { getMessageContent } from '../../utils/misc';
+import { IMoveFilesMessageContent } from '../../@types/message';
+import logger from '../../config/logger';
 
 export const moveFiles =
   (channel: Channel) =>
   async (message: ConsumeMessage | null): Promise<void> => {
     if (!message) return;
-    console.log('Received new video file to move..');
-    const file = JSON.parse(message.content.toString());
-    const fileNameWithoutExt = path.parse(file.name).name;
-    const dest = `${TorrentPath.DOWNLOAD}/${fileNameWithoutExt}.mp4`;
-    const src = file.path;
+    const file = getMessageContent<IMoveFilesMessageContent>(message);
+    logger.info({ message: 'Received new video file to move..', file });
     try {
-      await fs.move(src, dest);
-      console.log('file moved successfully!');
+      await fs.move(file.src, file.dest);
+      logger.info({ message: 'file moved successfully!', file });
       channel.ack(message);
     } catch (error) {
-      console.log(error);
+      logger.error({ message: 'something went wrong while moving file', file, error });
       channel.ack(message);
     }
   };

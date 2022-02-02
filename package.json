@@ -66,6 +66,7 @@
     "nanoid": "^3.2.0",
     "pretty-bytes": "^5.6.0",
     "ts-node-dev": "^1.1.8",
-    "webtorrent": "^1.7.1"
+    "webtorrent": "^1.7.1",
+    "winston": "^3.5.1"
   }
 }

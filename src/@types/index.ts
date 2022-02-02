@@ -46,5 +46,6 @@ export enum TorrentPath {
 export enum QueueName {
   DOWNLOAD_TORRENT = 'download-torrent',
   CONVERT_VIDEO = 'convert-video',
-  FILE_MANAGER = 'manage-files',
+  FILE_MOVE = 'move-files',
+  FILE_DELETE = 'delete-files',
 }

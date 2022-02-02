@@ -2,7 +2,9 @@
 /* eslint-disable object-shorthand */
 import amqp, { Channel } from 'amqp-connection-manager';
 import { QueueName } from '../@types';
+// eslint-disable-next-line import/namespace
 import { convertVideo } from './tasks/task.convertVideo';
+import { deleteFiles } from './tasks/task.deleteFiles';
 import { downloadTorrent } from './tasks/task.downloadtorrent';
 import { moveFiles } from './tasks/task.moveFiles';
 
@@ -21,7 +23,8 @@ export const publisherChannel = connection.createChannel({
     return Promise.all([
       channel.assertQueue(QueueName.DOWNLOAD_TORRENT, { durable: true }),
       channel.assertQueue(QueueName.CONVERT_VIDEO, { durable: true }),
-      channel.assertQueue(QueueName.FILE_MANAGER, { durable: true }),
+      channel.assertQueue(QueueName.FILE_MOVE, { durable: true }),
+      channel.assertQueue(QueueName.FILE_DELETE, { durable: true }),
     ]);
   },
 });
@@ -53,8 +56,10 @@ export const fileManagerChannel = connection.createChannel({
   setup: function (channel: Channel) {
     return Promise.all([
       channel.prefetch(1),
-      channel.assertQueue(QueueName.FILE_MANAGER, { durable: true }),
-      channel.consume(QueueName.FILE_MANAGER, moveFiles(channel)),
+      channel.assertQueue(QueueName.FILE_MOVE, { durable: true }),
+      channel.assertQueue(QueueName.FILE_DELETE, { durable: true }),
+      channel.consume(QueueName.FILE_MOVE, moveFiles(channel)),
+      channel.consume(QueueName.FILE_DELETE, deleteFiles(channel)),
     ]);
   },
 });

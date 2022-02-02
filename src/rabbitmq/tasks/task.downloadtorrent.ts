@@ -1,17 +1,19 @@
 import { Channel, ChannelWrapper } from 'amqp-connection-manager';
 import { ConsumeMessage } from 'amqplib';
 import { ITorrent, TorrentPath, IVideo, QueueName } from '../../@types';
+import { IConvertVideoMessageContent, IMoveFilesMessageContent } from '../../@types/message';
+import logger from '../../config/logger';
 import client from '../../config/webtorrent';
-import { allowedExt, convertableExt } from '../../utils/misc';
+import { allowedExt, convertableExt, getFileOutputPath, getMessageContent } from '../../utils/misc';
 import { updateNoMediaTorrent, updateTorrentInfo } from '../../utils/query';
 
 export const downloadTorrent =
   (channel: Channel, publisherChannel: ChannelWrapper) =>
   async (message: ConsumeMessage | null): Promise<void> => {
     if (!message) return;
-    console.log('Received new magnet link to process..');
     try {
-      const addedTorrent: ITorrent = JSON.parse(message.content.toString());
+      const addedTorrent: ITorrent = getMessageContent<ITorrent>(message);
+      logger.info({ message: 'Received new torrent to download..', addedTorrent });
       //! change path after convert
       client.add(addedTorrent.magnet, { path: TorrentPath.TMP }, async torrent => {
         const videofiles = torrent.files
@@ -20,8 +22,7 @@ export const downloadTorrent =
             const isVideoFile = allowedExt.has(ext);
             const isConvertable = convertableExt.has(ext);
             if (!isVideoFile) {
-              console.log("found file that's not video file");
-              console.log(file.name);
+              logger.info({ message: "found file that's not video file", file });
               file.deselect();
             }
             return {
@@ -38,7 +39,7 @@ export const downloadTorrent =
 
         if (videofiles.length === 0) {
           torrent.destroy({ destroyStore: true });
-          console.log('no video files found torrent destroyed');
+          logger.info({ message: 'no video files found, deleting torrent', addedTorrent });
           // eslint-disable-next-line no-underscore-dangle
           updateNoMediaTorrent(addedTorrent._id);
           channel.ack(message);
@@ -59,20 +60,28 @@ export const downloadTorrent =
             if (convertableVideoFiles.length > 0) {
               //* sending all convertable files to convert-video queue
               convertableVideoFiles.map(file =>
-                publisherChannel.sendToQueue(QueueName.CONVERT_VIDEO, { torrentId: SavedTorrent._id, videofile: file })
+                publisherChannel.sendToQueue(QueueName.CONVERT_VIDEO, {
+                  torrentID: SavedTorrent._id,
+                  ...file,
+                } as IConvertVideoMessageContent)
               );
             }
             await Promise.all(
-              nonConvertableVideoFiles.map(file => publisherChannel.sendToQueue(QueueName.FILE_MANAGER, { file }))
+              nonConvertableVideoFiles.map(file =>
+                publisherChannel.sendToQueue(QueueName.FILE_MOVE, {
+                  src: file.path,
+                  dest: getFileOutputPath(file.name, TorrentPath.DOWNLOAD),
+                } as IMoveFilesMessageContent)
+              )
             );
             channel.ack(message);
-            console.log('download complete torrent destroyed');
+            logger.info(`${SavedTorrent.name} torrent downloaded now deleting torrent`);
             torrent.destroy();
           });
         }
       });
     } catch (error) {
-      console.log(error);
+      logger.error({ message: 'Something went wrong while downloading torrent..', error });
       channel.ack(message);
     }
   };
