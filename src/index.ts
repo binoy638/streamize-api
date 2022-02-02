@@ -3,13 +3,13 @@ import morgan from 'morgan';
 import amqp from 'amqplib';
 import cors from 'cors';
 import helmet from 'helmet';
-import fs from 'fs-extra';
+// import fs from 'fs-extra';
 import torrentRouter from './routers/torrent.router';
 import videoRouter from './routers/video.router';
 import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
-import { TorrentPath } from './@types';
+// import { TorrentPath } from './@types';
 import { clearTorrents } from './utils/query';
 
 // eslint-disable-next-line import/no-mutable-exports
@@ -39,8 +39,8 @@ app.use('/video', videoRouter);
 
 app.listen(PORT, async () => {
   try {
-    await fs.emptyDir(TorrentPath.DOWNLOAD);
-    await fs.emptyDir(TorrentPath.TMP);
+    // await fs.emptyDir(TorrentPath.DOWNLOAD);
+    // await fs.emptyDir(TorrentPath.TMP);
     await connectMongo();
     await clearTorrents();
 

@@ -31,10 +31,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: cloud-torrent-downloader
-    volumes:
-      - ./src:/home/app/src
-      - ./tmp:/home/app/tmp
-      - ./downloads:/home/app/downloads
+    # volumes:
+    #   - ./src:/home/app/src
+    #   - ./tmp:/home/app/tmp
+    #   - ./downloads:/home/app/downloads
     ports:
       - "8000:3000"
     command: npm start
