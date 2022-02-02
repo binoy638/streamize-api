@@ -11,4 +11,4 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Rebuild Image and start container
-        run: sudo docker-compose -f docker-compose.dev.yml up -d --build
+        run: sudo docker-compose up -d --build
