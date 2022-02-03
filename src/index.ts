@@ -1,6 +1,5 @@
 import express from 'express';
 import morgan from 'morgan';
-import amqp from 'amqplib';
 import cors from 'cors';
 import helmet from 'helmet';
 import fs from 'fs-extra';
@@ -12,9 +11,9 @@ import connectMongo from './config/mongo';
 import { TorrentPath } from './@types';
 import { clearTorrents } from './utils/query';
 import logger from './config/logger';
+import { fileManagerChannel, publisherChannel, torrentChannel, videoChannel } from './rabbitmq';
 
 // eslint-disable-next-line import/no-mutable-exports
-export let rabbitMqPublisher: amqp.Channel;
 
 const PORT = 3000;
 
@@ -43,6 +42,10 @@ app.listen(PORT, async () => {
     await fs.emptyDir(TorrentPath.DOWNLOAD);
     await fs.emptyDir(TorrentPath.TMP);
     await connectMongo();
+    await publisherChannel.cancelAll();
+    await torrentChannel.cancelAll();
+    await videoChannel.cancelAll();
+    await fileManagerChannel.cancelAll();
     await clearTorrents();
 
     console.log(`Example app listening on port ${PORT}`);

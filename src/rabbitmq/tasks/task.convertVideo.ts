@@ -16,7 +16,9 @@ export const convertVideo =
     logger.info('Received new video file to convert.. file:%o', file);
     const outputPath = getFileOutputPath(file.name, TorrentPath.DOWNLOAD);
     try {
-      const done = await convertMKVtoMp4(file.path, outputPath, file.slug, file.torrentID);
+      const done = await convertMKVtoMp4(file.path, outputPath, file.slug, file.torrentID).then(err =>
+        logger.error(err)
+      );
       if (done) {
         logger.info('file converted successfully file:%o', file);
         publisherChannel
