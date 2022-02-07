@@ -1,7 +1,7 @@
 {
-  "name": "typescript-nodejs-starter",
+  "name": "streamize-api",
   "version": "1.0.0",
-  "description": "Started project setup for node js backend projects",
+  "description": "A node js video streaming server with torrent downloading support",
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",

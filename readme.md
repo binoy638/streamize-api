@@ -1,4 +1,4 @@
-# Starter Express app with typescript
+# Streamize - Host your own video streaming server
 
 ## Running the app in the development mode
 
@@ -26,7 +26,7 @@ Run the following command to launch the project inside a docker container
 
 ## Docker for Production
 
-Run the following command build & run a distroless docker container for production
+Run the following command build & run a docker container for production
 
 ```bash
   docker-compose up

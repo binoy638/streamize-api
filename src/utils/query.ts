@@ -124,11 +124,11 @@ export const getAllTorrentsFromDB = async (): Promise<ITorrent[]> => {
   }
 };
 
-export const getVideoFile = async (_id: string, slug: string): Promise<IVideo | null | undefined> => {
+export const getVideoFile = async (torrentSlug: string, videoSlug: string): Promise<IVideo | null | undefined> => {
   try {
-    const doc = await TorrentModel.findOne({ _id, 'files.slug': slug });
+    const doc = await TorrentModel.findOne({ slug: torrentSlug, 'files.slug': videoSlug });
     if (!doc) return null;
-    return doc.files.find(file => file.slug === slug);
+    return doc.files.find(file => file.slug === videoSlug);
   } catch (error) {
     logger.error(error);
     throw new Error('something went wrong while fetching video file');

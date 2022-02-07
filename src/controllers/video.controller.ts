@@ -5,12 +5,12 @@ import fs from 'fs';
 import { getTorrentBySlug, getVideoFile } from '../utils/query';
 
 export const getVideo = async (req: Request, res: Response): Promise<void> => {
-  const { torrentID, videoSlug } = req.params;
-  if (!torrentID || !videoSlug) {
-    throw boom.badRequest('torrentID and videoSlug is required');
+  const { torrentSlug, videoSlug } = req.params;
+  if (!torrentSlug || !videoSlug) {
+    throw boom.badRequest('torrentSlug and videoSlug is required');
   }
 
-  const video = await getVideoFile(torrentID, videoSlug);
+  const video = await getVideoFile(torrentSlug, videoSlug);
   if (!video) {
     throw boom.notFound('video not found');
   }

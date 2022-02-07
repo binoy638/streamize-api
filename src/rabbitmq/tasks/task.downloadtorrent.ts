@@ -97,7 +97,7 @@ export const downloadTorrent =
             );
             channel.ack(message);
             logger.info(`${SavedTorrent.name} torrent downloaded now deleting torrent`);
-            torrent.destroy();
+            torrent.destroy({ destroyStore: true });
           });
         }
       });
