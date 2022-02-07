@@ -124,6 +124,7 @@ export const getAllTorrentsFromDB = async (): Promise<ITorrent[]> => {
   }
 };
 
+//! check if torrent is completly downloaded
 export const getVideoFile = async (torrentSlug: string, videoSlug: string): Promise<IVideo | null | undefined> => {
   try {
     const doc = await TorrentModel.findOne({ slug: torrentSlug, 'files.slug': videoSlug });
