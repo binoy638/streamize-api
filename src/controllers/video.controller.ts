@@ -21,6 +21,7 @@ export const getVideo = async (req: Request, res: Response): Promise<void> => {
     throw boom.badRequest('range is required');
   }
 
+  //! file might not exist handle it later
   const videoPath = video.path;
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   const videoSize = fs.statSync(videoPath).size;

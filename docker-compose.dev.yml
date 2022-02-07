@@ -2,7 +2,7 @@ version: "3.7"
  
 services:
   mongo:
-    container_name: cloud-torrent-mongo
+    container_name: streamize-mongo
     image: mongo
     logging:
       driver: "none"
@@ -30,7 +30,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: cloud-torrent-downloader-dev
+    container_name: streamize-api-dev
     volumes:
       - ./src:/home/app/src
       - ./tmp:/home/app/tmp
