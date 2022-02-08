@@ -13,14 +13,14 @@ export const convertVideo =
     if (!message) return;
 
     const file = getMessageContent<IConvertVideoMessageContent>(message);
-    logger.info('Received new video file to convert.. file:%o', file);
+    logger.info(`Received new video file to convert.. file:${file}`);
     const outputPath = getFileOutputPath(file.name, TorrentPath.DOWNLOAD);
     try {
       const done = await convertMKVtoMp4(file.path, outputPath, file.slug, file.torrentID).then(err =>
         logger.error(err)
       );
       if (done) {
-        logger.info('file converted successfully file:%o', file);
+        logger.info(`file converted successfully file: ${file}`);
         publisherChannel
           .sendToQueue(QueueName.FILE_DELETE, { src: file.path } as IDeleteFilesMessageContent)
           .then(() => {
@@ -29,11 +29,11 @@ export const convertVideo =
             });
           });
       } else {
-        logger.error('something went wrong while converting file:%o', file);
+        logger.error(`something went wrong while converting file: ${file}`);
         channel.ack(message);
       }
     } catch (error) {
-      logger.error('something went wrong while converting file:%o error:%o', file, error);
+      logger.error(`something went wrong while converting file: ${file} error: ${error}`);
       channel.ack(message);
     }
   };

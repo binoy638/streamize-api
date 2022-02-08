@@ -9,7 +9,7 @@ import {
 import logger from '../../config/logger';
 import client from '../../config/webtorrent';
 import { allowedExt, convertableExt, getFileOutputPath, getMessageContent } from '../../utils/misc';
-import { updateNoMediaTorrent, updateTorrentInfo } from '../../utils/query';
+import { updateTorrentInfo } from '../../utils/query';
 
 export const downloadTorrent =
   (channel: Channel, publisherChannel: ChannelWrapper) =>
@@ -18,18 +18,13 @@ export const downloadTorrent =
     try {
       const addedTorrent: ITorrent = getMessageContent<ITorrent>(message);
       logger.info({ message: 'Received new torrent to download..', addedTorrent });
-      //! change path after convert
+
       client.add(addedTorrent.magnet, { path: TorrentPath.TMP }, async torrent => {
         const videofiles = torrent.files
           .map(file => {
-            console.log(file.name);
-
             const ext = file.name.split('.').pop() || '';
-            console.log(ext);
             const isVideoFile = allowedExt.has(ext);
-            console.log(isVideoFile);
             const isConvertable = convertableExt.has(ext);
-            console.log(isConvertable);
             if (!isVideoFile) {
               logger.info(`found file that's not video file ${file.name}`);
               // file.deselect();
@@ -42,16 +37,14 @@ export const downloadTorrent =
               isConvertable,
               status: 'downloading',
             } as IVideo;
-
-            // return addVideoFiles(addedTorrent._id, torrentfile);
           })
           .filter(file => allowedExt.has(file.ext));
-        console.log(videofiles);
+
         if (videofiles.length === 0) {
           torrent.destroy({ destroyStore: true });
           logger.info({ message: 'no video files found, deleting torrent', addedTorrent });
           // eslint-disable-next-line no-underscore-dangle
-          updateNoMediaTorrent(addedTorrent._id);
+          updateTorrentInfo(addedTorrent._id, { status: 'error', isMedia: false });
           channel.ack(message);
         } else {
           const { name, infoHash, length: size } = torrent;
@@ -71,9 +64,7 @@ export const downloadTorrent =
             torrentInfoHash: SavedTorrent.infoHash,
           } as ITorrentDownloadStatusMessageContent);
           torrent.on('done', async () => {
-            await updateTorrentInfo(addedTorrent._id, {
-              status: 'done',
-            });
+            await updateTorrentInfo(SavedTorrent._id, { status: 'done' });
             const convertableVideoFiles = SavedTorrent.files.filter(file => file.isConvertable);
             const nonConvertableVideoFiles = SavedTorrent.files.filter(file => !file.isConvertable);
             if (convertableVideoFiles.length > 0) {
@@ -85,6 +76,7 @@ export const downloadTorrent =
                 } as IConvertVideoMessageContent)
               );
             }
+            //* sending all nonconvertable files to file-move queue to move them to download folder
             await Promise.all(
               nonConvertableVideoFiles.map(file =>
                 publisherChannel.sendToQueue(QueueName.FILE_MOVE, {
@@ -103,7 +95,7 @@ export const downloadTorrent =
         }
       });
     } catch (error) {
-      logger.error({ message: 'Something went wrong while downloading torrent..', error });
+      logger.error(error);
       channel.ack(message);
     }
   };

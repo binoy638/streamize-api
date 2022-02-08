@@ -10,23 +10,9 @@ export const createTorrentWithMagnet = async (magnet: string): Promise<Document>
   return doc.save();
 };
 
-export const updateNoMediaTorrent = async (_id: string): Promise<void> => {
-  await TorrentModel.updateOne({ _id }, { noMedia: true, status: 'error' });
-};
-
-export const addVideoFiles = async (_id: string, videoFile: IVideo): Promise<void> => {
-  try {
-    await TorrentModel.updateOne({ _id }, { $push: { files: { ...videoFile } } });
-  } catch (error) {
-    console.log(error);
-  }
-};
-
 export const getVideoFiles = async (_id: string): Promise<IVideo[] | null> => {
   const doc = await TorrentModel.findOne({ _id });
-  console.log(doc);
   if (!doc) return null;
-  console.log(doc);
   return doc.files.filter(file => allowedExt.has(file.ext));
 };
 
@@ -124,12 +110,11 @@ export const getAllTorrentsFromDB = async (): Promise<ITorrent[]> => {
   }
 };
 
-//! check if torrent is completly downloaded
 export const getVideoFile = async (torrentSlug: string, videoSlug: string): Promise<IVideo | null | undefined> => {
   try {
     const doc = await TorrentModel.findOne({ slug: torrentSlug, 'files.slug': videoSlug });
     if (!doc) return null;
-    return doc.files.find(file => file.slug === videoSlug);
+    return doc.files.find(file => file.slug === videoSlug && file.status === 'done');
   } catch (error) {
     logger.error(error);
     throw new Error('something went wrong while fetching video file');
