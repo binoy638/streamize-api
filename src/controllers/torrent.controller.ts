@@ -57,7 +57,7 @@ export const addTorrent = async (req: Request, res: Response): Promise<void> => 
   if (!magnet) {
     throw boom.badRequest('magnet link is required');
   }
-  if (magnet.startsWith('magnet:?xt=urn:btih:')) {
+  if (!magnet.startsWith('magnet:?xt=urn:btih:')) {
     throw boom.badRequest('invalid magnet link');
   }
   const existInDB = await getTorrentByMagnet(magnet);
