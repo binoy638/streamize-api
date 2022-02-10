@@ -42,10 +42,10 @@ app.listen(PORT, async () => {
     await fs.emptyDir(TorrentPath.DOWNLOAD);
     await fs.emptyDir(TorrentPath.TMP);
     await connectMongo();
-    await publisherChannel.cancelAll();
-    await torrentChannel.cancelAll();
-    await videoChannel.cancelAll();
-    await fileManagerChannel.cancelAll();
+    await publisherChannel.ackAll();
+    await torrentChannel.ackAll();
+    await videoChannel.ackAll();
+    await fileManagerChannel.ackAll();
     await clearTorrents();
 
     console.log(`Example app listening on port ${PORT}`);
