@@ -13,6 +13,7 @@ import { updateTorrentInfo } from '../../utils/query';
 
 export const downloadTorrent =
   (channel: Channel, publisherChannel: ChannelWrapper) =>
+  // eslint-disable-next-line sonarjs/cognitive-complexity
   async (message: ConsumeMessage | null): Promise<void> => {
     if (!message) return;
     try {
@@ -20,6 +21,10 @@ export const downloadTorrent =
       logger.info({ message: 'Received new torrent to download..', addedTorrent });
 
       client.add(addedTorrent.magnet, { path: TorrentPath.TMP }, async torrent => {
+        torrent.on('error', () => {
+          logger.error(`Torrent error ack msg: ' ${addedTorrent} `);
+          channel.ack(message);
+        });
         const videofiles = torrent.files
           .map(file => {
             const ext = file.name.split('.').pop() || '';
@@ -57,6 +62,11 @@ export const downloadTorrent =
             files: videofiles,
             status: 'downloading',
           });
+          if (!SavedTorrent) {
+            logger.error(`torrent not saved ${addedTorrent}`);
+            channel.ack(message);
+            return;
+          }
 
           //* publish a message to track this torrent's download status and save td db
           publisherChannel.sendToQueue(QueueName.TRACK_TORRENT, {

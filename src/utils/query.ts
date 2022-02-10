@@ -20,10 +20,15 @@ export const clearTorrents = async (): Promise<void> => {
   await TorrentModel.deleteMany({});
 };
 
-export const updateTorrentInfo = async (_id: string, data: Partial<ITorrent>): Promise<ITorrent> => {
-  const doc = await TorrentModel.findOneAndUpdate({ _id }, data, { lean: true, new: true });
-  if (!doc) throw new Error("Counldn't find torrent");
-  return doc;
+export const updateTorrentInfo = async (_id: string, data: Partial<ITorrent>): Promise<ITorrent | null> => {
+  try {
+    const doc = await TorrentModel.findOneAndUpdate({ _id }, data, { lean: true, new: true });
+    if (doc) return doc;
+    return null;
+  } catch (error) {
+    logger.error(error);
+    return null;
+  }
 };
 
 export const updateTorrentFileStatus = async (_id: string, slug: string, status: TorrentStatus): Promise<void> => {
