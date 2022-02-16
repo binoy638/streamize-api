@@ -2,6 +2,7 @@
 /* eslint-disable object-shorthand */
 import amqp, { Channel } from 'amqp-connection-manager';
 import { QueueName } from '../@types';
+import logger from '../config/logger';
 // eslint-disable-next-line import/namespace
 import { convertVideo } from './tasks/task.convertVideo';
 import { deleteFiles } from './tasks/task.deleteFiles';
@@ -12,10 +13,10 @@ import { trackDownload } from './tasks/task.trackTorrentDownloadStatus';
 const connection = amqp.connect(['amqp://rabbitmq:5672']);
 
 connection.on('connect', function () {
-  console.log('Rabbitmq Connected!');
+  logger.info('Rabbitmq Connected!');
 });
 connection.on('disconnect', function (err) {
-  console.log('Rabbitmq Disconnected.', err);
+  logger.error(`Rabbitmq Disconnected. ${err}`, err);
 });
 
 export const publisherChannel = connection.createChannel({

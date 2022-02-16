@@ -1,18 +1,25 @@
 import { Request, Response } from 'express';
 import boom from '@hapi/boom';
 import 'express-async-errors';
-import fs from 'fs';
-import { getTorrentBySlug, getVideoFile } from '../utils/query';
+import fs from 'fs-extra';
+import { getVideoFile } from '../utils/query';
+import redisClient from '../config/redis';
+import { TorrentPath } from '../@types';
 
 export const getVideo = async (req: Request, res: Response): Promise<void> => {
-  const { torrentSlug, videoSlug } = req.params;
-  if (!torrentSlug || !videoSlug) {
-    throw boom.badRequest('torrentSlug and videoSlug is required');
+  const { videoSlug } = req.params;
+  if (!videoSlug) {
+    throw boom.badRequest(' videoSlug is required');
   }
 
-  const video = await getVideoFile(torrentSlug, videoSlug);
-  if (!video) {
-    throw boom.notFound('video not found');
+  let videoPath = await redisClient.get(`VIDEO_PATH:${videoSlug}`);
+  if (!videoPath) {
+    const video = await getVideoFile(videoSlug);
+    if (!video) {
+      throw boom.notFound('video not found');
+    }
+    videoPath = video.path;
+    await redisClient.set(`VIDEO_PATH:${videoSlug}`, videoPath);
   }
 
   // Ensure there is a range given for the video
@@ -21,8 +28,6 @@ export const getVideo = async (req: Request, res: Response): Promise<void> => {
     throw boom.badRequest('range is required');
   }
 
-  //! file might not exist handle it later
-  const videoPath = video.path;
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   const videoSize = fs.statSync(videoPath).size;
 
@@ -54,15 +59,24 @@ export const getVideo = async (req: Request, res: Response): Promise<void> => {
   videoStream.pipe(res);
 };
 
-export const getTorrentVideos = async (req: Request, res: Response): Promise<void> => {
-  const { slug } = req.params;
-  if (!slug) {
-    throw boom.badRequest('slug is required');
+export const getSubtitle = async (req: Request, res: Response): Promise<void> => {
+  const { filename } = req.params;
+  if (!filename) {
+    throw boom.badRequest('filename is required');
   }
+  const exists = await fs.pathExists(`${TorrentPath.SUBTITLES}/${filename}`);
 
-  const torrent = await getTorrentBySlug(slug);
-  if (!torrent) {
-    throw boom.notFound('torrent not found');
+  if (!exists) {
+    throw boom.notFound('file not found');
   }
-  res.send({ files: torrent.files });
+  const options = {
+    root: TorrentPath.SUBTITLES,
+  };
+  res.sendFile(filename, options, err => {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log('Sent:', filename);
+    }
+  });
 };

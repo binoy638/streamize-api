@@ -12,6 +12,13 @@ export type ConvertState = 'processing' | 'done' | 'error' | 'waiting';
 
 export type TorrentStatus = 'added' | 'downloading' | 'converting' | 'done' | 'error' | 'waiting' | 'pause';
 
+export interface ISubtitle {
+  fileName: string;
+  title: string;
+  language: string;
+  path: string;
+}
+
 export interface IVideo {
   name: string;
   slug: string;
@@ -19,6 +26,7 @@ export interface IVideo {
   path: string;
   ext: string;
   isConvertable: boolean;
+  subtitles: ISubtitle[];
   status: TorrentStatus;
   convertStatus: {
     progress: number;
@@ -43,6 +51,7 @@ export interface ITorrent {
 export enum TorrentPath {
   TMP = '/home/app/tmp',
   DOWNLOAD = '/home/app/downloads',
+  SUBTITLES = '/home/app/subtitles',
 }
 
 export enum QueueName {

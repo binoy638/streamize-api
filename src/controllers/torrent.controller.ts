@@ -10,6 +10,9 @@ import {
   getTorrentByMagnet,
 } from '../utils/query';
 import { publisherChannel } from '../rabbitmq';
+import { QueueName } from '../@types';
+import { IDeleteFilesMessageContent } from '../@types/message';
+import logger from '../config/logger';
 
 export const getAllTorrents = async (req: Request, res: Response): Promise<void> => {
   const torrents = await getAllTorrentsFromDB();
@@ -44,6 +47,23 @@ export const deleteTorrent = async (req: Request, res: Response): Promise<void> 
   if (torrent) {
     torrent.destroy();
   }
+
+  const Files = doc.files.map(file => {
+    if (file.path) {
+      publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: file.path } as IDeleteFilesMessageContent);
+    }
+    if (file.subtitles.length > 0) {
+      const subs = file.subtitles.map(subtitle => {
+        publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: subtitle.path } as IDeleteFilesMessageContent);
+        return subtitle.title;
+      });
+      logger.info(`Deleting subtitles: ${subs}`);
+    }
+    return file.name;
+  });
+
+  logger.info(`Deleting torrent ${doc.slug}\nFiles: ${Files}`);
+
   await deleteTorrentByID(doc._id);
   res.send({ message: 'torrent deleted successfully' });
 };
@@ -69,7 +89,7 @@ export const addTorrent = async (req: Request, res: Response): Promise<void> => 
   const torrent = await createTorrentWithMagnet(magnet);
 
   publisherChannel
-    .sendToQueue('download-torrent', torrent)
+    .sendToQueue(QueueName.DOWNLOAD_TORRENT, torrent)
     .then(() => {
       res.send({ message: 'torrent added successfully', torrent });
     })

@@ -18,11 +18,11 @@ export const downloadTorrent =
     if (!message) return;
     try {
       const addedTorrent: ITorrent = getMessageContent<ITorrent>(message);
-      logger.info({ message: 'Received new torrent to download..', addedTorrent });
+      logger.info(`Received new torrent to download.. ${addedTorrent}`);
 
       client.add(addedTorrent.magnet, { path: TorrentPath.TMP }, async torrent => {
         torrent.on('error', () => {
-          logger.error(`Torrent error ack msg: ' ${addedTorrent} `);
+          logger.error(`Torrent error, ack msg: ' ${addedTorrent} `);
           channel.ack(message);
         });
         const videofiles = torrent.files

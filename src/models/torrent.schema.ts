@@ -1,6 +1,40 @@
 import { model, Schema } from 'mongoose';
 import { nanoid } from 'nanoid';
-import { ITorrent } from '../@types';
+import { ITorrent, ISubtitle, IVideo, IDownloadInfo } from '../@types';
+
+const subtitleSchema: Schema = new Schema<ISubtitle>({
+  fileName: String,
+  title: String,
+  language: String,
+  path: String,
+});
+
+const downloadInfoSchema: Schema = new Schema<IDownloadInfo>({
+  downloadSpeed: { type: Number },
+  uploadSpeed: { type: Number },
+  progress: { type: Number },
+  timeRemaining: { type: Number },
+  paused: { type: Boolean },
+  completed: { type: Boolean },
+});
+
+const fileSchema: Schema = new Schema<IVideo>({
+  name: { type: String },
+  slug: { type: String, default: () => nanoid(5).toLowerCase() },
+  path: { type: String },
+  size: { type: Number },
+  ext: { type: String },
+  subtitles: { type: [subtitleSchema], default: [] },
+  isConvertable: { type: Boolean, default: false },
+  status: {
+    type: String,
+    enum: ['downloading', 'paused', 'done', 'error', 'waiting', 'converting', 'added'],
+  },
+  convertStatus: {
+    progress: { type: Number },
+    state: { type: String, enum: ['processing', 'done', 'error', 'waiting'] },
+  },
+});
 
 const torrentSchema: Schema = new Schema<ITorrent>(
   {
@@ -16,24 +50,10 @@ const torrentSchema: Schema = new Schema<ITorrent>(
     size: {
       type: Number,
     },
-    files: [
-      {
-        name: { type: String },
-        slug: { type: String, default: () => nanoid(5).toLowerCase() },
-        path: { type: String },
-        size: { type: Number },
-        ext: { type: String },
-        isConvertable: { type: String },
-        status: {
-          type: String,
-          enum: ['downloading', 'paused', 'done', 'error', 'waiting', 'converting', 'added'],
-        },
-        convertStatus: {
-          progress: { type: Number },
-          state: { type: String, enum: ['processing', 'done', 'error', 'waiting'] },
-        },
-      },
-    ],
+    files: {
+      type: [fileSchema],
+      default: [],
+    },
     isMultiVideos: {
       type: Boolean,
     },
@@ -46,12 +66,7 @@ const torrentSchema: Schema = new Schema<ITorrent>(
       enum: ['downloading', 'paused', 'done', 'error', 'waiting', 'converting', 'added'],
     },
     downloadInfo: {
-      downloadSpeed: { type: Number },
-      uploadSpeed: { type: Number },
-      progress: { type: Number },
-      timeRemaining: { type: Number },
-      paused: { type: Boolean },
-      completed: { type: Boolean },
+      type: downloadInfoSchema,
     },
   },
   { timestamps: true }

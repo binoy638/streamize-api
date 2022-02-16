@@ -1,6 +1,12 @@
+/* eslint-disable unicorn/new-for-builtins */
+/* eslint-disable prefer-promise-reject-errors */
 import { ConsumeMessage } from 'amqplib';
+import ffmpeg from 'fluent-ffmpeg';
 import path from 'path';
-import { TorrentPath } from '../@types';
+import { ISubtitle, TorrentPath } from '../@types';
+import { IConvertVideoMessageContent } from '../@types/message';
+import { addSubtitleFile } from './query';
+import logger from '../config/logger';
 
 export const allowedExt = new Set(['mp4', 'mkv', 'avi']);
 export const convertableExt = new Set(['mkv', 'avi']);
@@ -18,4 +24,82 @@ export const stripFileExtension = (fileName: string): string => {
 
 export const getFileOutputPath = (fileName: string, path: TorrentPath): string => {
   return `${path}/${stripFileExtension(fileName)}.mp4`;
+};
+
+export const getSubtitleOutputPath = (fileName: string, path: TorrentPath): string => {
+  return `${path}/${fileName}.vtt`;
+};
+
+interface Sub {
+  title: string;
+  language: string;
+}
+
+export const getSubtitle = (
+  inputVideoFile: string,
+  subtitleInfo: ISubtitle,
+  index: number,
+  torrentID: string,
+  videoSlug: string
+): Promise<void> =>
+  new Promise<void>((resolve, reject) => {
+    ffmpeg(inputVideoFile)
+      .noAudio()
+      .noVideo()
+      .outputOptions('-map', `0:s:${index}`)
+      .output(subtitleInfo.path)
+      .on('end', () => {
+        logger.info(`Subtitle extracted successfully ${subtitleInfo}`);
+        addSubtitleFile(torrentID, videoSlug, subtitleInfo)
+          .then(() => resolve())
+          .catch(error => {
+            logger.error(error);
+            reject(error);
+          });
+      })
+      .on('error', error => {
+        logger.error(`Subtitle extraction failed ${subtitleInfo}`);
+        logger.error(error.message);
+        reject();
+      })
+      .run();
+  });
+
+export const getSubtitlesList = (videoFilePath: string): Promise<Sub[]> =>
+  new Promise<Sub[]>((resolve, reject) => {
+    ffmpeg(videoFilePath).ffprobe((err, data) => {
+      if (err) {
+        logger.error(err);
+        reject(err);
+      } else {
+        const subtitlesCodecs = data.streams
+          .filter(stream => stream.codec_type === 'subtitle')
+          .map(subtitle => {
+            return { title: subtitle?.tags?.title || 'unknown', language: subtitle?.tags?.language || 'unknown' };
+          });
+        resolve(subtitlesCodecs);
+      }
+    });
+  });
+
+export const extractSubtitles = async (videoFile: IConvertVideoMessageContent): Promise<void> => {
+  const subtitleslist = await getSubtitlesList(videoFile.path).catch(error => {
+    logger.error(error);
+  });
+  if (subtitleslist && subtitleslist.length > 0) {
+    const promises = subtitleslist.map((subtitle, index) => {
+      const fileName = `${videoFile.slug}-${subtitle.language}-${index}.vtt`;
+      const subtitleInfo: ISubtitle = {
+        fileName,
+        title: subtitle.title,
+        language: subtitle.language,
+        path: getSubtitleOutputPath(fileName, TorrentPath.SUBTITLES),
+      };
+      return getSubtitle(videoFile.path, subtitleInfo, index, videoFile.torrentID, videoFile.slug);
+    });
+
+    await Promise.allSettled(promises).catch(error => {
+      logger.error(error);
+    });
+  }
 };

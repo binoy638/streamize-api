@@ -1,3 +1,4 @@
+/* eslint-disable prefer-promise-reject-errors */
 import ffmpeg from 'fluent-ffmpeg';
 import logger from '../config/logger';
 import { updateFileConvertProgress, updateTorrentFileStatus, updateTorrentInfo } from './query';
@@ -7,8 +8,8 @@ export const convertMKVtoMp4 = (
   outputPath: string,
   slug: string,
   torrentId: string
-): Promise<string> => {
-  return new Promise<string>((resolve, reject) => {
+): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
     ffmpeg(filePath)
       .format('mp4')
       .audioCodec('libmp3lame')
@@ -26,12 +27,12 @@ export const convertMKVtoMp4 = (
         await updateFileConvertProgress(torrentId, slug, 100, 'done');
         resolve(slug);
       })
-      .on('error', err => async () => {
+      .on('error', async err => {
         await updateTorrentInfo(torrentId, { status: 'error' });
         await updateTorrentFileStatus(torrentId, slug, 'error');
         await updateFileConvertProgress(torrentId, slug, 0, 'error');
-        logger.error(err);
-        reject(err);
+        logger.error(err.message);
+        reject('something went wrong');
       })
       .on('progress', async progress => {
         logger.debug(`converting video progress: ${progress.percent}`);
@@ -39,4 +40,3 @@ export const convertMKVtoMp4 = (
       })
       .run();
   });
-};

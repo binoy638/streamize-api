@@ -1,20 +1,14 @@
 import WebTorrent from 'webtorrent';
+import logger from './logger';
 
 const client = new WebTorrent();
 
 client.on('torrent', torrent => {
-  console.log({ message: 'Torrent is ready', InfoHash: torrent.infoHash });
+  logger.info(`Torrent is ready, InfoHash: ${torrent.infoHash}`);
 });
 
 client.on('error', err => {
-  console.log({ err });
+  logger.error(err);
 });
-
-// const graceful = () => {
-//   client.destroy();
-// };
-
-// process.on('SIGTERM', graceful);
-// process.on('SIGINT', graceful);
 
 export default client;

@@ -3,7 +3,7 @@ import { Channel, ConsumeMessage } from 'amqplib';
 import { TorrentPath, QueueName } from '../../@types';
 import { IConvertVideoMessageContent, IDeleteFilesMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
-import { getFileOutputPath, getMessageContent } from '../../utils/misc';
+import { extractSubtitles, getFileOutputPath, getMessageContent } from '../../utils/misc';
 import { updateFilePath } from '../../utils/query';
 import { convertMKVtoMp4 } from '../../utils/videoConverter';
 
@@ -16,9 +16,10 @@ export const convertVideo =
     logger.info(`Received new video file to convert.. file:${file}`);
     const outputPath = getFileOutputPath(file.name, TorrentPath.DOWNLOAD);
     try {
-      const done = await convertMKVtoMp4(file.path, outputPath, file.slug, file.torrentID).then(err =>
-        logger.error(err)
-      );
+      await extractSubtitles(file);
+      const done = await convertMKVtoMp4(file.path, outputPath, file.slug, file.torrentID).catch(error => {
+        logger.error(error);
+      });
       if (done) {
         logger.info(`file converted successfully file: ${file}`);
         publisherChannel

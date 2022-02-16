@@ -12,6 +12,7 @@ import { TorrentPath } from './@types';
 import { clearTorrents } from './utils/query';
 import logger from './config/logger';
 import { fileManagerChannel, publisherChannel, torrentChannel, videoChannel } from './rabbitmq';
+import redisClient from './config/redis';
 
 // eslint-disable-next-line import/no-mutable-exports
 
@@ -20,7 +21,7 @@ const PORT = 3000;
 const app = express();
 
 app.use(helmet());
-app.use(morgan('tiny'));
+app.use(morgan('common'));
 app.use(cors());
 app.use(express.json());
 
@@ -28,13 +29,7 @@ app.use('/torrent', torrentRouter);
 app.use('/video', videoRouter);
 
 // app.get('/test', async (req, res) => {
-//   // rabbitMqPublisher.sendToQueue('download-torrent', Buffer.from('hello'));
-//   const doc = await TorrentModel.find({});
-//   // const doc = await TorrentModel.updateOne({ _id: '61fab50baf98fd0e99876b45' }, { $set: { 'files.$.status':  } });
-//   // console.log(doc);
-//   // const doc = await TorrentModel.find({});
-//   // logger.info('hello file:%o', { hello: 'hi' });
-//   res.send(doc);
+
 // });
 
 app.listen(PORT, async () => {
@@ -42,15 +37,16 @@ app.listen(PORT, async () => {
     await fs.emptyDir(TorrentPath.DOWNLOAD);
     await fs.emptyDir(TorrentPath.TMP);
     await connectMongo();
-    await publisherChannel.ackAll();
-    await torrentChannel.ackAll();
-    await videoChannel.ackAll();
-    await fileManagerChannel.ackAll();
+    await redisClient.connect();
+    publisherChannel.ackAll();
+    torrentChannel.ackAll();
+    videoChannel.ackAll();
+    fileManagerChannel.ackAll();
     await clearTorrents();
 
-    console.log(`Example app listening on port ${PORT}`);
+    logger.info(`Example app listening on port ${PORT}`);
   } catch (error) {
-    console.error(error);
+    logger.error(error);
   }
 });
 

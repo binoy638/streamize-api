@@ -1,9 +1,10 @@
 /* eslint-disable unicorn/no-null */
 import { Document } from 'mongoose';
-import { ConvertState, IDownloadInfo, ITorrent, IVideo, TorrentStatus } from '../@types';
+import { ConvertState, IDownloadInfo, ISubtitle, ITorrent, IVideo, TorrentStatus } from '../@types';
 import logger from '../config/logger';
 import { TorrentModel } from '../models/torrent.schema';
-import { allowedExt } from './misc';
+
+const allowedExt = new Set(['mp4', 'mkv', 'avi']);
 
 export const createTorrentWithMagnet = async (magnet: string): Promise<Document> => {
   const doc = new TorrentModel({ magnet, status: 'added' });
@@ -115,13 +116,21 @@ export const getAllTorrentsFromDB = async (): Promise<ITorrent[]> => {
   }
 };
 
-export const getVideoFile = async (torrentSlug: string, videoSlug: string): Promise<IVideo | null | undefined> => {
+export const getVideoFile = async (videoSlug: string): Promise<IVideo | null | undefined> => {
   try {
-    const doc = await TorrentModel.findOne({ slug: torrentSlug, 'files.slug': videoSlug });
+    const doc = await TorrentModel.findOne({ 'files.slug': videoSlug });
     if (!doc) return null;
     return doc.files.find(file => file.slug === videoSlug && file.status === 'done');
   } catch (error) {
     logger.error(error);
     throw new Error('something went wrong while fetching video file');
+  }
+};
+
+export const addSubtitleFile = async (_id: string, fileSlug: string, subtitleInfo: ISubtitle): Promise<void> => {
+  try {
+    await TorrentModel.updateOne({ _id, 'files.slug': fileSlug }, { $push: { 'files.$.subtitles': subtitleInfo } });
+  } catch (error) {
+    logger.error(error);
   }
 };

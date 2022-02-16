@@ -26,6 +26,15 @@ services:
     ports:
         - 5673:5672
         - 15673:15672
+  redis:
+    image: redis:6.2.6-alpine
+    logging:
+      driver: "none"
+    container_name: redis
+    healthcheck:
+      test: ["CMD", "redis-cli","ping"]
+    ports:
+      - "6380:6379"
   app:
     build:
       context: .
@@ -36,6 +45,7 @@ services:
     #   - ./src:/home/app/src
       - /home/tmp:/home/app/tmp
       - /home/downloads:/home/app/downloads
+      - /home/subtitles:/home/app/subtitles
     ports:
       - "8000:3000"
     command: npm start
@@ -43,5 +53,7 @@ services:
       mongo:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
      
