@@ -36,6 +36,7 @@ app.listen(PORT, async () => {
   try {
     await fs.emptyDir(TorrentPath.DOWNLOAD);
     await fs.emptyDir(TorrentPath.TMP);
+    await fs.emptyDir(TorrentPath.SUBTITLES);
     await connectMongo();
     await redisClient.connect();
     publisherChannel.ackAll();
