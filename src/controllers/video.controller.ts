@@ -80,3 +80,16 @@ export const getSubtitle = async (req: Request, res: Response): Promise<void> =>
     }
   });
 };
+
+export const getVideoInfo = async (req: Request, res: Response): Promise<void> => {
+  const { videoSlug } = req.params;
+  if (!videoSlug) {
+    throw boom.badRequest('filename is required');
+  }
+
+  const video = await getVideoFile(videoSlug);
+  if (!video) {
+    throw boom.notFound('video not found');
+  }
+  res.status(200).send(video);
+};
