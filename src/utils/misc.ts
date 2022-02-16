@@ -27,7 +27,7 @@ export const getFileOutputPath = (fileName: string, path: TorrentPath): string =
 };
 
 export const getSubtitleOutputPath = (fileName: string, path: TorrentPath): string => {
-  return `${path}/${fileName}.vtt`;
+  return `${path}/${fileName}`;
 };
 
 interface Sub {
