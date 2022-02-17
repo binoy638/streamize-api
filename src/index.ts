@@ -34,16 +34,18 @@ app.use('/video', videoRouter);
 
 app.listen(PORT, async () => {
   try {
-    await fs.emptyDir(TorrentPath.DOWNLOAD);
-    await fs.emptyDir(TorrentPath.TMP);
-    await fs.emptyDir(TorrentPath.SUBTITLES);
     await connectMongo();
     await redisClient.connect();
-    publisherChannel.ackAll();
-    torrentChannel.ackAll();
-    videoChannel.ackAll();
-    fileManagerChannel.ackAll();
-    await clearTorrents();
+    if (process.env.NODE_ENV === 'development') {
+      await fs.emptyDir(TorrentPath.DOWNLOAD);
+      await fs.emptyDir(TorrentPath.TMP);
+      await fs.emptyDir(TorrentPath.SUBTITLES);
+      publisherChannel.ackAll();
+      torrentChannel.ackAll();
+      videoChannel.ackAll();
+      fileManagerChannel.ackAll();
+      await clearTorrents();
+    }
 
     logger.info(`Example app listening on port ${PORT}`);
   } catch (error) {
