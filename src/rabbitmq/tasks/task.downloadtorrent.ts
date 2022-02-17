@@ -18,7 +18,7 @@ export const downloadTorrent =
     if (!message) return;
     try {
       const addedTorrent: ITorrent = getMessageContent<ITorrent>(message);
-      logger.info(`Received new torrent to download.. ${addedTorrent}`);
+      logger.info(`Received new torrent to download.. ${JSON.stringify(addedTorrent)}`);
 
       client.add(addedTorrent.magnet, { path: TorrentPath.TMP }, async torrent => {
         torrent.on('error', () => {

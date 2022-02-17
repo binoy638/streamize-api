@@ -75,7 +75,10 @@ export const getSubtitlesList = (videoFilePath: string): Promise<Sub[]> =>
         const subtitlesCodecs = data.streams
           .filter(stream => stream.codec_type === 'subtitle')
           .map(subtitle => {
-            return { title: subtitle?.tags?.title || 'unknown', language: subtitle?.tags?.language || 'unknown' };
+            return {
+              title: subtitle?.tags?.title || 'unknown',
+              language: subtitle?.tags?.language || subtitle?.tags?.LANGUAGE || 'unknown',
+            };
           });
         resolve(subtitlesCodecs);
       }

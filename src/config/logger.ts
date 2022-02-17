@@ -2,11 +2,10 @@ import { createLogger, format, transports } from 'winston';
 
 const { combine, printf, colorize, errors } = format;
 
-const logFormat = format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`);
-
 const prodLogger = () => {
+  const logFormat = format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`);
   return createLogger({
-    level: 'debug',
+    level: 'info',
     format: combine(
       format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
       // Format the metadata object

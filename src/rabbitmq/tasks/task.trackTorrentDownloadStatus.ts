@@ -52,7 +52,7 @@ export const trackDownload =
             });
         }
         const downloadInfo = getDataFromTorrent(torrent);
-        logger.debug('torrent download status received: %o', downloadInfo);
+        logger.debug(`torrent download status received: ${downloadInfo}`);
         updateTorrentDownloadInfo(data.torrentID, downloadInfo)
           .then(() => {
             if (downloadInfo.completed) {
