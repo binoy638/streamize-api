@@ -5,7 +5,7 @@ const { combine, printf, colorize, errors } = format;
 const prodLogger = () => {
   const logFormat = format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`);
   return createLogger({
-    level: 'info',
+    level: 'debug',
     format: combine(
       format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
       // Format the metadata object
