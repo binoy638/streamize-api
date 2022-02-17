@@ -1,13 +1,23 @@
 import { createLogger, format, transports } from 'winston';
 
-const { combine, printf, json, colorize, errors } = format;
+const { combine, printf, colorize, errors } = format;
+
+const logFormat = format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`);
 
 const prodLogger = () => {
   return createLogger({
-    level: 'info',
-    format: combine(format.timestamp(), errors({ stack: true }), json()),
+    level: 'debug',
+    format: combine(
+      format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+      // Format the metadata object
+      format.metadata({ fillExcept: ['message', 'level', 'timestamp', 'label'] })
+    ),
     defaultMeta: { service: 'user-service' },
-    transports: [new transports.Console()],
+    transports: [
+      new transports.Console({
+        format: format.combine(logFormat),
+      }),
+    ],
   });
 };
 

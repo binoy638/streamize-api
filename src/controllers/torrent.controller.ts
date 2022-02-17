@@ -13,6 +13,7 @@ import { publisherChannel } from '../rabbitmq';
 import { QueueName } from '../@types';
 import { IDeleteFilesMessageContent } from '../@types/message';
 import logger from '../config/logger';
+import redisClient from '../config/redis';
 
 export const getAllTorrents = async (req: Request, res: Response): Promise<void> => {
   const torrents = await getAllTorrentsFromDB();
@@ -57,6 +58,7 @@ export const deleteTorrent = async (req: Request, res: Response): Promise<void> 
         publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: subtitle.path } as IDeleteFilesMessageContent);
         return subtitle.title;
       });
+      redisClient.del(`VIDEO_PATH:${file.slug}`).catch(error => logger.error(error));
       logger.info(`Deleting subtitles: ${subs}`);
     }
     return file.name;

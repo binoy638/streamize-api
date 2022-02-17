@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-identical-functions */
 import { Channel, ConsumeMessage } from 'amqplib';
 import { getMessageContent } from '../../utils/misc';
 import { ITorrentDownloadStatusMessageContent } from '../../@types/message';
@@ -44,7 +45,11 @@ export const trackDownload =
               clearInterval(timer);
               logger.info('torrent download complete');
             })
-            .catch(error => logger.error(error));
+            .catch(error => {
+              logger.error(error);
+              channel.ack(message);
+              clearInterval(timer);
+            });
         }
         const downloadInfo = getDataFromTorrent(torrent);
         logger.debug('torrent download status received: %o', downloadInfo);
@@ -56,7 +61,11 @@ export const trackDownload =
               logger.info('torrent download complete');
             }
           })
-          .catch(error => logger.error(error));
+          .catch(error => {
+            logger.error(error);
+            channel.ack(message);
+            clearInterval(timer);
+          });
       }, 5000);
     } catch (error) {
       logger.error(error);
