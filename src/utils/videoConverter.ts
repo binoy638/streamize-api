@@ -1,6 +1,7 @@
 /* eslint-disable sonarjs/cognitive-complexity */
 /* eslint-disable prefer-promise-reject-errors */
 import ffmpeg from 'fluent-ffmpeg';
+import { IVideo } from '../@types';
 import logger from '../config/logger';
 import { updateFileConvertProgress, updateTorrentFileStatus, updateTorrentInfo } from './query';
 
@@ -26,13 +27,17 @@ export const getSupportedCodecs = (filePath: string): Promise<[string, string]> 
           if (audioStream?.codec_name && supportedAudioCodecs.has(audioStream.codec_name)) {
             logger.info(`Audio codec ${audioStream.codec_name} is supported`);
             audioCodec = 'copy';
+          } else {
+            logger.info(`Audio codec ${audioStream?.codec_name} is not supported`);
           }
         }
         if (videoStreams.length > 0) {
           const videoStream = videoStreams[0];
           if (videoStream?.codec_name && supportedVideoCodecs.has(videoStream.codec_name)) {
-            logger.info(`Audio codec ${videoStream.codec_name} is supported`);
+            logger.info(`Video codec ${videoStream.codec_name} is supported`);
             videoCodec = 'copy';
+          } else {
+            logger.info(`Video codec ${videoStream?.codec_name} is not supported`);
           }
         }
         resolve([audioCodec, videoCodec]);
@@ -80,4 +85,11 @@ export const convertMKVtoMp4 = async (
       })
       .run();
   });
+};
+
+export const isFileConvertable = async (file: IVideo): Promise<boolean> => {
+  if (file.ext !== 'mp4') return true;
+  const [audioCodec, videoCodec] = await getSupportedCodecs(file.path);
+  if (audioCodec === 'copy' && videoCodec === 'copy') return false;
+  return true;
 };

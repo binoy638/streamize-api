@@ -9,7 +9,8 @@ import {
 import logger from '../../config/logger';
 import client from '../../config/webtorrent';
 import { allowedExt, convertableExt, getFileOutputPath, getMessageContent } from '../../utils/misc';
-import { updateTorrentInfo } from '../../utils/query';
+import { getTorrentBySlug, updateTorrentFileConvertable, updateTorrentInfo } from '../../utils/query';
+import { isFileConvertable } from '../../utils/videoConverter';
 
 export const downloadTorrent =
   (channel: Channel, publisherChannel: ChannelWrapper) =>
@@ -75,8 +76,25 @@ export const downloadTorrent =
           } as ITorrentDownloadStatusMessageContent);
           torrent.on('done', async () => {
             await updateTorrentInfo(SavedTorrent._id, { status: 'done' });
-            const convertableVideoFiles = SavedTorrent.files.filter(file => file.isConvertable);
-            const nonConvertableVideoFiles = SavedTorrent.files.filter(file => !file.isConvertable);
+
+            await Promise.allSettled(
+              SavedTorrent.files.map(file => {
+                return isFileConvertable(file).then(isConvertable => {
+                  updateTorrentFileConvertable(SavedTorrent._id, file.name, isConvertable);
+                });
+              })
+            ).catch(error => {
+              logger.error(error);
+            });
+
+            const UpdatedTorrent = await getTorrentBySlug(SavedTorrent.slug);
+            if (!UpdatedTorrent) {
+              logger.error(`torrent not found after updating convertable data ${SavedTorrent.name}`);
+              channel.ack(message);
+              return;
+            }
+            const convertableVideoFiles = UpdatedTorrent.files.filter(file => file.isConvertable);
+            const nonConvertableVideoFiles = UpdatedTorrent.files.filter(file => !file.isConvertable);
             if (convertableVideoFiles.length > 0) {
               //* sending all convertable files to convert-video queue
               convertableVideoFiles.map(file =>

@@ -36,6 +36,10 @@ export const updateTorrentFileStatus = async (_id: string, slug: string, status:
   await TorrentModel.updateOne({ _id, 'files.slug': slug }, { $set: { 'files.$.status': status } });
 };
 
+export const updateTorrentFileConvertable = async (_id: string, slug: string, bool: boolean): Promise<void> => {
+  await TorrentModel.updateOne({ _id, 'files.slug': slug }, { $set: { 'files.$.isConvertable': bool } });
+};
+
 export const updateFileConvertProgress = async (
   _id: string,
   slug: string,
