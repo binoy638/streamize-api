@@ -12,7 +12,7 @@ export const trackDownload =
   async (message: ConsumeMessage | null): Promise<void> => {
     if (!message) return;
     const data = getMessageContent<ITorrentDownloadStatusMessageContent>(message);
-    logger.info(`Received new file to track download status: ${data}`);
+    logger.info(`Received new file to track download status: ${JSON.stringify(data)}`);
 
     try {
       const timer = setInterval(() => {
