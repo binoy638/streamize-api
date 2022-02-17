@@ -13,7 +13,7 @@ export const convertVideo =
     if (!message) return;
 
     const file = getMessageContent<IConvertVideoMessageContent>(message);
-    logger.info(`Received new video file to convert.. file:${file}`);
+    logger.info(`Received new video file to convert.. file:${file.name}`);
     const outputPath = getFileOutputPath(file.name, TorrentPath.DOWNLOAD);
     try {
       await extractSubtitles(file);
@@ -21,7 +21,7 @@ export const convertVideo =
         logger.error(error);
       });
       if (done) {
-        logger.info(`file converted successfully file: ${file}`);
+        logger.info(`file converted successfully file: ${file.name}`);
         publisherChannel
           .sendToQueue(QueueName.FILE_DELETE, { src: file.path } as IDeleteFilesMessageContent)
           .then(() => {
@@ -30,11 +30,11 @@ export const convertVideo =
             });
           });
       } else {
-        logger.error(`something went wrong while converting file: ${file}`);
+        logger.error(`something went wrong while converting file: ${file.name}`);
         channel.ack(message);
       }
     } catch (error) {
-      logger.error(`something went wrong while converting file: ${file} error: ${error}`);
+      logger.error(`something went wrong while converting file: ${file.name} error: ${JSON.stringify(error)}`);
       channel.ack(message);
     }
   };

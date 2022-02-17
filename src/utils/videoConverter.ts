@@ -1,19 +1,59 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 /* eslint-disable prefer-promise-reject-errors */
 import ffmpeg from 'fluent-ffmpeg';
 import logger from '../config/logger';
 import { updateFileConvertProgress, updateTorrentFileStatus, updateTorrentInfo } from './query';
 
-export const convertMKVtoMp4 = (
+// TODO: multiple audio support
+
+const supportedAudioCodecs = new Set(['aac', 'flac', 'mp3', 'ogg', 'opus', 'mpeg', 'mpeg-1', 'mpeg-2']);
+
+const supportedVideoCodecs = new Set(['avc', 'h264', 'theora', 'vp8', 'vp9']);
+
+// chrome supported audio codecs:  aac,flac,mp3,ogg,opus,mpeg,mpeg-1,mpeg-2
+// chrome supported video codecs: avc,h264,theora,vp8,vp9,
+
+export const getSupportedCodecs = (filePath: string): Promise<[string, string]> =>
+  new Promise<[string, string]>((resolve, reject) => {
+    let audioCodec = 'libmp3lame';
+    let videoCodec = 'libx264';
+    ffmpeg(filePath).ffprobe((error, data) => {
+      if (!error) {
+        const audioStreams = data.streams.filter(stream => stream.codec_type === 'audio');
+        const videoStreams = data.streams.filter(stream => stream.codec_type === 'video');
+        if (audioStreams.length > 0) {
+          const audioStream = audioStreams[0];
+          if (audioStream?.codec_name && supportedAudioCodecs.has(audioStream.codec_name)) {
+            logger.info(`Audio codec ${audioStream.codec_name} is supported`);
+            audioCodec = 'copy';
+          }
+        }
+        if (videoStreams.length > 0) {
+          const videoStream = videoStreams[0];
+          if (videoStream?.codec_name && supportedVideoCodecs.has(videoStream.codec_name)) {
+            logger.info(`Audio codec ${videoStream.codec_name} is supported`);
+            videoCodec = 'copy';
+          }
+        }
+        resolve([audioCodec, videoCodec]);
+      } else {
+        reject(error);
+      }
+    });
+  });
+
+export const convertMKVtoMp4 = async (
   filePath: string,
   outputPath: string,
   slug: string,
   torrentId: string
-): Promise<string> =>
-  new Promise<string>((resolve, reject) => {
+): Promise<string> => {
+  const [audioCodec, videoCodec] = await getSupportedCodecs(filePath);
+  return new Promise<string>((resolve, reject) => {
     ffmpeg(filePath)
       .format('mp4')
-      .audioCodec('libmp3lame')
-      .videoCodec('copy')
+      .audioCodec(audioCodec)
+      .videoCodec(videoCodec)
       .output(outputPath)
       .on('start', async () => {
         await updateTorrentInfo(torrentId, { status: 'converting' });
@@ -40,3 +80,4 @@ export const convertMKVtoMp4 = (
       })
       .run();
   });
+};
