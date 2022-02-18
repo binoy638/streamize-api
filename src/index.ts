@@ -28,17 +28,6 @@ app.use(express.json());
 app.use('/torrent', torrentRouter);
 app.use('/video', videoRouter);
 
-// app.get('/test', async (req, res) => {
-//   try {
-//     const doc = await getTorrentBySlug('bq7gd');
-//     const file = doc?.files[0];
-//     const _file = Object.assign({}, ...file);
-//     res.send({ id: 'asdsad', ..._file });
-//   } catch (error) {
-//     res.send(error);
-//   }
-// });
-
 app.listen(PORT, async () => {
   try {
     await connectMongo();
