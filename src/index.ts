@@ -29,14 +29,7 @@ app.use('/torrent', torrentRouter);
 app.use('/video', videoRouter);
 
 // app.get('/test', async (req, res) => {
-//   try {
-//     const doc = await getTorrentBySlug('fv69j');
-//     // const file = doc?.files[0];
-//     // const _file = Object.assign({}, ...file);
-//     res.send(doc);
-//   } catch (error) {
-//     res.send(error);
-//   }
+
 // });
 
 app.listen(PORT, async () => {
