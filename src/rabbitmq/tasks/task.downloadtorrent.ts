@@ -80,7 +80,7 @@ export const downloadTorrent =
             await Promise.allSettled(
               SavedTorrent.files.map(file => {
                 return isFileConvertable(file).then(isConvertable => {
-                  updateTorrentFileConvertable(SavedTorrent._id, file.name, isConvertable);
+                  updateTorrentFileConvertable(SavedTorrent._id, file.slug, isConvertable);
                 });
               })
             ).catch(error => {
@@ -93,8 +93,10 @@ export const downloadTorrent =
               channel.ack(message);
               return;
             }
+
             const convertableVideoFiles = UpdatedTorrent.files.filter(file => file.isConvertable);
             const nonConvertableVideoFiles = UpdatedTorrent.files.filter(file => !file.isConvertable);
+
             if (convertableVideoFiles.length > 0) {
               //* sending all convertable files to convert-video queue
               convertableVideoFiles.map(file =>
@@ -104,17 +106,20 @@ export const downloadTorrent =
                 } as IConvertVideoMessageContent)
               );
             }
-            //* sending all nonconvertable files to file-move queue to move them to download folder
-            await Promise.all(
-              nonConvertableVideoFiles.map(file =>
-                publisherChannel.sendToQueue(QueueName.FILE_MOVE, {
-                  src: file.path,
-                  dest: getFileOutputPath(file.name, TorrentPath.DOWNLOAD),
-                  torrentID: SavedTorrent._id,
-                  fileSlug: file.slug,
-                } as IMoveFilesMessageContent)
-              )
-            );
+            if (nonConvertableVideoFiles.length > 0) {
+              //* sending all nonconvertable files to file-move queue to move them to download folder
+              await Promise.all(
+                nonConvertableVideoFiles.map(file =>
+                  publisherChannel.sendToQueue(QueueName.FILE_MOVE, {
+                    src: file.path,
+                    dest: getFileOutputPath(file.name, TorrentPath.DOWNLOAD),
+                    torrentID: SavedTorrent._id,
+                    fileSlug: file.slug,
+                  } as IMoveFilesMessageContent)
+                )
+              );
+            }
+
             channel.ack(message);
             logger.info(`${SavedTorrent.name} torrent downloaded now deleting torrent`);
             //! this might leave usless files in tmp folder

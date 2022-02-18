@@ -13,8 +13,10 @@ export const convertVideo =
     if (!message) return;
 
     const file = getMessageContent<IConvertVideoMessageContent>(message);
+
     logger.info(`Received new video file to convert.. file:${file.name}`);
     const outputPath = getFileOutputPath(file.name, TorrentPath.DOWNLOAD);
+
     try {
       await extractSubtitles(file);
       const done = await convertMKVtoMp4(file.path, outputPath, file.slug, file.torrentID).catch(error => {

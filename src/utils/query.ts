@@ -80,7 +80,7 @@ export const updateFilePath = async (_id: string, slug: string, path: string): P
 
 export const getTorrentBySlug = async (slug: string): Promise<ITorrent | null> => {
   try {
-    const doc = await TorrentModel.findOne({ slug });
+    const doc = await TorrentModel.findOne({ slug }, { lean: true });
     if (!doc) return null;
     return doc;
   } catch (error) {
