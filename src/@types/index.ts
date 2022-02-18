@@ -20,6 +20,7 @@ export interface ISubtitle {
 }
 
 export interface IVideo {
+  [x: string]: any;
   name: string;
   slug: string;
   size: number;
@@ -28,6 +29,7 @@ export interface IVideo {
   isConvertable: boolean;
   subtitles: ISubtitle[];
   status: TorrentStatus;
+  downloadInfo?: IDownloadInfo;
   convertStatus: {
     progress: number;
     state: ConvertState;
@@ -45,7 +47,7 @@ export interface ITorrent {
   isMultiVideos: boolean;
   status: TorrentStatus;
   isMedia: boolean;
-  downloadInfo: IDownloadInfo;
+  downloadInfo?: IDownloadInfo;
 }
 
 export enum TorrentPath {
@@ -56,7 +58,6 @@ export enum TorrentPath {
 
 export enum QueueName {
   DOWNLOAD_TORRENT = 'download-torrent',
-  TRACK_TORRENT = 'track-torrent',
   CONVERT_VIDEO = 'convert-video',
   FILE_MOVE = 'move-files',
   FILE_DELETE = 'delete-files',

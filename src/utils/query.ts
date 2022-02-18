@@ -111,7 +111,7 @@ export const deleteTorrentByID = async (_id: string): Promise<void> => {
 //! need pagination later
 export const getAllTorrentsFromDB = async (): Promise<ITorrent[]> => {
   try {
-    const docs = await TorrentModel.find({}).select('-files').limit(20);
+    const docs = await TorrentModel.find({}).select('-files').limit(20).lean(true);
     if (!docs) return [];
     return docs;
   } catch (error) {

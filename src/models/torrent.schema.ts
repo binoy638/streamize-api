@@ -1,21 +1,12 @@
 import { model, Schema } from 'mongoose';
 import { nanoid } from 'nanoid';
-import { ITorrent, ISubtitle, IVideo, IDownloadInfo } from '../@types';
+import { ITorrent, ISubtitle, IVideo } from '../@types';
 
 const subtitleSchema: Schema = new Schema<ISubtitle>({
   fileName: String,
   title: String,
   language: String,
   path: String,
-});
-
-const downloadInfoSchema: Schema = new Schema<IDownloadInfo>({
-  downloadSpeed: { type: Number },
-  uploadSpeed: { type: Number },
-  progress: { type: Number },
-  timeRemaining: { type: Number },
-  paused: { type: Boolean },
-  completed: { type: Boolean },
 });
 
 const fileSchema: Schema = new Schema<IVideo>({
@@ -64,9 +55,6 @@ const torrentSchema: Schema = new Schema<ITorrent>(
     status: {
       type: String,
       enum: ['downloading', 'paused', 'done', 'error', 'waiting', 'converting', 'added'],
-    },
-    downloadInfo: {
-      type: downloadInfoSchema,
     },
   },
   { timestamps: true }
