@@ -46,6 +46,7 @@ services:
       - /home/tmp:/home/app/tmp
       - /home/downloads:/home/app/downloads
       - /home/subtitles:/home/app/subtitles
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
     ports:
       - "8000:3000"
     command: npm start
