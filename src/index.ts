@@ -43,16 +43,16 @@ app.listen(PORT, async () => {
   try {
     await connectMongo();
     await redisClient.connect();
-    // if (process.env.NODE_ENV === 'development') {
-    await fs.emptyDir(TorrentPath.DOWNLOAD);
-    await fs.emptyDir(TorrentPath.TMP);
-    await fs.emptyDir(TorrentPath.SUBTITLES);
-    publisherChannel.ackAll();
-    torrentChannel.ackAll();
-    videoChannel.ackAll();
-    fileManagerChannel.ackAll();
-    await clearTorrents();
-    // }
+    if (process.env.NODE_ENV === 'development') {
+      await fs.emptyDir(TorrentPath.DOWNLOAD);
+      await fs.emptyDir(TorrentPath.TMP);
+      await fs.emptyDir(TorrentPath.SUBTITLES);
+      publisherChannel.ackAll();
+      torrentChannel.ackAll();
+      videoChannel.ackAll();
+      fileManagerChannel.ackAll();
+      await clearTorrents();
+    }
 
     logger.info(`Example app listening on port ${PORT}`);
   } catch (error) {
