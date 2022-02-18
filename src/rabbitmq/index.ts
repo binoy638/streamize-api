@@ -15,7 +15,7 @@ connection.on('connect', function () {
   logger.info('Rabbitmq Connected!');
 });
 connection.on('disconnect', function (err) {
-  logger.error(`Rabbitmq Disconnected. ${err}`, err);
+  logger.error(`Rabbitmq Disconnected. ${JSON.stringify(err)}`);
 });
 
 export const publisherChannel = connection.createChannel({

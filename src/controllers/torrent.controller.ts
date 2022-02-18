@@ -37,22 +37,25 @@ export const getTorrentInfo = async (req: Request, res: Response): Promise<void>
     throw boom.badRequest('slug is required');
   }
   const doc = await getTorrentBySlug(slug);
-  if (doc && doc.status === 'downloading') {
-    const torrent = client.get(doc.infoHash);
-    if (torrent) {
-      const downloadInfo = getDataFromTorrent(torrent);
+  if (doc) {
+    if (doc.status === 'downloading') {
+      const torrent = client.get(doc.infoHash);
+      if (torrent) {
+        const downloadInfo = getDataFromTorrent(torrent);
 
-      const filesWithDownloadInfo = doc.files.map(docFile => {
-        const file = torrent.files.find(file => file.name === docFile.name);
-        if (file) {
-          const downloadInfo = getDataFromTorrentFile(file);
-          return { ...docFile, downloadInfo };
-        }
-        return docFile;
-      });
-      doc.downloadInfo = downloadInfo;
-      doc.files = filesWithDownloadInfo;
+        const filesWithDownloadInfo = doc.files.map(docFile => {
+          const file = torrent.files.find(file => file.name === docFile.name);
+          if (file) {
+            const downloadInfo = getDataFromTorrentFile(file);
+            return { ...docFile, downloadInfo };
+          }
+          return docFile;
+        });
+        doc.downloadInfo = downloadInfo;
+        doc.files = filesWithDownloadInfo;
+      }
     }
+
     res.send(doc);
   } else {
     throw boom.notFound('torrent not found');

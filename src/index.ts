@@ -9,7 +9,7 @@ import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
 import { TorrentPath } from './@types';
-import { clearTorrents, getTorrentBySlug } from './utils/query';
+import { clearTorrents } from './utils/query';
 import logger from './config/logger';
 import { fileManagerChannel, publisherChannel, torrentChannel, videoChannel } from './rabbitmq';
 import redisClient from './config/redis';
@@ -28,16 +28,16 @@ app.use(express.json());
 app.use('/torrent', torrentRouter);
 app.use('/video', videoRouter);
 
-app.get('/test', async (req, res) => {
-  try {
-    const doc = await getTorrentBySlug('fv69j');
-    // const file = doc?.files[0];
-    // const _file = Object.assign({}, ...file);
-    res.send(doc);
-  } catch (error) {
-    res.send(error);
-  }
-});
+// app.get('/test', async (req, res) => {
+//   try {
+//     const doc = await getTorrentBySlug('fv69j');
+//     // const file = doc?.files[0];
+//     // const _file = Object.assign({}, ...file);
+//     res.send(doc);
+//   } catch (error) {
+//     res.send(error);
+//   }
+// });
 
 app.listen(PORT, async () => {
   try {
