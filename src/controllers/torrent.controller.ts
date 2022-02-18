@@ -14,7 +14,7 @@ import { QueueName } from '../@types';
 import { IDeleteFilesMessageContent } from '../@types/message';
 import logger from '../config/logger';
 import redisClient from '../config/redis';
-import { getDataFromTorrent } from '../utils/torrentHelper';
+import { getDataFromTorrent, getDataFromTorrentFile } from '../utils/torrentHelper';
 
 export const getAllTorrents = async (req: Request, res: Response): Promise<void> => {
   const torrents = await getAllTorrentsFromDB();
@@ -37,11 +37,21 @@ export const getTorrentInfo = async (req: Request, res: Response): Promise<void>
     throw boom.badRequest('slug is required');
   }
   const doc = await getTorrentBySlug(slug);
-  if (doc) {
+  if (doc && doc.status === 'downloading') {
     const torrent = client.get(doc.infoHash);
     if (torrent) {
       const downloadInfo = getDataFromTorrent(torrent);
+
+      const filesWithDownloadInfo = doc.files.map(docFile => {
+        const file = torrent.files.find(file => file.name === docFile.name);
+        if (file) {
+          const downloadInfo = getDataFromTorrentFile(file);
+          return { ...docFile, downloadInfo };
+        }
+        return docFile;
+      });
       doc.downloadInfo = downloadInfo;
+      doc.files = filesWithDownloadInfo;
     }
     res.send(doc);
   } else {

@@ -8,6 +8,12 @@ export interface IDownloadInfo {
   paused: boolean;
   completed: boolean;
 }
+
+export interface IFileDownloadInfo {
+  downloaded: number;
+  progress: number;
+}
+
 export type ConvertState = 'processing' | 'done' | 'error' | 'waiting';
 
 export type TorrentStatus = 'added' | 'downloading' | 'converting' | 'done' | 'error' | 'waiting' | 'pause';
@@ -29,7 +35,7 @@ export interface IVideo {
   isConvertable: boolean;
   subtitles: ISubtitle[];
   status: TorrentStatus;
-  downloadInfo?: IDownloadInfo;
+  downloadInfo?: IFileDownloadInfo;
   convertStatus: {
     progress: number;
     state: ConvertState;

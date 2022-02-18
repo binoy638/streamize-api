@@ -1,5 +1,5 @@
-import { Torrent } from 'webtorrent';
-import { IDownloadInfo } from '../@types';
+import { Torrent, TorrentFile } from 'webtorrent';
+import { IDownloadInfo, IFileDownloadInfo } from '../@types';
 
 export const getDataFromTorrent = (torrent: Torrent): IDownloadInfo => {
   return {
@@ -9,5 +9,12 @@ export const getDataFromTorrent = (torrent: Torrent): IDownloadInfo => {
     timeRemaining: torrent.timeRemaining,
     paused: torrent.paused,
     completed: torrent.done,
+  };
+};
+
+export const getDataFromTorrentFile = (file: TorrentFile): IFileDownloadInfo => {
+  return {
+    downloaded: file.downloaded,
+    progress: file.progress,
   };
 };
