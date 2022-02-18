@@ -15,6 +15,8 @@ services:
       - '27018:27017'
   rabbitmq:
     image: rabbitmq:3.8-management-alpine
+    environment:
+      - RABBITMQ_CONFIG_FILE=/etc/rabbitmq/rabbitmq.conf
     logging:
       driver: "none"
     container_name: rabbitmq
@@ -23,9 +25,11 @@ services:
       interval: 30s
       timeout: 30s
       retries: 3
+    volumes:
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
     ports:
-        - 5673:5672
-        - 15673:15672
+      - 5673:5672
+      - 15673:15672
   redis:
     image: redis:6.2.6-alpine
     logging:
@@ -46,7 +50,6 @@ services:
       - /home/tmp:/home/app/tmp
       - /home/downloads:/home/app/downloads
       - /home/subtitles:/home/app/subtitles
-      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
     ports:
       - "8000:3000"
     command: npm start
