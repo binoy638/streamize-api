@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import boom from '@hapi/boom';
 import 'express-async-errors';
+import fs from 'fs-extra';
 import client from '../config/webtorrent';
 import {
   createTorrentWithMagnet,
@@ -8,9 +9,10 @@ import {
   getTorrentBySlug,
   getAllTorrentsFromDB,
   getTorrentByMagnet,
+  clearTorrents,
 } from '../utils/query';
-import { publisherChannel } from '../rabbitmq';
-import { QueueName } from '../@types';
+import { fileManagerChannel, publisherChannel, torrentChannel, videoChannel } from '../rabbitmq';
+import { QueueName, TorrentPath } from '../@types';
 import { IDeleteFilesMessageContent } from '../@types/message';
 import logger from '../config/logger';
 import redisClient from '../config/redis';
@@ -120,12 +122,38 @@ export const addTorrent = async (req: Request, res: Response): Promise<void> => 
   const torrent = await createTorrentWithMagnet(magnet);
 
   publisherChannel
-    .sendToQueue(QueueName.DOWNLOAD_TORRENT, torrent)
+    .sendToQueue(QueueName.DOWNLOAD_TORRENT, torrent, { persistent: true, expiration: '86400000' })
     .then(() => {
       res.send({ message: 'torrent added successfully', torrent });
     })
     .catch(error => {
-      console.log(error);
+      logger.error(error);
       throw boom.internal('something went wrong');
     });
+};
+
+export const clearTemp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    await fs.emptyDir(TorrentPath.TMP);
+    res.send({ message: 'temp folder cleared successfully' });
+  } catch (error) {
+    logger.error(error);
+    throw boom.internal('something went wrong');
+  }
+};
+
+export const deleteAllTorrents = async (req: Request, res: Response): Promise<void> => {
+  try {
+    await fs.emptyDir(TorrentPath.DOWNLOAD);
+    await fs.emptyDir(TorrentPath.TMP);
+    publisherChannel.ackAll();
+    torrentChannel.ackAll();
+    videoChannel.ackAll();
+    fileManagerChannel.ackAll();
+    await clearTorrents();
+    res.send({ message: 'All torrents deleted' });
+  } catch (error) {
+    logger.error(error);
+    throw boom.internal('something went wrong while deleting torrents');
+  }
 };

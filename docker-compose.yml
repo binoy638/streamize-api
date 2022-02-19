@@ -4,6 +4,7 @@ services:
   mongo:
     container_name: streamize-mongo
     image: mongo
+    restart: always
     logging:
       driver: "none"
     healthcheck:
@@ -11,12 +12,15 @@ services:
       interval: 30s
       timeout: 30s
       retries: 3
+    volumes:
+      - /data/db
     ports:
       - '27018:27017'
   rabbitmq:
     image: rabbitmq:3.8-management-alpine
     environment:
       - RABBITMQ_CONFIG_FILE=/etc/rabbitmq/rabbitmq.conf
+    restart: always
     logging:
       driver: "none"
     container_name: rabbitmq
@@ -26,7 +30,8 @@ services:
       timeout: 30s
       retries: 3
     volumes:
-      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - /var/lib/rabbitmq/mnesia/
+      - /rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
     ports:
       - 5673:5672
       - 15673:15672

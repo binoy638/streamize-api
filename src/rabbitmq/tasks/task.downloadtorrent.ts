@@ -91,22 +91,30 @@ export const downloadTorrent =
             if (convertableVideoFiles.length > 0) {
               //* sending all convertable files to convert-video queue
               convertableVideoFiles.map(file =>
-                publisherChannel.sendToQueue(QueueName.CONVERT_VIDEO, {
-                  torrentID: SavedTorrent._id,
-                  ...file,
-                } as IConvertVideoMessageContent)
+                publisherChannel.sendToQueue(
+                  QueueName.CONVERT_VIDEO,
+                  {
+                    torrentID: SavedTorrent._id,
+                    ...file,
+                  } as IConvertVideoMessageContent,
+                  { persistent: true }
+                )
               );
             }
             if (nonConvertableVideoFiles.length > 0) {
               //* sending all nonconvertable files to file-move queue to move them to download folder
               await Promise.all(
                 nonConvertableVideoFiles.map(file =>
-                  publisherChannel.sendToQueue(QueueName.FILE_MOVE, {
-                    src: file.path,
-                    dest: getFileOutputPath(file.name, TorrentPath.DOWNLOAD),
-                    torrentID: SavedTorrent._id,
-                    fileSlug: file.slug,
-                  } as IMoveFilesMessageContent)
+                  publisherChannel.sendToQueue(
+                    QueueName.FILE_MOVE,
+                    {
+                      src: file.path,
+                      dest: getFileOutputPath(file.name, TorrentPath.DOWNLOAD),
+                      torrentID: SavedTorrent._id,
+                      fileSlug: file.slug,
+                    } as IMoveFilesMessageContent,
+                    { persistent: true }
+                  )
                 )
               );
             }

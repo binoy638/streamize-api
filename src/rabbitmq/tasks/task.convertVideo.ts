@@ -25,7 +25,7 @@ export const convertVideo =
       if (done) {
         logger.info(`file converted successfully file: ${file.name}`);
         publisherChannel
-          .sendToQueue(QueueName.FILE_DELETE, { src: file.path } as IDeleteFilesMessageContent)
+          .sendToQueue(QueueName.FILE_DELETE, { src: file.path } as IDeleteFilesMessageContent, { persistent: true })
           .then(() => {
             updateFilePath(file.torrentID, file.slug, outputPath).then(() => {
               channel.ack(message);

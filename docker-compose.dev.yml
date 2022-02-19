@@ -26,7 +26,7 @@ services:
       timeout: 30s
       retries: 3
     volumes:
-      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - /rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
     ports:
       - 5673:5672
       - 15673:15672
