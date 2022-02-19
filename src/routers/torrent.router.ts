@@ -15,9 +15,9 @@ torrentRouter.get('/', getAllTorrents);
 
 torrentRouter.delete('/:slug', deleteTorrent);
 
-torrentRouter.delete('/all', deleteAllTorrents);
+torrentRouter.delete('/clear/all', deleteAllTorrents);
 
-torrentRouter.delete('/temp', clearTemp);
+torrentRouter.delete('/clear/temp', clearTemp);
 
 torrentRouter.get('/:slug', getTorrentInfo);
 
