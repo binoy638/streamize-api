@@ -133,7 +133,16 @@ export const downloadTorrent =
             return;
           }
           torrent.on('metadata', async () => {
+            logger.info(`torrent metadata received`);
             if (torrent.progress === 1) {
+              logger.info(`torrent already downloaded`);
+              await handleCompletedTorrent(torrent, addedTorrent, publisherChannel, channel, message);
+            }
+          });
+          torrent.on('ready', async () => {
+            logger.info(`torrent is ready, inside ready event`);
+            if (torrent.progress === 1) {
+              logger.info(`torrent already downloaded, inside ready`);
               await handleCompletedTorrent(torrent, addedTorrent, publisherChannel, channel, message);
             }
           });
