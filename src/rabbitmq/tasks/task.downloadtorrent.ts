@@ -134,7 +134,7 @@ export const downloadTorrent =
           }
           if (torrent.progress === 1) {
             logger.info(`torrent already downloaded, inside ready`);
-            await handleCompletedTorrent(torrent, addedTorrent, publisherChannel, channel, message);
+            await handleCompletedTorrent(torrent, SavedTorrent, publisherChannel, channel, message);
           }
           torrent.on('done', async () => {
             await handleCompletedTorrent(torrent, SavedTorrent, publisherChannel, channel, message);

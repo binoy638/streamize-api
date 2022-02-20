@@ -5,6 +5,7 @@ import fs from 'fs-extra';
 import { getVideoFile } from '../utils/query';
 import redisClient from '../config/redis';
 import { TorrentPath } from '../@types';
+import logger from '../config/logger';
 
 export const getVideo = async (req: Request, res: Response): Promise<void> => {
   const { videoSlug } = req.params;
@@ -92,4 +93,22 @@ export const getVideoInfo = async (req: Request, res: Response): Promise<void> =
     throw boom.notFound('video not found');
   }
   res.status(200).send(video);
+};
+
+export const downloadVideo = async (req: Request, res: Response): Promise<void> => {
+  const { videoSlug } = req.params;
+  if (!videoSlug) {
+    throw boom.badRequest('filename is required');
+  }
+
+  const video = await getVideoFile(videoSlug);
+  if (!video) {
+    throw boom.notFound('video not found');
+  }
+  const { path } = video;
+  res.download(path, error => {
+    if (error) {
+      logger.error(error);
+    }
+  });
 };
