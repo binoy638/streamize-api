@@ -105,8 +105,13 @@ export const downloadVideo = async (req: Request, res: Response): Promise<void> 
   if (!video) {
     throw boom.notFound('video not found');
   }
-  const { path } = video;
-  res.download(path, error => {
+  const { path, name } = video;
+  const options = {
+    headers: {
+      'Content-Disposition': `attachment; filename=${name}`,
+    },
+  };
+  res.download(path, name, options, error => {
     if (error) {
       logger.error(error);
     }
