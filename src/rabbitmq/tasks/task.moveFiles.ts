@@ -15,7 +15,7 @@ export const moveFiles =
       await fs.move(file.src, file.dest);
       await updateFilePath(file.torrentID, file.fileSlug, file.dest);
       await updateTorrentFileStatus(file.torrentID, file.fileSlug, 'done');
-      logger.info(`file moved successfully: ${file}`);
+      logger.info(`file moved successfully: ${JSON.stringify(file)}`);
       channel.ack(message);
     } catch (error) {
       logger.error(error);
