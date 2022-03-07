@@ -1,4 +1,4 @@
-# Streamize - Host your own video streaming server
+# Streamize - Download and stream torrents online
 
 ## Running the app in the development mode
 
