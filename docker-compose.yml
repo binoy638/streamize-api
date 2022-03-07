@@ -7,6 +7,8 @@ services:
     restart: always
     logging:
       driver: "none"
+    networks:
+      - nginx-network
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongo mongo:27017/test --quiet
       interval: 30s
@@ -23,6 +25,8 @@ services:
     restart: always
     logging:
       driver: "none"
+    networks:
+      - nginx-network
     container_name: rabbitmq
     healthcheck:
       test: rabbitmq-diagnostics -q ping
@@ -37,6 +41,9 @@ services:
       - 15673:15672
   redis:
     image: redis:6.2.6-alpine
+    restart: always
+    networks:
+      - nginx-network
     logging:
       driver: "none"
     container_name: redis
@@ -49,6 +56,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: streamize-api
+    networks:
+      - nginx-network
     restart: on-failure:5 
     volumes:
     #   - ./src:/home/app/src
@@ -66,3 +75,8 @@ services:
       redis:
         condition: service_healthy
      
+
+networks:
+  nginx-network:
+    external: true
+
