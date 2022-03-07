@@ -16,8 +16,6 @@ services:
       retries: 3
     volumes:
       - /data/db
-    ports:
-      - '27018:27017'
   rabbitmq:
     image: rabbitmq:3.8-management-alpine
     environment:
@@ -36,9 +34,6 @@ services:
     volumes:
       - /var/lib/rabbitmq/mnesia/
       - /rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
-    ports:
-      - 5673:5672
-      - 15673:15672
   redis:
     image: redis:6.2.6-alpine
     restart: always
@@ -49,8 +44,6 @@ services:
     container_name: redis
     healthcheck:
       test: ["CMD", "redis-cli","ping"]
-    ports:
-      - "6380:6379"
   app:
     build:
       context: .
@@ -60,12 +53,9 @@ services:
       - nginx-network
     restart: on-failure:5 
     volumes:
-    #   - ./src:/home/app/src
       - /home/tmp:/home/app/tmp
       - /home/downloads:/home/app/downloads
       - /home/subtitles:/home/app/subtitles
-    ports:
-      - "8000:3000"
     command: npm start
     depends_on:
       mongo:
