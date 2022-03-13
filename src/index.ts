@@ -29,7 +29,7 @@ app.use('/torrent', torrentRouter);
 app.use('/video', videoRouter);
 
 // app.get('/test', async (req, res) => {
-
+// const torrents = await TorrentModel.findById('622defe7cfaebb923accdf60');
 // });
 
 app.listen(PORT, async () => {
