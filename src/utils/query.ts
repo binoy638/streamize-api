@@ -124,8 +124,7 @@ export const getVideoFile = async (videoSlug: string): Promise<IVideo | null | u
   try {
     const doc = await TorrentModel.findOne({ 'files.slug': videoSlug }).lean(true);
     if (!doc) return null;
-    // return doc.files.find(file => file.slug === videoSlug && file.status === 'done');
-    return doc.files.find(file => file.slug === videoSlug);
+    return doc.files.find(file => file.slug === videoSlug && file.status === 'done');
   } catch (error) {
     logger.error(error);
     throw new Error('something went wrong while fetching video file');

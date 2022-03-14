@@ -19,9 +19,7 @@ export const getVideo = async (req: Request, res: Response): Promise<void> => {
     if (!video) {
       throw boom.notFound('video not found');
     }
-    //! remove it
-    // videoPath = video.path;
-    videoPath = video.path.replace('/tmp/', '/downloads/');
+    videoPath = video.path;
     await redisClient.set(`VIDEO_PATH:${videoSlug}`, videoPath);
   }
 
@@ -99,7 +97,6 @@ export const getVideoInfo = async (req: Request, res: Response): Promise<void> =
 
 export const downloadVideo = async (req: Request, res: Response): Promise<void> => {
   const { videoSlug } = req.params;
-  const { t } = req.query;
   if (!videoSlug) {
     throw boom.badRequest('filename is required');
   }
@@ -108,20 +105,8 @@ export const downloadVideo = async (req: Request, res: Response): Promise<void> 
   if (!video) {
     throw boom.notFound('video not found');
   }
-  const { name } = video;
+  const { name, path } = video;
 
-  let { path } = video;
-
-  if (t) {
-    path = path.replace('/tmp/', '/downloads/');
-  }
-
-  console.log(path);
-
-  fs.access(path, e => {
-    console.log(e);
-    console.log(e ? 'it exists' : 'no passwd!');
-  });
   const options = {
     headers: {
       'Content-Disposition': `attachment; filename=${name}`,
