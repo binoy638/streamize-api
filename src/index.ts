@@ -35,13 +35,14 @@ app.get('/test', async (req, res) => {
     // eslint-disable-next-line security/detect-object-injection
     const file = files[num];
     const name = file.split('/').pop() || 'abc';
+    console.log(name);
     const options = {
       headers: {
         'Content-Disposition': `attachment; filename=${name}`,
       },
     };
     // eslint-disable-next-line security/detect-object-injection
-    res.download(files[num], name, options, error => {
+    res.download(`${TorrentPath.DOWNLOAD}/${files[num]}`, name, options, error => {
       if (error) {
         logger.error(error);
       }
