@@ -97,6 +97,7 @@ export const getVideoInfo = async (req: Request, res: Response): Promise<void> =
 
 export const downloadVideo = async (req: Request, res: Response): Promise<void> => {
   const { videoSlug } = req.params;
+  const { t } = req.query;
   if (!videoSlug) {
     throw boom.badRequest('filename is required');
   }
@@ -105,14 +106,26 @@ export const downloadVideo = async (req: Request, res: Response): Promise<void> 
   if (!video) {
     throw boom.notFound('video not found');
   }
-  const { path, name } = video;
-  const newPath = path.replace('/tmp/', '/downloads/');
+  const { name } = video;
+
+  let { path } = video;
+
+  if (t) {
+    path = path.replace('/tmp/', '/downloads/');
+  }
+
+  console.log(path);
+
+  fs.access(path, e => {
+    console.log(e);
+    console.log(e ? 'it exists' : 'no passwd!');
+  });
   const options = {
     headers: {
       'Content-Disposition': `attachment; filename=${name}`,
     },
   };
-  res.download(newPath, name, options, error => {
+  res.download(path, name, options, error => {
     if (error) {
       logger.error(error);
     }
