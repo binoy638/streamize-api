@@ -19,7 +19,9 @@ export const getVideo = async (req: Request, res: Response): Promise<void> => {
     if (!video) {
       throw boom.notFound('video not found');
     }
-    videoPath = video.path;
+    //! remove it
+    // videoPath = video.path;
+    videoPath = video.path.replace('/tmp/', '/downloads/');
     await redisClient.set(`VIDEO_PATH:${videoSlug}`, videoPath);
   }
 
