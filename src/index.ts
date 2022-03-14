@@ -28,10 +28,26 @@ app.use(express.json());
 app.use('/torrent', torrentRouter);
 app.use('/video', videoRouter);
 
-// app.get('/test', async (req, res) => {
-// const torrents = await TorrentModel.findById('622defe7cfaebb923accdf60');
-// });
-
+app.get('/test', async (req, res) => {
+  const num = (req.query.num as unknown as number) || 1;
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
+  fs.readdir(TorrentPath.DOWNLOAD, (err, files) => {
+    // eslint-disable-next-line security/detect-object-injection
+    const file = files[num];
+    const name = file.split('/').pop() || 'abc';
+    const options = {
+      headers: {
+        'Content-Disposition': `attachment; filename=${name}`,
+      },
+    };
+    // eslint-disable-next-line security/detect-object-injection
+    res.download(files[num], name, options, error => {
+      if (error) {
+        logger.error(error);
+      }
+    });
+  });
+});
 app.listen(PORT, async () => {
   try {
     await connectMongo();
