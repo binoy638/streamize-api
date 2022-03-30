@@ -13,7 +13,6 @@ const supportedVideoCodecs = new Set(['avc', 'h264', 'theora', 'vp8', 'vp9']);
 
 // chrome supported audio codecs:  aac,flac,mp3,ogg,opus,mpeg,mpeg-1,mpeg-2
 // chrome supported video codecs: avc,h264,theora,vp8,vp9,
-
 export const getSupportedCodecs = (filePath: string): Promise<[string, string]> =>
   new Promise<[string, string]>((resolve, reject) => {
     let audioCodec = 'libmp3lame';
