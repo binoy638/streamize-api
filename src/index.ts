@@ -49,6 +49,14 @@ app.listen(PORT, async () => {
   }
 });
 
+process.on('uncaughtException', error => {
+  logger.error(error);
+});
+
+process.on('unhandledRejection', error => {
+  logger.error(error);
+});
+
 app.on('error', error => logger.error(error));
 
 app.use(notFoundHandler);
