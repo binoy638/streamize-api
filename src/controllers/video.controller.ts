@@ -15,7 +15,7 @@ export const getVideo = async (req: Request, res: Response): Promise<void> => {
 
   let videoPath = await redisClient.get(`VIDEO_PATH:${videoSlug}`);
   if (!videoPath) {
-    const video = await getVideoFile(videoSlug);
+    const video = await getVideoFile(videoSlug, true);
     if (!video) {
       throw boom.notFound('video not found');
     }
@@ -88,7 +88,7 @@ export const getVideoInfo = async (req: Request, res: Response): Promise<void> =
     throw boom.badRequest('filename is required');
   }
 
-  const video = await getVideoFile(videoSlug);
+  const video = await getVideoFile(videoSlug, false);
   if (!video) {
     throw boom.notFound('video not found');
   }
@@ -101,7 +101,7 @@ export const downloadVideo = async (req: Request, res: Response): Promise<void> 
     throw boom.badRequest('filename is required');
   }
 
-  const video = await getVideoFile(videoSlug);
+  const video = await getVideoFile(videoSlug, true);
   if (!video) {
     throw boom.notFound('video not found');
   }

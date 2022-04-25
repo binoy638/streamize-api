@@ -26,7 +26,7 @@ export interface ISubtitle {
 }
 
 export interface IVideo {
-  [x: string]: any;
+  // [x: string]: any;
   name: string;
   slug: string;
   size: number;
@@ -36,7 +36,7 @@ export interface IVideo {
   subtitles: ISubtitle[];
   status: TorrentStatus;
   downloadInfo?: IFileDownloadInfo;
-  convertStatus: {
+  convertStatus?: {
     progress: number;
     state: ConvertState;
   };
