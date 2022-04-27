@@ -7,6 +7,7 @@ import { extractSubtitles, getFileOutputPath, getMessageContent } from '../../ut
 import { getVideoFile, updateFilePath } from '../../utils/query';
 import { convertMKVtoMp4 } from '../../utils/videoConverter';
 
+//! temp solution
 const isProcessed = (video: IVideo): boolean => {
   const status = video?.convertStatus;
   if (!status) return false;
