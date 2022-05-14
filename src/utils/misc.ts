@@ -1,8 +1,10 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
 /* eslint-disable unicorn/new-for-builtins */
 /* eslint-disable prefer-promise-reject-errors */
 import { ConsumeMessage } from 'amqplib';
 import ffmpeg from 'fluent-ffmpeg';
 import path from 'path';
+import fs from 'fs-extra';
 import { ISubtitle, TorrentPath } from '../@types';
 import { IConvertVideoMessageContent } from '../@types/message';
 import { addSubtitleFile } from './query';
@@ -22,11 +24,11 @@ export const stripFileExtension = (fileName: string): string => {
   return path.parse(fileName).name;
 };
 
-export const getFileOutputPath = (fileName: string, path: TorrentPath): string => {
+export const getFileOutputPath = (fileName: string, path: string): string => {
   return `${path}/${stripFileExtension(fileName)}.mp4`;
 };
 
-export const getSubtitleOutputPath = (fileName: string, path: TorrentPath): string => {
+export const getSubtitleOutputPath = (fileName: string, path: string): string => {
   return `${path}/${fileName}`;
 };
 
@@ -105,4 +107,21 @@ export const extractSubtitles = async (videoFile: IConvertVideoMessageContent): 
       logger.error(error);
     });
   }
+};
+
+export const isEmpty = async (dirPath: string): Promise<boolean> => {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
+  const files = await fs.readdir(dirPath);
+  if (files.length === 0) return true;
+  // eslint-disable-next-line no-restricted-syntax
+  for (const file of files) {
+    const filePath = `${dirPath}/${file}`;
+    // eslint-disable-next-line no-await-in-loop
+    const stats = await fs.stat(filePath);
+    if (stats.isDirectory()) {
+      return isEmpty(`${dirPath}/${file}`);
+    }
+    return false;
+  }
+  return false;
 };

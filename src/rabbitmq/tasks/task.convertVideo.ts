@@ -26,7 +26,7 @@ export const convertVideo =
     const video = await getVideoFile(file.slug, false);
     //* Checking if the video is already getting converted
     if (video && isProcessed(video) === false) {
-      const outputPath = getFileOutputPath(file.name, TorrentPath.DOWNLOAD);
+      const outputPath = getFileOutputPath(file.name, `${TorrentPath.DOWNLOAD}/${file.torrentSlug}/${file.slug}`);
 
       try {
         await extractSubtitles(file);
@@ -36,7 +36,11 @@ export const convertVideo =
         if (done) {
           logger.info(`file converted successfully file: ${file.name}`);
           publisherChannel
-            .sendToQueue(QueueName.FILE_DELETE, { src: file.path } as IDeleteFilesMessageContent, { persistent: true })
+            .sendToQueue(
+              QueueName.FILE_DELETE,
+              { src: file.path, torrentSlug: file.torrentSlug } as IDeleteFilesMessageContent,
+              { persistent: true }
+            )
             .then(() => {
               updateFilePath(file.torrentID, file.slug, outputPath).then(() => {
                 channel.ack(message);

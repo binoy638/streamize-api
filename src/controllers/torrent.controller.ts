@@ -8,7 +8,7 @@ import {
   deleteTorrentByID,
   getTorrentBySlug,
   getAllTorrentsFromDB,
-  // getTorrentByMagnet,
+  getTorrentByMagnet,
   clearTorrents,
 } from '../utils/query';
 import { fileManagerChannel, publisherChannel, torrentChannel, videoChannel } from '../rabbitmq';
@@ -113,11 +113,11 @@ export const addTorrent = async (req: Request, res: Response): Promise<void> => 
   if (!magnet.startsWith('magnet:?xt=urn:btih:')) {
     throw boom.badRequest('invalid magnet link');
   }
-  // const existInDB = await getTorrentByMagnet(magnet);
-  // const existInWebTorrent = client.get(magnet);
-  // if (existInDB || existInWebTorrent) {
-  //   throw boom.badRequest('torrent already exist');
-  // }
+  const existInDB = await getTorrentByMagnet(magnet);
+  const existInWebTorrent = client.get(magnet);
+  if (existInDB || existInWebTorrent) {
+    throw boom.badRequest('torrent already exist');
+  }
 
   const torrent = await createTorrentWithMagnet(magnet);
 

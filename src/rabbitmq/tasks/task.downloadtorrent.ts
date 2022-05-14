@@ -46,6 +46,7 @@ const handleCompletedTorrent = async (
         QueueName.CONVERT_VIDEO,
         {
           torrentID: downloadedTorrent._id,
+          torrentSlug: downloadedTorrent.slug,
           ...file,
         } as IConvertVideoMessageContent,
         { persistent: true }
@@ -60,8 +61,9 @@ const handleCompletedTorrent = async (
           QueueName.FILE_MOVE,
           {
             src: file.path,
-            dest: getFileOutputPath(file.name, TorrentPath.DOWNLOAD),
+            dest: getFileOutputPath(file.name, `${TorrentPath.DOWNLOAD}/${downloadedTorrent.slug}`),
             torrentID: downloadedTorrent._id,
+            torrentSlug: downloadedTorrent.slug,
             fileSlug: file.slug,
           } as IMoveFilesMessageContent,
           { persistent: true }
@@ -84,7 +86,7 @@ export const downloadTorrent =
       const addedTorrent: ITorrent = getMessageContent<ITorrent>(message);
       logger.info(`Received new torrent to download.. ${JSON.stringify(addedTorrent)}`);
 
-      client.add(addedTorrent.magnet, { path: TorrentPath.TMP }, async torrent => {
+      client.add(addedTorrent.magnet, { path: `${TorrentPath.TMP}/${addedTorrent.slug}` }, async torrent => {
         torrent.on('error', () => {
           logger.error(`Torrent error, ack msg: ' ${addedTorrent} `);
           channel.ack(message);
