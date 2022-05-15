@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import { Channel, ConsumeMessage } from 'amqplib';
-import { getMessageContent, isEmpty } from '../../utils/misc';
+import { getMessageContent, isDirEmpty } from '../../utils/misc';
 import { IMoveFilesMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
 import { updateFilePath, updateTorrentFileStatus } from '../../utils/query';
@@ -18,9 +18,9 @@ export const moveFiles =
       await updateTorrentFileStatus(file.torrentID, file.fileSlug, 'done');
       logger.info(`file moved successfully: ${JSON.stringify(file)}`);
       //* delete the directory if its empty
-      const isDirEmpty = await isEmpty(`${TorrentPath.TMP}/${file.torrentSlug}`);
+      const isEmpty = await isDirEmpty(`${TorrentPath.TMP}/${file.torrentSlug}`);
 
-      if (isDirEmpty) {
+      if (isEmpty) {
         await fs.remove(`${TorrentPath.TMP}/${file.torrentSlug}`);
       }
       channel.ack(message);

@@ -1,4 +1,4 @@
-import { IVideo } from '.';
+import { IVideo, TorrentPath } from '.';
 
 export interface IMoveFilesMessageContent {
   src: string;
@@ -11,6 +11,7 @@ export interface IMoveFilesMessageContent {
 export interface IDeleteFilesMessageContent {
   src: string;
   torrentSlug: string;
+  dirPath: TorrentPath;
 }
 
 export interface IConvertVideoMessageContent extends IVideo {

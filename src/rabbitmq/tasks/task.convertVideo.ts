@@ -1,5 +1,6 @@
 import { ChannelWrapper } from 'amqp-connection-manager';
 import { Channel, ConsumeMessage } from 'amqplib';
+import fs from 'fs-extra';
 import { TorrentPath, QueueName, IVideo } from '../../@types';
 import { IConvertVideoMessageContent, IDeleteFilesMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
@@ -26,26 +27,26 @@ export const convertVideo =
     const video = await getVideoFile(file.slug, false);
     //* Checking if the video is already getting converted
     if (video && isProcessed(video) === false) {
-      const outputPath = getFileOutputPath(file.name, `${TorrentPath.DOWNLOAD}/${file.torrentSlug}/${file.slug}`);
+      const outputPath = getFileOutputPath(file.name, `${TorrentPath.DOWNLOAD}/${file.torrentSlug}`);
 
       try {
         await extractSubtitles(file);
+        await fs.ensureDir(`${TorrentPath.DOWNLOAD}/${file.torrentSlug}`);
         const done = await convertMKVtoMp4(file.path, outputPath, file.slug, file.torrentID).catch(error => {
           logger.error(error);
         });
         if (done) {
           logger.info(`file converted successfully file: ${file.name}`);
-          publisherChannel
-            .sendToQueue(
-              QueueName.FILE_DELETE,
-              { src: file.path, torrentSlug: file.torrentSlug } as IDeleteFilesMessageContent,
-              { persistent: true }
-            )
-            .then(() => {
-              updateFilePath(file.torrentID, file.slug, outputPath).then(() => {
-                channel.ack(message);
-              });
+          const data: IDeleteFilesMessageContent = {
+            src: file.path,
+            torrentSlug: file.torrentSlug,
+            dirPath: TorrentPath.TMP,
+          };
+          publisherChannel.sendToQueue(QueueName.FILE_DELETE, data, { persistent: true }).then(() => {
+            updateFilePath(file.torrentID, file.slug, outputPath).then(() => {
+              channel.ack(message);
             });
+          });
         } else {
           logger.error(`something went wrong while converting file: ${file.name}`);
           channel.ack(message);

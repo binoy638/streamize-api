@@ -28,10 +28,6 @@ export const getFileOutputPath = (fileName: string, path: string): string => {
   return `${path}/${stripFileExtension(fileName)}.mp4`;
 };
 
-export const getSubtitleOutputPath = (fileName: string, path: string): string => {
-  return `${path}/${fileName}`;
-};
-
 interface Sub {
   title: string;
   language: string;
@@ -92,24 +88,30 @@ export const extractSubtitles = async (videoFile: IConvertVideoMessageContent): 
     logger.error(error);
   });
   if (subtitleslist && subtitleslist.length > 0) {
-    const promises = subtitleslist.map((subtitle, index) => {
-      const fileName = `${videoFile.slug}-${subtitle.language}-${index}.vtt`;
-      const subtitleInfo: ISubtitle = {
-        fileName,
-        title: subtitle.title,
-        language: subtitle.language,
-        path: getSubtitleOutputPath(fileName, TorrentPath.SUBTITLES),
-      };
-      return getSubtitle(videoFile.path, subtitleInfo, index, videoFile.torrentID, videoFile.slug);
-    });
+    try {
+      const subtitleDir = `${TorrentPath.SUBTITLES}/${videoFile.torrentSlug}`;
+      await fs.ensureDir(subtitleDir);
+      const promises = subtitleslist.map((subtitle, index) => {
+        const fileName = `${videoFile.slug}-${subtitle.language}-${index}.vtt`;
+        const subtitleInfo: ISubtitle = {
+          fileName,
+          title: subtitle.title,
+          language: subtitle.language,
+          path: `${subtitleDir}/${fileName}`,
+        };
+        return getSubtitle(videoFile.path, subtitleInfo, index, videoFile.torrentID, videoFile.slug);
+      });
 
-    await Promise.allSettled(promises).catch(error => {
+      await Promise.allSettled(promises).catch(error => {
+        logger.error(error);
+      });
+    } catch (error) {
       logger.error(error);
-    });
+    }
   }
 };
 
-export const isEmpty = async (dirPath: string): Promise<boolean> => {
+export const isDirEmpty = async (dirPath: string): Promise<boolean> => {
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   const files = await fs.readdir(dirPath);
   if (files.length === 0) return true;
@@ -119,7 +121,7 @@ export const isEmpty = async (dirPath: string): Promise<boolean> => {
     // eslint-disable-next-line no-await-in-loop
     const stats = await fs.stat(filePath);
     if (stats.isDirectory()) {
-      return isEmpty(`${dirPath}/${file}`);
+      return isDirEmpty(`${dirPath}/${file}`);
     }
     return false;
   }

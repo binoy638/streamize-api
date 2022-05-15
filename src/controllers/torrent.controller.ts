@@ -46,11 +46,6 @@ export const getall = async (req: Request, res: Response, next: NextFunction): P
 export const get = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { slug } = req.params;
 
-  if (!slug) {
-    next(boom.badRequest('slug is required'));
-    return;
-  }
-
   try {
     const doc = await TorrentModel.findOne({ slug }).lean();
 
@@ -91,9 +86,7 @@ export const get = async (req: Request, res: Response, next: NextFunction): Prom
 
 export const del = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { slug } = req.params;
-  if (!slug) {
-    next(boom.badRequest('slug is required'));
-  }
+
   try {
     const doc = await TorrentModel.findOne({ slug }).lean();
 
@@ -110,11 +103,21 @@ export const del = async (req: Request, res: Response, next: NextFunction): Prom
     //* put all files in queue to delete
     const Files = doc.files.map(file => {
       if (file.path) {
-        publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: file.path } as IDeleteFilesMessageContent);
+        const data: IDeleteFilesMessageContent = {
+          src: file.path,
+          torrentSlug: doc.slug,
+          dirPath: TorrentPath.DOWNLOAD,
+        };
+        publisherChannel.sendToQueue(QueueName.FILE_DELETE, data);
       }
       if (file.subtitles.length > 0) {
         const subs = file.subtitles.map(subtitle => {
-          publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: subtitle.path } as IDeleteFilesMessageContent);
+          const data: IDeleteFilesMessageContent = {
+            src: subtitle.path,
+            torrentSlug: doc.slug,
+            dirPath: TorrentPath.SUBTITLES,
+          };
+          publisherChannel.sendToQueue(QueueName.FILE_DELETE, data);
           return subtitle.title;
         });
         redisClient.del(`VIDEO_PATH:${file.slug}`).catch(error => logger.error(error));
@@ -140,10 +143,6 @@ export const del = async (req: Request, res: Response, next: NextFunction): Prom
 
 export const add = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { magnet } = req.body;
-
-  if (!magnet || !magnet.startsWith('magnet:?xt=urn:btih:')) {
-    next(boom.badRequest('invalid magnet link'));
-  }
 
   try {
     const exists = await TorrentModel.findOne({ magnet });
