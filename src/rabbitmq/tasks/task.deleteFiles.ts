@@ -21,7 +21,8 @@ export const deleteFiles =
       }
       channel.ack(message);
     } catch (error) {
-      logger.error({ message: 'something went wrong while deleting file', data, error });
+      logger.info('something went wrong while deleting file');
+      logger.error(error);
       channel.ack(message);
     }
   };

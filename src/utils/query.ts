@@ -100,14 +100,6 @@ export const getTorrentByMagnet = async (magnet: string): Promise<ITorrent | nul
   }
 };
 
-export const deleteTorrentByID = async (_id: string): Promise<void> => {
-  try {
-    await TorrentModel.deleteOne({ _id });
-  } catch (error) {
-    logger.error(error);
-  }
-};
-
 //! need pagination later
 export const getAllTorrentsFromDB = async (): Promise<ITorrent[]> => {
   try {

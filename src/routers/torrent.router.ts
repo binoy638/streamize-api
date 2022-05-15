@@ -1,26 +1,18 @@
 import { Router } from 'express';
-// eslint-disable-next-line import/no-cycle
-import {
-  addTorrent,
-  clearTemp,
-  deleteAllTorrents,
-  deleteTorrent,
-  getAllTorrents,
-  getTorrentInfo,
-} from '../controllers/torrent.controller';
+import * as torrentController from '../controllers/torrent.controller';
 
 const torrentRouter = Router();
 
-torrentRouter.get('/', getAllTorrents);
+torrentRouter.get('/', torrentController.getall);
 
-torrentRouter.delete('/:slug', deleteTorrent);
+torrentRouter.delete('/:slug', torrentController.del);
 
-torrentRouter.delete('/clear/all', deleteAllTorrents);
+torrentRouter.delete('/clear/all', torrentController.clearAll);
 
-torrentRouter.delete('/clear/temp', clearTemp);
+torrentRouter.delete('/clear/temp', torrentController.clearTemp);
 
-torrentRouter.get('/:slug', getTorrentInfo);
+torrentRouter.get('/:slug', torrentController.get);
 
-torrentRouter.post('/', addTorrent);
+torrentRouter.post('/', torrentController.add);
 
 export default torrentRouter;

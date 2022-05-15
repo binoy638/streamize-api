@@ -87,8 +87,9 @@ export const downloadTorrent =
       logger.info(`Received new torrent to download.. ${JSON.stringify(addedTorrent)}`);
 
       client.add(addedTorrent.magnet, { path: `${TorrentPath.TMP}/${addedTorrent.slug}` }, async torrent => {
-        torrent.on('error', () => {
-          logger.error(`Torrent error, ack msg: ' ${addedTorrent} `);
+        torrent.on('error', error => {
+          logger.error(`Torrent error: ' ${addedTorrent} `);
+          logger.error(error);
           channel.ack(message);
         });
 

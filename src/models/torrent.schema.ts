@@ -1,6 +1,12 @@
-import { model, Schema } from 'mongoose';
+/* eslint-disable func-names */
+import { Model, model, Schema } from 'mongoose';
 import { nanoid } from 'nanoid';
 import { ITorrent, ISubtitle, IVideo } from '../@types';
+import logger from '../config/logger';
+
+interface ITorrentModel extends Model<ITorrent> {
+  getTorrents(): Promise<ITorrent[]>;
+}
 
 const subtitleSchema: Schema = new Schema<ISubtitle>({
   fileName: String,
@@ -27,7 +33,7 @@ const fileSchema: Schema = new Schema<IVideo>({
   },
 });
 
-const torrentSchema: Schema = new Schema<ITorrent>(
+const torrentSchema = new Schema<ITorrent, ITorrentModel>(
   {
     slug: { type: String, default: () => nanoid(5).toLowerCase() },
     magnet: {
@@ -55,9 +61,23 @@ const torrentSchema: Schema = new Schema<ITorrent>(
     status: {
       type: String,
       enum: ['downloading', 'paused', 'done', 'error', 'waiting', 'converting', 'added'],
+      default: 'added',
     },
   },
   { timestamps: true }
 );
 
-export const TorrentModel = model<ITorrent>('Torrent', torrentSchema);
+//* Helper methods
+
+torrentSchema.static('getTorrents', async function (): Promise<ITorrent[]> {
+  try {
+    const docs = await this.find({}).select('-files').limit(20).lean(true);
+    if (!docs) return [];
+    return docs;
+  } catch (error) {
+    logger.error(error);
+    throw new Error('something went wrong while fetching all torrents');
+  }
+});
+
+export const TorrentModel = model<ITorrent, ITorrentModel>('Torrent', torrentSchema);
