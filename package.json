@@ -8,11 +8,14 @@
     "start": "node ./dist/src/index.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "format:check": "prettier -c \"**/*.{js,ts,json}\"",
     "format": "prettier -w \"**/*.{js,ts,json}\"",
     "lint": "eslint --fix ./src/*",
     "install:husky": "husky install",
-    "pre-commit": "npm run typecheck && lint-staged"
+    "pre-commit": "npm run typecheck && lint-staged && jest"
   },
   "lint-staged": {
     "src/**/*.{js,ts}": "eslint",
@@ -57,7 +60,6 @@
     "amqplib": "^0.8.0",
     "cors": "^2.8.5",
     "express": "^4.17.2",
-    "express-async-errors": "^3.1.1",
     "fluent-ffmpeg": "^2.1.2",
     "fs-extra": "^10.0.0",
     "helmet": "^5.0.2",
@@ -68,6 +70,7 @@
     "redis": "^4.0.3",
     "ts-node-dev": "^1.1.8",
     "webtorrent": "^1.7.1",
-    "winston": "^3.5.1"
+    "winston": "^3.5.1",
+    "yup": "^0.32.11"
   }
 }

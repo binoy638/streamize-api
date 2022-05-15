@@ -1,16 +1,16 @@
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import boom from '@hapi/boom';
-import 'express-async-errors';
 import fs from 'fs-extra';
 import { getVideoFile } from '../utils/query';
 import redisClient from '../config/redis';
 import { TorrentPath } from '../@types';
 import logger from '../config/logger';
 
-export const getVideo = async (req: Request, res: Response): Promise<void> => {
+export const getVideo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { videoSlug } = req.params;
   if (!videoSlug) {
-    throw boom.badRequest(' videoSlug is required');
+    next(boom.badRequest(' videoSlug is required'));
+    return;
   }
 
   let videoPath = await redisClient.get(`VIDEO_PATH:${videoSlug}`);

@@ -1,5 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-shadow */
 /* eslint-disable no-unused-vars */
+
+import * as Yup from 'yup';
+
 export interface IDownloadInfo {
   downloadSpeed: number;
   uploadSpeed: number;
@@ -67,4 +71,10 @@ export enum QueueName {
   CONVERT_VIDEO = 'convert-video',
   FILE_MOVE = 'move-files',
   FILE_DELETE = 'delete-files',
+}
+
+export interface RequestPayload {
+  body: Yup.ObjectSchema<any> | undefined;
+  query: Yup.ObjectSchema<any> | undefined;
+  params: Yup.ObjectSchema<any> | undefined;
 }
