@@ -9,8 +9,6 @@ videoRouter.get('/stream/:videoSlug/:filename', validator(streamVideoValidator),
 
 videoRouter.get('/:videoSlug', getVideoInfo);
 
-videoRouter.get('/subtitle', validator(streamVideoValidator), getSubtitle);
-
-// videoRouter.get('/download/:videoSlug', downloadVideo);
+videoRouter.get('/subtitle/:videoSlug/:filename', validator(streamVideoValidator), getSubtitle);
 
 export default videoRouter;
