@@ -4,9 +4,7 @@ import fs from 'fs-extra';
 import client from '../config/webtorrent';
 import { fileManagerChannel, publisherChannel, torrentChannel, videoChannel } from '../rabbitmq';
 import { QueueName, TorrentPath } from '../@types';
-import { IDeleteFilesMessageContent } from '../@types/message';
 import logger from '../config/logger';
-import redisClient from '../config/redis';
 import { getDataFromTorrent, getDataFromTorrentFile } from '../utils/torrentHelper';
 import { TorrentModel } from '../models/torrent.schema';
 
@@ -100,29 +98,12 @@ export const del = async (req: Request, res: Response, next: NextFunction): Prom
       torrent.destroy();
     }
 
+    publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: `${TorrentPath.TMP}/${doc.slug}` });
+
     //* put all files in queue to delete
     const Files = doc.files.map(file => {
-      if (file.path) {
-        const data: IDeleteFilesMessageContent = {
-          src: file.path,
-          torrentSlug: doc.slug,
-          dirPath: TorrentPath.DOWNLOAD,
-        };
-        publisherChannel.sendToQueue(QueueName.FILE_DELETE, data);
-      }
-      if (file.subtitles.length > 0) {
-        const subs = file.subtitles.map(subtitle => {
-          const data: IDeleteFilesMessageContent = {
-            src: subtitle.path,
-            torrentSlug: doc.slug,
-            dirPath: TorrentPath.SUBTITLES,
-          };
-          publisherChannel.sendToQueue(QueueName.FILE_DELETE, data);
-          return subtitle.title;
-        });
-        redisClient.del(`VIDEO_PATH:${file.slug}`).catch(error => logger.error(error));
-        logger.info(`Deleting subtitles: ${subs}`);
-      }
+      publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: `${TorrentPath.DOWNLOAD}/${file.slug}` });
+      publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: `${TorrentPath.SUBTITLES}/${file.slug}` });
       return file.name;
     });
 

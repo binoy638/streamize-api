@@ -30,15 +30,6 @@ services:
     ports:
       - 5673:5672
       - 15673:15672
-  redis:
-    image: redis:6.2.6-alpine
-    logging:
-      driver: "none"
-    container_name: redis
-    healthcheck:
-      test: ["CMD", "redis-cli","ping"]
-    ports:
-      - "6380:6379"
   app-dev:
     build:
       context: .
@@ -58,6 +49,5 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+
 

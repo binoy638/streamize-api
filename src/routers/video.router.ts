@@ -1,14 +1,16 @@
 import { Router } from 'express';
-import { downloadVideo, getSubtitle, getVideo, getVideoInfo } from '../controllers/video.controller';
+import { getSubtitle, streamVideo, getVideoInfo } from '../controllers/video.controller';
+import { validator } from '../middlewares/validator.middleware';
+import { streamVideoValidator } from '../validators/video.validator';
 
 const videoRouter = Router();
 
-videoRouter.get('/play/:videoSlug', getVideo);
+videoRouter.get('/stream/:videoSlug/:filename', validator(streamVideoValidator), streamVideo);
 
 videoRouter.get('/:videoSlug', getVideoInfo);
 
-videoRouter.get('/subtitle/:filename', getSubtitle);
+videoRouter.get('/subtitle', validator(streamVideoValidator), getSubtitle);
 
-videoRouter.get('/download/:videoSlug', downloadVideo);
+// videoRouter.get('/download/:videoSlug', downloadVideo);
 
 export default videoRouter;

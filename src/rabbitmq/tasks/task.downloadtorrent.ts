@@ -3,12 +3,12 @@ import { Channel, ChannelWrapper } from 'amqp-connection-manager';
 import { ConsumeMessage } from 'amqplib';
 import { Torrent } from 'webtorrent';
 import { ITorrent, TorrentPath, IVideo, QueueName } from '../../@types';
-import { IConvertVideoMessageContent, IMoveFilesMessageContent } from '../../@types/message';
+import { IConvertVideoMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
 import client from '../../config/webtorrent';
-import { allowedExt, convertableExt, getFileOutputPath, getMessageContent } from '../../utils/misc';
-import { getTorrentBySlug, updateTorrentFileConvertable, updateTorrentInfo } from '../../utils/query';
-import { isFileConvertable } from '../../utils/videoConverter';
+import { TorrentModel } from '../../models/torrent.schema';
+import { allowedExt, convertableExt, getMessageContent } from '../../utils/misc';
+import { updateTorrentInfo } from '../../utils/query';
 
 const handleCompletedTorrent = async (
   torrentInClient: Torrent,
@@ -17,60 +17,20 @@ const handleCompletedTorrent = async (
   consumerChannel: Channel,
   message: ConsumeMessage
 ) => {
-  await updateTorrentInfo(downloadedTorrent._id, { status: 'done' });
+  await TorrentModel.updateOne({ _id: downloadedTorrent._id }, { status: 'waiting' });
 
-  await Promise.allSettled(
-    downloadedTorrent.files.map(file => {
-      return isFileConvertable(file).then(isConvertable => {
-        updateTorrentFileConvertable(downloadedTorrent._id, file.slug, isConvertable);
-      });
-    })
-  ).catch(error => {
-    logger.error(error);
-  });
-
-  const UpdatedTorrent = await getTorrentBySlug(downloadedTorrent.slug);
-  if (!UpdatedTorrent) {
-    logger.error(`torrent not found after updating convertable data ${downloadedTorrent.name}`);
-    consumerChannel.ack(message);
-    return;
-  }
-
-  const convertableVideoFiles = UpdatedTorrent.files.filter(file => file.isConvertable);
-  const nonConvertableVideoFiles = UpdatedTorrent.files.filter(file => !file.isConvertable);
-
-  if (convertableVideoFiles.length > 0) {
-    //* sending all convertable files to convert-video queue
-    convertableVideoFiles.map(file =>
-      publisherChannel.sendToQueue(
-        QueueName.CONVERT_VIDEO,
-        {
-          torrentID: downloadedTorrent._id,
-          torrentSlug: downloadedTorrent.slug,
-          ...file,
-        } as IConvertVideoMessageContent,
-        { persistent: true }
-      )
-    );
-  }
-  if (nonConvertableVideoFiles.length > 0) {
-    //* sending all nonconvertable files to file-move queue to move them to download folder
-    await Promise.all(
-      nonConvertableVideoFiles.map(file =>
-        publisherChannel.sendToQueue(
-          QueueName.FILE_MOVE,
-          {
-            src: file.path,
-            dest: getFileOutputPath(file.name, `${TorrentPath.DOWNLOAD}/${downloadedTorrent.slug}`),
-            torrentID: downloadedTorrent._id,
-            torrentSlug: downloadedTorrent.slug,
-            fileSlug: file.slug,
-          } as IMoveFilesMessageContent,
-          { persistent: true }
-        )
-      )
-    );
-  }
+  //* sending all video files to process-video queue
+  downloadedTorrent.files.map(file =>
+    publisherChannel.sendToQueue(
+      QueueName.PROCESS_VIDEO,
+      {
+        torrentID: downloadedTorrent._id,
+        torrentSlug: downloadedTorrent.slug,
+        ...file,
+      } as IConvertVideoMessageContent,
+      { persistent: true }
+    )
+  );
 
   consumerChannel.ack(message);
   logger.info(`${downloadedTorrent.name} torrent downloaded now deleting torrent`);

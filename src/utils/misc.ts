@@ -114,7 +114,7 @@ export const extractSubtitles = async (videoFile: IConvertVideoMessageContent): 
 export const isDirEmpty = async (dirPath: string): Promise<boolean> => {
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   const files = await fs.readdir(dirPath);
-  if (files.length === 0) return true;
+  if (!files || files.length === 0) return true;
   // eslint-disable-next-line no-restricted-syntax
   for (const file of files) {
     const filePath = `${dirPath}/${file}`;

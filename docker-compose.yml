@@ -33,16 +33,7 @@ services:
       retries: 3
     volumes:
       - ./src/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
-  redis:
-    image: redis:6.2.6-alpine
-    restart: always
-    networks:
-      - nginx-network
-    logging:
-      driver: "none"
-    container_name: redis
-    healthcheck:
-      test: ["CMD", "redis-cli","ping"]
+
   app:
     build:
       context: .
@@ -61,8 +52,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+
      
 
 networks:

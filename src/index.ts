@@ -12,9 +12,6 @@ import { TorrentPath } from './@types';
 import { clearTorrents } from './utils/query';
 import logger from './config/logger';
 import { fileManagerChannel, publisherChannel, torrentChannel, videoChannel } from './rabbitmq';
-import redisClient from './config/redis';
-
-// eslint-disable-next-line import/no-mutable-exports
 
 const PORT = 3000;
 
@@ -31,7 +28,6 @@ app.use('/video', videoRouter);
 app.listen(PORT, async () => {
   try {
     await connectMongo();
-    await redisClient.connect();
     if (process.env.NODE_ENV === 'development') {
       await fs.emptyDir(TorrentPath.DOWNLOAD);
       await fs.emptyDir(TorrentPath.TMP);
