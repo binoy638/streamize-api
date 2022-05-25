@@ -36,15 +36,23 @@ export const getSubtitle = async (req: Request, res: Response, next: NextFunctio
     next(boom.notFound('file not found'));
   }
   const options = {
-    root: TorrentPath.SUBTITLES,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
+    root: `${TorrentPath.SUBTITLES}/${videoSlug}`,
   };
-  res.sendFile(filename as string, options, err => {
-    if (err) {
-      console.log(err);
-    } else {
-      console.log('Sent:', filename);
-    }
-  });
+  try {
+    res.sendFile(filename as string, options, err => {
+      if (err) {
+        console.log(err);
+      } else {
+        console.log('Sent:', filename);
+      }
+    });
+  } catch (error) {
+    logger.error(error);
+    next(boom.internal('Internal server error'));
+  }
 };
 
 export const getVideoInfo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
