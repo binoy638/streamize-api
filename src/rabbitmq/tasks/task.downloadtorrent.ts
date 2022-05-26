@@ -3,7 +3,7 @@ import { Channel, ChannelWrapper } from 'amqp-connection-manager';
 import { ConsumeMessage } from 'amqplib';
 import { Torrent } from 'webtorrent';
 import { ITorrent, TorrentPath, IVideo, QueueName, VideoState, TorrentState } from '../../@types';
-import { IConvertVideoMessageContent } from '../../@types/message';
+import { IProcessVideoMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
 import client from '../../config/webtorrent';
 import { TorrentModel } from '../../models/torrent.schema';
@@ -19,12 +19,12 @@ const handleCompletedTorrent = async (
   //* sending all video files to process-video queue
   downloadedTorrent.files.map(file =>
     publisherChannel.sendToQueue(
-      QueueName.PROCESS_VIDEO,
+      QueueName.INSPECT_VIDEO,
       {
         torrentID: downloadedTorrent._id,
         torrentSlug: downloadedTorrent.slug,
         ...file,
-      } as IConvertVideoMessageContent,
+      } as IProcessVideoMessageContent,
       { persistent: true }
     )
   );
@@ -40,10 +40,9 @@ export const downloadTorrent =
   // eslint-disable-next-line sonarjs/cognitive-complexity
   async (message: ConsumeMessage | null): Promise<void> => {
     if (!message) return;
+    const addedTorrent: ITorrent = Utils.getMessageContent<ITorrent>(message);
+    logger.info(`Received new torrent to download.. ${JSON.stringify(addedTorrent)}`);
     try {
-      const addedTorrent: ITorrent = Utils.getMessageContent<ITorrent>(message);
-      logger.info(`Received new torrent to download.. ${JSON.stringify(addedTorrent)}`);
-
       client.add(addedTorrent.magnet, { path: `${TorrentPath.TMP}/${addedTorrent.slug}` }, async torrent => {
         torrent.on('error', error => {
           logger.error(`Torrent error: ' ${addedTorrent} `);
@@ -76,7 +75,6 @@ export const downloadTorrent =
         }
 
         const { name, infoHash, length: size } = torrent;
-        const isMultiVideos = videofiles.length > 1;
 
         const SavedTorrent = await TorrentModel.findOneAndUpdate(
           { _id: addedTorrent._id },
@@ -84,7 +82,6 @@ export const downloadTorrent =
             name,
             infoHash,
             size,
-            isMultiVideos,
             files: videofiles,
             status: TorrentState.DOWNLOADING,
           },
@@ -106,6 +103,7 @@ export const downloadTorrent =
       });
     } catch (error) {
       logger.error(error);
+      await Utils.updateTorrentStatus(addedTorrent._id, TorrentState.ERROR);
       channel.ack(message);
     }
   };

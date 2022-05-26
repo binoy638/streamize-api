@@ -22,7 +22,6 @@ const fileSchema: Schema = new Schema<IVideo>({
   size: { type: Number },
   ext: { type: String },
   subtitles: { type: [subtitleSchema], default: [] },
-  isConvertable: { type: Boolean, default: false },
   status: {
     type: String,
     enum: VideoState,

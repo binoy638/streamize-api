@@ -1,7 +1,7 @@
 import { ChannelWrapper } from 'amqp-connection-manager';
 import { Channel, ConsumeMessage } from 'amqplib';
 import { QueueName, IVideo, VideoState } from '../../@types';
-import { IConvertVideoMessageContent, IDeleteFilesMessageContent } from '../../@types/message';
+import { IProcessVideoMessageContent, IDeleteFilesMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
 import VideoProcessor from '../../libs/videoProcessor';
 import Utils from '../../utils';
@@ -19,9 +19,9 @@ export const processVideo =
   async (message: ConsumeMessage | null): Promise<void> => {
     if (!message) return;
 
-    const file = Utils.getMessageContent<IConvertVideoMessageContent>(message);
+    const file = Utils.getMessageContent<IProcessVideoMessageContent>(message);
 
-    logger.info(`Received new video file to convert.. file:${file.name}`);
+    logger.info(`Received new CPU intensive video file to convert.. file:${file.name}`);
     const video = await Utils.getVideoFile(file.slug, false);
     //* Checking if the video is already getting converted
     if (video && isProcessed(video) === false) {
@@ -40,11 +40,7 @@ export const processVideo =
         });
       } catch (error) {
         logger.error(`something went wrong while converting file: ${file.name} error: ${JSON.stringify(error)}`);
-        logger.info(`deleting file ${file.name}`);
-        const data: IDeleteFilesMessageContent = {
-          src: file.path,
-        };
-        publisherChannel.sendToQueue(QueueName.FILE_DELETE, data, { persistent: true });
+        await Utils.updateVideoFileStatus(file.torrentID, file.slug, VideoState.ERROR);
         channel.ack(message);
       }
     } else {

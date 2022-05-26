@@ -4,7 +4,7 @@ export interface IDeleteFilesMessageContent {
   src: string;
 }
 
-export interface IConvertVideoMessageContent extends IVideo {
+export interface IProcessVideoMessageContent extends IVideo {
   torrentID: string;
   torrentSlug: string;
 }

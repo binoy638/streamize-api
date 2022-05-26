@@ -2,11 +2,11 @@ import { NextFunction, Request, Response } from 'express';
 import boom from '@hapi/boom';
 import fs from 'fs-extra';
 import client from '../config/webtorrent';
-import { fileManagerChannel, publisherChannel, torrentChannel, videoChannel } from '../rabbitmq';
-import { QueueName, TorrentPath } from '../@types';
+import * as rabbitMQ from '../rabbitmq';
+import { QueueName, TorrentPath, TorrentState } from '../@types';
 import logger from '../config/logger';
-import { getDataFromTorrent, getDataFromTorrentFile } from '../utils/torrentHelper';
 import { TorrentModel } from '../models/torrent.schema';
+import Utils from '../utils';
 
 /**
  *
@@ -18,10 +18,10 @@ export const getall = async (req: Request, res: Response, next: NextFunction): P
     const torrents = await TorrentModel.getTorrents();
 
     const torrentsWithDownloadInfo = torrents.map(torrent => {
-      if (torrent.status === 'downloading') {
+      if (torrent.status === TorrentState.DOWNLOADING) {
         const torrentInClient = client.get(torrent.infoHash);
         if (torrentInClient) {
-          return { ...torrent, downloadInfo: getDataFromTorrent(torrentInClient) };
+          return { ...torrent, downloadInfo: Utils.getDataFromTorrent(torrentInClient) };
         }
         return torrent;
       }
@@ -52,15 +52,15 @@ export const get = async (req: Request, res: Response, next: NextFunction): Prom
       return;
     }
 
-    if (doc.status === 'downloading') {
+    if (doc.status === TorrentState.DOWNLOADING) {
       const torrent = client.get(doc.infoHash);
       if (torrent) {
-        const downloadInfo = getDataFromTorrent(torrent);
+        const downloadInfo = Utils.getDataFromTorrent(torrent);
 
         const filesWithDownloadInfo = doc.files.map(docFile => {
           const file = torrent.files.find(file => file.name === docFile.name);
           if (file) {
-            const downloadInfo = getDataFromTorrentFile(file);
+            const downloadInfo = Utils.getDataFromTorrentFile(file);
             return { ...docFile, downloadInfo };
           }
           return docFile;
@@ -98,12 +98,16 @@ export const del = async (req: Request, res: Response, next: NextFunction): Prom
       torrent.destroy();
     }
 
-    publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: `${TorrentPath.TMP}/${doc.slug}` });
+    rabbitMQ.publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: `${TorrentPath.TMP}/${doc.slug}` });
 
     //* put all files in queue to delete
     const Files = doc.files.map(file => {
-      publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: `${TorrentPath.DOWNLOAD}/${file.slug}` });
-      publisherChannel.sendToQueue(QueueName.FILE_DELETE, { src: `${TorrentPath.SUBTITLES}/${file.slug}` });
+      rabbitMQ.publisherChannel.sendToQueue(QueueName.FILE_DELETE, {
+        src: `${TorrentPath.DOWNLOAD}/${file.slug}`,
+      });
+      rabbitMQ.publisherChannel.sendToQueue(QueueName.FILE_DELETE, {
+        src: `${TorrentPath.SUBTITLES}/${file.slug}`,
+      });
       return file.name;
     });
 
@@ -135,7 +139,7 @@ export const add = async (req: Request, res: Response, next: NextFunction): Prom
     const doc = new TorrentModel({ magnet });
     const torrent = await doc.save();
 
-    publisherChannel
+    rabbitMQ.publisherChannel
       .sendToQueue(QueueName.DOWNLOAD_TORRENT, torrent, { persistent: true, expiration: '86400000' })
       .then(() => {
         res.send({ message: 'torrent added successfully', torrent });
@@ -174,10 +178,12 @@ export const clearAll = async (req: Request, res: Response, next: NextFunction):
   try {
     await fs.emptyDir(TorrentPath.DOWNLOAD);
     await fs.emptyDir(TorrentPath.TMP);
-    publisherChannel.ackAll();
-    torrentChannel.ackAll();
-    videoChannel.ackAll();
-    fileManagerChannel.ackAll();
+    rabbitMQ.publisherChannel.ackAll();
+    rabbitMQ.torrentChannel.ackAll();
+    rabbitMQ.cpuIntensiveVideoProcessingChannel.ackAll();
+    rabbitMQ.videoInspectionChannel.ackAll();
+    rabbitMQ.fileManagerChannel.ackAll();
+    rabbitMQ.nonCpuIntensiveVideoProcessingChannel.ackAll();
     await TorrentModel.deleteMany({});
     res.send({ message: 'All torrents deleted' });
   } catch (error) {

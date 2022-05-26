@@ -49,7 +49,6 @@ export interface IVideo {
   size: number;
   path: string;
   ext: string;
-  isConvertable: boolean;
   subtitles: ISubtitle[];
   status: VideoState;
   downloadInfo?: IFileDownloadInfo;
@@ -76,7 +75,9 @@ export enum TorrentPath {
 
 export enum QueueName {
   DOWNLOAD_TORRENT = 'download-torrent',
-  PROCESS_VIDEO = 'process-video',
+  PROCESS_VIDEO_CPU_INTENSIVE = 'process-video-cpu-intensive',
+  PROCESS_VIDEO_NON_CPU_INTENSIVE = 'process-video-non-cpu-intensive',
+  INSPECT_VIDEO = 'inspect-video',
   FILE_DELETE = 'delete-files',
 }
 

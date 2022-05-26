@@ -1,5 +1,6 @@
 import { ConsumeMessage } from 'amqplib';
-import { IVideo } from '../@types';
+import { Torrent, TorrentFile } from 'webtorrent';
+import { IVideo, IDownloadInfo, IFileDownloadInfo, VideoState, TorrentState } from '../@types';
 import logger from '../config/logger';
 import { TorrentModel } from '../models/torrent.schema';
 
@@ -14,6 +15,24 @@ class Utils {
     return JSON.parse(message.content.toString()) as T;
   }
 
+  static getDataFromTorrent = (torrent: Torrent): IDownloadInfo => {
+    return {
+      downloadSpeed: torrent.downloadSpeed,
+      uploadSpeed: torrent.uploadSpeed,
+      progress: torrent.progress,
+      timeRemaining: torrent.timeRemaining,
+      paused: torrent.paused,
+      completed: torrent.done,
+    };
+  };
+
+  static getDataFromTorrentFile = (file: TorrentFile): IFileDownloadInfo => {
+    return {
+      downloaded: file.downloaded,
+      progress: file.progress,
+    };
+  };
+
   static getVideoFile = async (videoSlug: string, downloaded: boolean): Promise<IVideo | null | undefined> => {
     try {
       const doc = await TorrentModel.findOne({ 'files.slug': videoSlug }).lean(true);
@@ -26,6 +45,23 @@ class Utils {
     } catch (error) {
       logger.error(error);
       throw new Error('something went wrong while fetching video file');
+    }
+  };
+
+  static updateVideoFileStatus = async (torrentID: string, videoSlug: string, status: VideoState): Promise<void> => {
+    try {
+      await TorrentModel.updateOne({ _id: torrentID, 'files.slug': videoSlug }, { $set: { 'files.$.status': status } });
+    } catch (error) {
+      logger.error(error);
+      throw new Error('something went wrong while updating video file status');
+    }
+  };
+
+  static updateTorrentStatus = async (torrentID: string, status: TorrentState): Promise<void> => {
+    try {
+      await TorrentModel.updateOne({ _id: torrentID }, { status });
+    } catch (error) {
+      logger.error(error);
     }
   };
 }

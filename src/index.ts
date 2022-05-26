@@ -10,7 +10,7 @@ import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
 import { TorrentPath } from './@types';
 import logger from './config/logger';
-import { fileManagerChannel, publisherChannel, torrentChannel, videoChannel } from './rabbitmq';
+import * as rabbitMQ from './rabbitmq';
 import { TorrentModel } from './models/torrent.schema';
 
 const PORT = 3000;
@@ -32,10 +32,12 @@ app.listen(PORT, async () => {
       await fs.emptyDir(TorrentPath.DOWNLOAD);
       await fs.emptyDir(TorrentPath.TMP);
       await fs.emptyDir(TorrentPath.SUBTITLES);
-      publisherChannel.ackAll();
-      torrentChannel.ackAll();
-      videoChannel.ackAll();
-      fileManagerChannel.ackAll();
+      rabbitMQ.publisherChannel.ackAll();
+      rabbitMQ.torrentChannel.ackAll();
+      rabbitMQ.cpuIntensiveVideoProcessingChannel.ackAll();
+      rabbitMQ.videoInspectionChannel.ackAll();
+      rabbitMQ.fileManagerChannel.ackAll();
+      rabbitMQ.nonCpuIntensiveVideoProcessingChannel.ackAll();
       await TorrentModel.deleteMany({});
     }
 
