@@ -1,7 +1,7 @@
 /* eslint-disable sonarjs/cognitive-complexity */
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs-extra';
-import { ConvertState, ITorrent, IVideo, TorrentPath, TorrentStatus } from '../@types';
+import { IVideo, TorrentPath, TorrentState, VideoState } from '../@types';
 import logger from '../config/logger';
 import { TorrentModel } from '../models/torrent.schema';
 import SubtitleProcessor from './subtitleProcessor';
@@ -68,41 +68,41 @@ class VideoProcessor extends SubtitleProcessor {
         .outputOption(['-sn', '-hls_time 10', '-hls_list_size 0', '-f hls'])
         .output(outputPath)
         .on('start', async () => {
-          await this.updateTorrentInfo({ status: 'converting' });
-          await this.updateVideoStatus('converting');
+          await this.updateTorrentStatus(TorrentState.PROCESSING);
+          await this.updateVideoStatus(VideoState.PROCESSING);
           logger.info('Converting to HLS...');
         })
         .on('end', async () => {
           logger.info('conversion done');
-          await this.updateTorrentInfo({ status: 'done' });
-          await this.updateVideoStatus('done');
-          await this.updateVideoConvertProgress({ progress: 100, state: 'done' });
+          await this.updateTorrentStatus(TorrentState.DONE);
+          await this.updateVideoStatus(VideoState.DONE);
+          await this.updateTranscodingProgress(100);
           resolve();
         })
         .on('error', async err => {
-          await this.updateTorrentInfo({ status: 'error' });
-          await this.updateVideoStatus('error');
-          await this.updateVideoConvertProgress({ progress: 0, state: 'error' });
+          await this.updateTorrentStatus(TorrentState.ERROR);
+          await this.updateVideoStatus(VideoState.ERROR);
+          await this.updateTranscodingProgress(0);
           logger.error(err.message);
           reject();
         })
         .on('progress', async progress => {
           logger.debug(`hls video convert progress: ${progress.percent}`);
-          await this.updateVideoConvertProgress({ progress: progress.percent, state: 'processing' });
+          await this.updateTranscodingProgress(progress.percent);
         })
         .run();
     });
   }
 
-  private async updateTorrentInfo(data: Partial<ITorrent>): Promise<void> {
+  private async updateTorrentStatus(status: TorrentState): Promise<void> {
     try {
-      await TorrentModel.updateOne({ _id: this.id }, data);
+      await TorrentModel.updateOne({ _id: this.id }, { status });
     } catch (error) {
       logger.error(error);
     }
   }
 
-  private async updateVideoStatus(status: TorrentStatus): Promise<void> {
+  private async updateVideoStatus(status: VideoState): Promise<void> {
     try {
       await TorrentModel.updateOne(
         { _id: this.id, 'files.slug': this.video.slug },
@@ -113,11 +113,11 @@ class VideoProcessor extends SubtitleProcessor {
     }
   }
 
-  private async updateVideoConvertProgress(data: { progress: number; state: ConvertState }): Promise<void> {
+  private async updateTranscodingProgress(num: number): Promise<void> {
     try {
       await TorrentModel.updateOne(
         { _id: this.id, 'files.slug': this.video.slug },
-        { $set: { 'files.$.convertStatus': data } }
+        { $set: { 'files.$.transcodingPercent': num } }
       );
     } catch (error) {
       logger.error(error);

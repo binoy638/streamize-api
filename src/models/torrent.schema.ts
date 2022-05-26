@@ -1,7 +1,7 @@
 /* eslint-disable func-names */
 import { Model, model, Schema } from 'mongoose';
 import { nanoid } from 'nanoid';
-import { ITorrent, ISubtitle, IVideo } from '../@types';
+import { ITorrent, ISubtitle, IVideo, VideoState, TorrentState } from '../@types';
 import logger from '../config/logger';
 
 interface ITorrentModel extends Model<ITorrent> {
@@ -25,11 +25,11 @@ const fileSchema: Schema = new Schema<IVideo>({
   isConvertable: { type: Boolean, default: false },
   status: {
     type: String,
-    enum: ['downloading', 'paused', 'done', 'error', 'waiting', 'converting', 'added'],
+    enum: VideoState,
   },
-  convertStatus: {
-    progress: { type: Number },
-    state: { type: String, enum: ['processing', 'done', 'error', 'waiting'] },
+  transcodingPercent: {
+    type: Number,
+    default: 0,
   },
 });
 
@@ -51,17 +51,9 @@ const torrentSchema = new Schema<ITorrent, ITorrentModel>(
       type: [fileSchema],
       default: [],
     },
-    isMultiVideos: {
-      type: Boolean,
-    },
-    isMedia: {
-      type: Boolean,
-      default: true,
-    },
     status: {
-      type: String,
-      enum: ['downloading', 'paused', 'done', 'error', 'waiting', 'converting', 'added'],
-      default: 'added',
+      enum: TorrentState,
+      default: TorrentState.ADDED,
     },
   },
   { timestamps: true }

@@ -2,7 +2,7 @@
 import { Channel, ChannelWrapper } from 'amqp-connection-manager';
 import { ConsumeMessage } from 'amqplib';
 import { Torrent } from 'webtorrent';
-import { ITorrent, TorrentPath, IVideo, QueueName } from '../../@types';
+import { ITorrent, TorrentPath, IVideo, QueueName, VideoState, TorrentState } from '../../@types';
 import { IConvertVideoMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
 import client from '../../config/webtorrent';
@@ -16,8 +16,6 @@ const handleCompletedTorrent = async (
   consumerChannel: Channel,
   message: ConsumeMessage
 ) => {
-  await TorrentModel.updateOne({ _id: downloadedTorrent._id }, { status: 'waiting' });
-
   //* sending all video files to process-video queue
   downloadedTorrent.files.map(file =>
     publisherChannel.sendToQueue(
@@ -30,6 +28,7 @@ const handleCompletedTorrent = async (
       { persistent: true }
     )
   );
+  await TorrentModel.updateOne({ _id: downloadedTorrent._id }, { status: TorrentState.QUEUED });
 
   consumerChannel.ack(message);
   logger.info(`${downloadedTorrent.name} torrent downloaded now deleting torrent`);
@@ -60,7 +59,7 @@ export const downloadTorrent =
               path: file.path,
               size: file.length,
               ext,
-              status: 'downloading',
+              status: VideoState.DOWNLOADING,
             } as IVideo;
           })
           //* filtering torrent files based on media extensions
@@ -71,7 +70,7 @@ export const downloadTorrent =
           torrent.destroy({ destroyStore: true });
           logger.info({ message: 'no video files found, deleting torrent', addedTorrent });
           // eslint-disable-next-line no-underscore-dangle
-          await TorrentModel.updateOne({ _id: addedTorrent._id }, { status: 'error', isMedia: false });
+          await TorrentModel.updateOne({ _id: addedTorrent._id }, { status: TorrentState.ERROR, isMedia: false });
           channel.ack(message);
           return;
         }
@@ -87,7 +86,7 @@ export const downloadTorrent =
             size,
             isMultiVideos,
             files: videofiles,
-            status: 'downloading',
+            status: TorrentState.DOWNLOADING,
           },
           { new: true, lean: true }
         );

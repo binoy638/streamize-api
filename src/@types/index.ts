@@ -18,9 +18,23 @@ export interface IFileDownloadInfo {
   progress: number;
 }
 
-export type ConvertState = 'processing' | 'done' | 'error' | 'waiting';
+export enum VideoState {
+  DOWNLOADING = 'downloading',
+  PROCESSING = 'processing',
+  DONE = 'done',
+  ERROR = 'error',
+  QUEUED = 'queued',
+}
 
-export type TorrentStatus = 'added' | 'downloading' | 'converting' | 'done' | 'error' | 'waiting' | 'pause';
+export enum TorrentState {
+  DOWNLOADING = 'downloading',
+  PAUSED = 'paused',
+  DONE = 'done',
+  QUEUED = 'queued',
+  ERROR = 'error',
+  ADDED = 'added',
+  PROCESSING = 'processing',
+}
 
 export interface ISubtitle {
   fileName: string;
@@ -30,7 +44,6 @@ export interface ISubtitle {
 }
 
 export interface IVideo {
-  // [x: string]: any;
   name: string;
   slug: string;
   size: number;
@@ -38,12 +51,9 @@ export interface IVideo {
   ext: string;
   isConvertable: boolean;
   subtitles: ISubtitle[];
-  status: TorrentStatus;
+  status: VideoState;
   downloadInfo?: IFileDownloadInfo;
-  convertStatus?: {
-    progress: number;
-    state: ConvertState;
-  };
+  transcodingPercent: number;
 }
 
 export interface ITorrent {
@@ -54,9 +64,7 @@ export interface ITorrent {
   name: string;
   size: number;
   files: IVideo[];
-  isMultiVideos: boolean;
-  status: TorrentStatus;
-  isMedia: boolean;
+  status: TorrentState;
   downloadInfo?: IDownloadInfo;
 }
 

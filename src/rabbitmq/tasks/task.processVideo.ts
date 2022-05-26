@@ -1,6 +1,6 @@
 import { ChannelWrapper } from 'amqp-connection-manager';
 import { Channel, ConsumeMessage } from 'amqplib';
-import { QueueName, IVideo } from '../../@types';
+import { QueueName, IVideo, VideoState } from '../../@types';
 import { IConvertVideoMessageContent, IDeleteFilesMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
 import VideoProcessor from '../../libs/videoProcessor';
@@ -8,9 +8,9 @@ import Utils from '../../utils';
 
 //! temp solution
 const isProcessed = (video: IVideo): boolean => {
-  const status = video?.convertStatus;
+  const status = video?.status;
   if (!status) return false;
-  if (status.state === 'done' || status.state === 'processing') return true;
+  if (status === VideoState.DONE || status === VideoState.PROCESSING) return true;
   return false;
 };
 
