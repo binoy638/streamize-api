@@ -136,7 +136,7 @@ export const add = async (req: Request, res: Response, next: NextFunction): Prom
       return;
     }
 
-    const doc = new TorrentModel({ magnet });
+    const doc = new TorrentModel({ magnet, status: TorrentState.ADDED });
     const torrent = await doc.save();
 
     rabbitMQ.publisherChannel
