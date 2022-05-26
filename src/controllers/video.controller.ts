@@ -1,9 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
 import boom from '@hapi/boom';
 import fs from 'fs-extra';
-import { getVideoFile } from '../utils/query';
 import { TorrentPath } from '../@types';
 import logger from '../config/logger';
+import Utils from '../utils';
 
 export const streamVideo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { videoSlug, filename } = req.params;
@@ -61,7 +61,7 @@ export const getVideoInfo = async (req: Request, res: Response, next: NextFuncti
     next(boom.badRequest('filename is required'));
   }
 
-  const video = await getVideoFile(videoSlug, false);
+  const video = await Utils.getVideoFile(videoSlug, false);
   if (!video) {
     next(boom.notFound('video not found'));
   }

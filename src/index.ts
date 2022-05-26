@@ -9,9 +9,9 @@ import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
 import { TorrentPath } from './@types';
-import { clearTorrents } from './utils/query';
 import logger from './config/logger';
 import { fileManagerChannel, publisherChannel, torrentChannel, videoChannel } from './rabbitmq';
+import { TorrentModel } from './models/torrent.schema';
 
 const PORT = 3000;
 
@@ -36,7 +36,7 @@ app.listen(PORT, async () => {
       torrentChannel.ackAll();
       videoChannel.ackAll();
       fileManagerChannel.ackAll();
-      await clearTorrents();
+      await TorrentModel.deleteMany({});
     }
 
     logger.info(`Example app listening on port ${PORT}`);

@@ -7,8 +7,7 @@ import { IConvertVideoMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
 import client from '../../config/webtorrent';
 import { TorrentModel } from '../../models/torrent.schema';
-import { allowedExt, convertableExt, getMessageContent } from '../../utils/misc';
-import { updateTorrentInfo } from '../../utils/query';
+import Utils from '../../utils';
 
 const handleCompletedTorrent = async (
   torrentInClient: Torrent,
@@ -43,7 +42,7 @@ export const downloadTorrent =
   async (message: ConsumeMessage | null): Promise<void> => {
     if (!message) return;
     try {
-      const addedTorrent: ITorrent = getMessageContent<ITorrent>(message);
+      const addedTorrent: ITorrent = Utils.getMessageContent<ITorrent>(message);
       logger.info(`Received new torrent to download.. ${JSON.stringify(addedTorrent)}`);
 
       client.add(addedTorrent.magnet, { path: `${TorrentPath.TMP}/${addedTorrent.slug}` }, async torrent => {
@@ -56,53 +55,55 @@ export const downloadTorrent =
         const videofiles = torrent.files
           .map(file => {
             const ext = file.name.split('.').pop() || '';
-            const isVideoFile = allowedExt.has(ext);
-            const isConvertable = convertableExt.has(ext);
-            if (!isVideoFile) {
-              logger.info(`found file that's not video file ${file.name}`);
-              // file.deselect();
-            }
             return {
               name: file.name,
               path: file.path,
               size: file.length,
               ext,
-              isConvertable,
               status: 'downloading',
             } as IVideo;
           })
-          .filter(file => allowedExt.has(file.ext));
+          //* filtering torrent files based on media extensions
+          .filter(file => Utils.supportedMediaExtension.has(file.ext));
 
+        //* If no supported media files found remove the torrent
         if (videofiles.length === 0) {
           torrent.destroy({ destroyStore: true });
           logger.info({ message: 'no video files found, deleting torrent', addedTorrent });
           // eslint-disable-next-line no-underscore-dangle
-          updateTorrentInfo(addedTorrent._id, { status: 'error', isMedia: false });
+          await TorrentModel.updateOne({ _id: addedTorrent._id }, { status: 'error', isMedia: false });
           channel.ack(message);
-        } else {
-          const { name, infoHash, length: size } = torrent;
-          const isMultiVideos = videofiles.length > 1;
-          const SavedTorrent = await updateTorrentInfo(addedTorrent._id, {
+          return;
+        }
+
+        const { name, infoHash, length: size } = torrent;
+        const isMultiVideos = videofiles.length > 1;
+
+        const SavedTorrent = await TorrentModel.findOneAndUpdate(
+          { _id: addedTorrent._id },
+          {
             name,
             infoHash,
             size,
             isMultiVideos,
             files: videofiles,
             status: 'downloading',
-          });
-          if (!SavedTorrent) {
-            logger.error(`torrent not saved ${addedTorrent}`);
-            channel.ack(message);
-            return;
-          }
-          if (torrent.progress === 1) {
-            logger.info(`torrent already downloaded, inside ready`);
-            await handleCompletedTorrent(torrent, SavedTorrent, publisherChannel, channel, message);
-          }
-          torrent.on('done', async () => {
-            await handleCompletedTorrent(torrent, SavedTorrent, publisherChannel, channel, message);
-          });
+          },
+          { new: true, lean: true }
+        );
+
+        if (!SavedTorrent) {
+          logger.error(`torrent not saved ${addedTorrent}`);
+          channel.ack(message);
+          return;
         }
+        if (torrent.progress === 1) {
+          logger.info(`torrent already downloaded, inside ready`);
+          await handleCompletedTorrent(torrent, SavedTorrent, publisherChannel, channel, message);
+        }
+        torrent.on('done', async () => {
+          await handleCompletedTorrent(torrent, SavedTorrent, publisherChannel, channel, message);
+        });
       });
     } catch (error) {
       logger.error(error);

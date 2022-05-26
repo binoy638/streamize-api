@@ -4,8 +4,7 @@ import { QueueName, IVideo } from '../../@types';
 import { IConvertVideoMessageContent, IDeleteFilesMessageContent } from '../../@types/message';
 import logger from '../../config/logger';
 import VideoProcessor from '../../libs/videoProcessor';
-import { getMessageContent } from '../../utils/misc';
-import { getVideoFile } from '../../utils/query';
+import Utils from '../../utils';
 
 //! temp solution
 const isProcessed = (video: IVideo): boolean => {
@@ -20,10 +19,10 @@ export const processVideo =
   async (message: ConsumeMessage | null): Promise<void> => {
     if (!message) return;
 
-    const file = getMessageContent<IConvertVideoMessageContent>(message);
+    const file = Utils.getMessageContent<IConvertVideoMessageContent>(message);
 
     logger.info(`Received new video file to convert.. file:${file.name}`);
-    const video = await getVideoFile(file.slug, false);
+    const video = await Utils.getVideoFile(file.slug, false);
     //* Checking if the video is already getting converted
     if (video && isProcessed(video) === false) {
       const videoProcessor = new VideoProcessor(file.torrentID, video);
