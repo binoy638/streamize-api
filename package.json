@@ -58,6 +58,7 @@
     "@hapi/boom": "^9.1.4",
     "amqp-connection-manager": "^4.0.1",
     "amqplib": "^0.8.0",
+    "check-disk-space": "^3.3.0",
     "cors": "^2.8.5",
     "express": "^4.17.2",
     "fluent-ffmpeg": "^2.1.2",

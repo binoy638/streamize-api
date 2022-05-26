@@ -10,6 +10,13 @@ export const streamVideo = async (req: Request, res: Response, next: NextFunctio
 
   const path = `${TorrentPath.DOWNLOAD}/${videoSlug}/${filename}`;
 
+  const exists = await fs.pathExists(path);
+
+  if (!exists) {
+    next(boom.notFound('video not found'));
+    return;
+  }
+
   const options = {
     headers: {
       'Access-Control-Allow-Origin': '*',

@@ -27,8 +27,9 @@ export const getall = async (req: Request, res: Response, next: NextFunction): P
       }
       return torrent;
     });
+    const diskSpace = await Utils.getDiskSpace();
 
-    res.send({ torrents: torrentsWithDownloadInfo });
+    res.send({ torrents: torrentsWithDownloadInfo, diskSpace });
   } catch (error) {
     logger.error(error);
 
@@ -69,7 +70,6 @@ export const get = async (req: Request, res: Response, next: NextFunction): Prom
         doc.files = filesWithDownloadInfo;
       }
     }
-
     res.send(doc);
   } catch (error) {
     logger.error(error);

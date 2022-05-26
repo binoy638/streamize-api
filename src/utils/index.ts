@@ -1,6 +1,7 @@
 import { ConsumeMessage } from 'amqplib';
 import { Torrent, TorrentFile } from 'webtorrent';
-import { IVideo, IDownloadInfo, IFileDownloadInfo, VideoState, TorrentState } from '../@types';
+import checkDiskSpace from 'check-disk-space';
+import { IVideo, IDownloadInfo, IFileDownloadInfo, VideoState, TorrentState, TorrentPath } from '../@types';
 import logger from '../config/logger';
 import { TorrentModel } from '../models/torrent.schema';
 
@@ -62,6 +63,16 @@ class Utils {
       await TorrentModel.updateOne({ _id: torrentID }, { status });
     } catch (error) {
       logger.error(error);
+    }
+  };
+
+  static getDiskSpace = async (): Promise<{ size: number; free: number }> => {
+    try {
+      const diskSpace = await checkDiskSpace(TorrentPath.DOWNLOAD);
+      return { size: diskSpace.size, free: diskSpace.free };
+    } catch (error) {
+      logger.error(error);
+      return { size: 0, free: 0 };
     }
   };
 }
