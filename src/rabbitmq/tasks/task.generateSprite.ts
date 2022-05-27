@@ -27,7 +27,6 @@ export const generateSprite =
         inputPath: file.inputPath,
         outputDir,
         multiple: true,
-        interval: 4,
         webVTT: {
           required: true,
           path: vttPath,
