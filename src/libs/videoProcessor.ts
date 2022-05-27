@@ -57,11 +57,11 @@ class VideoProcessor extends SubtitleProcessor {
     });
   }
 
-  public async convertToHLS(): Promise<void> {
+  public async convertToHLS(): Promise<string> {
     const { audioCodec, videoCodec } = await this.getCompatibleCodecs();
     const outputPath = `${this.baseDir}/${this.video.slug}/${this.video.slug}.m3u8`;
     await fs.ensureDir(`${this.baseDir}/${this.video.slug}`);
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       ffmpeg(this.video.path)
         .audioCodec(audioCodec)
         .videoCodec(videoCodec)
@@ -77,7 +77,7 @@ class VideoProcessor extends SubtitleProcessor {
           await this.updateTorrentStatus(TorrentState.DONE);
           await this.updateVideoStatus(VideoState.DONE);
           await this.updateTranscodingProgress(100);
-          resolve();
+          resolve(outputPath);
         })
         .on('error', async err => {
           await this.updateTorrentStatus(TorrentState.ERROR);

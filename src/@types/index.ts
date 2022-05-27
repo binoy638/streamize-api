@@ -49,6 +49,7 @@ export interface IVideo {
   size: number;
   path: string;
   ext: string;
+  progressPreview: boolean;
   subtitles: ISubtitle[];
   status: VideoState;
   downloadInfo?: IFileDownloadInfo;
@@ -79,6 +80,7 @@ export enum QueueName {
   PROCESS_VIDEO_NON_CPU_INTENSIVE = 'process-video-non-cpu-intensive',
   INSPECT_VIDEO = 'inspect-video',
   FILE_DELETE = 'delete-files',
+  GENERATE_SPRITE = 'generate-sprite',
 }
 
 export interface RequestPayload {

@@ -13,3 +13,7 @@ export interface ITorrentDownloadStatusMessageContent {
   torrentID: string;
   torrentInfoHash: string;
 }
+
+export interface ISpriteGenerationMessageContent extends IProcessVideoMessageContent {
+  inputPath: string;
+}

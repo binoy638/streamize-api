@@ -6,6 +6,7 @@ import logger from '../config/logger';
 // eslint-disable-next-line import/namespace
 import { deleteFiles } from './tasks/task.deleteFiles';
 import { downloadTorrent } from './tasks/task.downloadtorrent';
+import { generateSprite } from './tasks/task.generateSprite';
 import { inspectVideo } from './tasks/task.inspectVideo';
 import { processVideo } from './tasks/task.processVideo';
 
@@ -72,6 +73,17 @@ export const nonCpuIntensiveVideoProcessingChannel = connection.createChannel({
       channel.prefetch(1),
       channel.assertQueue(QueueName.PROCESS_VIDEO_NON_CPU_INTENSIVE, { durable: true }),
       channel.consume(QueueName.PROCESS_VIDEO_NON_CPU_INTENSIVE, processVideo(channel, publisherChannel)),
+    ]);
+  },
+});
+
+export const spriteGenerationChannel = connection.createChannel({
+  json: true,
+  setup: function (channel: Channel) {
+    return Promise.all([
+      channel.prefetch(1),
+      channel.assertQueue(QueueName.GENERATE_SPRITE, { durable: true }),
+      channel.consume(QueueName.GENERATE_SPRITE, generateSprite(channel)),
     ]);
   },
 });

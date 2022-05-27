@@ -21,6 +21,7 @@ const fileSchema: Schema = new Schema<IVideo>({
   path: { type: String },
   size: { type: Number },
   ext: { type: String },
+  progressPreview: { type: Boolean, default: false },
   subtitles: { type: [subtitleSchema], default: [] },
   status: {
     type: String,
