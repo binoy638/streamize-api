@@ -65,21 +65,18 @@ export const getSubtitle = async (req: Request, res: Response, next: NextFunctio
 
 export const getPreview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { videoSlug, filename } = req.params;
-
-  const exists = await fs.pathExists(`${TorrentPath.DOWNLOAD}/${videoSlug}/thumbnails/${filename}`);
+  const path = `${TorrentPath.DOWNLOAD}/${videoSlug}/thumbnails/${filename}`;
+  const exists = await fs.pathExists(path);
 
   if (!exists) {
     next(boom.notFound('file not found'));
   }
-  const options = {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Cross-Origin-Resource-Policy': 'cross-origin',
-    },
-    root: `${TorrentPath.DOWNLOAD}/${videoSlug}/thumbnails`,
-  };
+
   try {
-    res.sendFile(filename as string, options, err => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+
+    res.sendFile(path, err => {
       if (err) {
         console.log(err);
       } else {
