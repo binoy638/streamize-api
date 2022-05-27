@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-identical-functions */
 import { NextFunction, Request, Response } from 'express';
 import boom from '@hapi/boom';
 import fs from 'fs-extra';
@@ -47,6 +48,34 @@ export const getSubtitle = async (req: Request, res: Response, next: NextFunctio
       'Access-Control-Allow-Origin': '*',
     },
     root: `${TorrentPath.SUBTITLES}/${videoSlug}`,
+  };
+  try {
+    res.sendFile(filename as string, options, err => {
+      if (err) {
+        console.log(err);
+      } else {
+        console.log('Sent:', filename);
+      }
+    });
+  } catch (error) {
+    logger.error(error);
+    next(boom.internal('Internal server error'));
+  }
+};
+
+export const getPreview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { videoSlug, filename } = req.params;
+
+  const exists = await fs.pathExists(`${TorrentPath.DOWNLOAD}/${videoSlug}/thumbnails/${filename}`);
+
+  if (!exists) {
+    next(boom.notFound('file not found'));
+  }
+  const options = {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
+    root: `${TorrentPath.DOWNLOAD}/${videoSlug}/thumbnails`,
   };
   try {
     res.sendFile(filename as string, options, err => {
