@@ -25,7 +25,7 @@ export const processVideo =
 
     const file = Utils.getMessageContent<IProcessVideoMessageContent>(message);
 
-    logger.info(`Received new CPU intensive video file to convert.. file:${file.name}`);
+    logger.info(`Received new file to convert.. file:${file.name}`);
     const video = await Utils.getVideoFile(file.slug, false);
     //* Checking if the video is already getting converted
     if (video && isProcessed(video) === false) {
