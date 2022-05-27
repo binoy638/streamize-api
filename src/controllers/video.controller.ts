@@ -74,6 +74,7 @@ export const getPreview = async (req: Request, res: Response, next: NextFunction
   const options = {
     headers: {
       'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     },
     root: `${TorrentPath.DOWNLOAD}/${videoSlug}/thumbnails`,
   };
