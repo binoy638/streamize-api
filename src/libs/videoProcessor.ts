@@ -64,6 +64,7 @@ class VideoProcessor extends SubtitleProcessor {
     return new Promise<string>((resolve, reject) => {
       ffmpeg(this.video.path)
         .audioCodec(audioCodec)
+        .audioChannels(2)
         .videoCodec(videoCodec)
         .outputOption(['-sn', '-hls_time 10', '-hls_list_size 0', '-f hls'])
         .output(outputPath)

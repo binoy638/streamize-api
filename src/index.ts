@@ -18,7 +18,9 @@ const PORT = 3000;
 const app = express();
 
 app.use(helmet());
-app.use(morgan('common'));
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('common'));
+}
 app.use(cors());
 app.use(express.json());
 
