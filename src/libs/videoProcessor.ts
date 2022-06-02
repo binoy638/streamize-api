@@ -62,8 +62,9 @@ class VideoProcessor extends SubtitleProcessor {
     const outputPath = `${this.baseDir}/${this.video.slug}/${this.video.slug}.m3u8`;
     await fs.ensureDir(`${this.baseDir}/${this.video.slug}`);
     return new Promise<string>((resolve, reject) => {
+      console.log(audioCodec);
       ffmpeg(this.video.path)
-        .audioCodec(audioCodec)
+        .audioCodec('copy')
         .audioChannels(2)
         .videoCodec(videoCodec)
         .outputOption(['-sn', '-hls_time 10', '-hls_list_size 0', '-f hls'])
