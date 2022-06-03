@@ -17,8 +17,8 @@ const subtitleSchema: Schema = new Schema<ISubtitle>({
 
 const fileSchema: Schema = new Schema<IVideo>({
   name: { type: String },
-  slug: { type: String, default: () => nanoid(5).toLowerCase() },
-  path: { type: String },
+  slug: { type: String, default: () => nanoid(5).toLowerCase(), unique: true },
+  path: { type: String, unique: true },
   size: { type: Number },
   ext: { type: String },
   progressPreview: { type: Boolean, default: false },

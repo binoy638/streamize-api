@@ -2,6 +2,8 @@ FROM node:16
 
 WORKDIR /home/app
 
+ENV NODE_ENV=production
+
 USER root
 
 RUN apt-get -y update

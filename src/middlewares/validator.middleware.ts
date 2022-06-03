@@ -7,9 +7,9 @@ export const validator =
   (requestPayload: RequestPayload) =>
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      if (requestPayload.body) await requestPayload.body.validate(req.body);
-      if (requestPayload.query) await requestPayload.query.validate(req.query);
-      if (requestPayload.params) await requestPayload.params.validate(req.params);
+      if (requestPayload?.body) await requestPayload.body.validate(req.body);
+      if (requestPayload?.query) await requestPayload.query.validate(req.query);
+      if (requestPayload?.params) await requestPayload.params.validate(req.params);
       next();
     } catch (error) {
       logger.error(error);

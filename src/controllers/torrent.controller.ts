@@ -3,10 +3,11 @@ import boom from '@hapi/boom';
 import fs from 'fs-extra';
 import client from '../config/webtorrent';
 import * as rabbitMQ from '../rabbitmq';
-import { QueueName, TorrentPath, TorrentState } from '../@types';
+import { ITorrent, QueueName, TorrentPath, TorrentState } from '../@types';
 import logger from '../config/logger';
 import { TorrentModel } from '../models/torrent.schema';
 import Utils from '../utils';
+import { UserModel } from '../models/user.schema';
 
 /**
  *
@@ -44,21 +45,29 @@ export const getall = async (req: Request, res: Response, next: NextFunction): P
 
 export const get = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { slug } = req.params;
-
+  const { currentUser } = req;
   try {
-    const doc = await TorrentModel.findOne({ slug }).lean();
+    const doc = await UserModel.findOne({ _id: currentUser.id }).populate<{ torrents: ITorrent[] }>('torrents').lean();
 
-    if (!doc) {
+    if (!doc || doc.torrents.length === 0) {
       next(boom.notFound('torrent not found'));
       return;
     }
 
-    if (doc.status === TorrentState.DOWNLOADING) {
-      const torrent = client.get(doc.infoHash);
+    const torrent = doc.torrents.find(tor => tor.slug === slug);
+
+    if (!torrent) {
+      next(boom.notFound('torrent not found'));
+      return;
+    }
+    const torrentDoc = torrent;
+
+    if (torrentDoc.status === TorrentState.DOWNLOADING) {
+      const torrent = client.get(torrentDoc.infoHash);
       if (torrent) {
         const downloadInfo = Utils.getDataFromTorrent(torrent);
 
-        const filesWithDownloadInfo = doc.files.map(docFile => {
+        const filesWithDownloadInfo = torrentDoc.files.map(docFile => {
           const file = torrent.files.find(file => file.name === docFile.name);
           if (file) {
             const downloadInfo = Utils.getDataFromTorrentFile(file);
@@ -66,11 +75,11 @@ export const get = async (req: Request, res: Response, next: NextFunction): Prom
           }
           return docFile;
         });
-        doc.downloadInfo = downloadInfo;
-        doc.files = filesWithDownloadInfo;
+        torrentDoc.downloadInfo = downloadInfo;
+        torrentDoc.files = filesWithDownloadInfo;
       }
     }
-    res.send(doc);
+    res.send(torrentDoc);
   } catch (error) {
     logger.error(error);
     next(boom.internal('Internal server error'));
@@ -84,7 +93,7 @@ export const get = async (req: Request, res: Response, next: NextFunction): Prom
 
 export const del = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { slug } = req.params;
-
+  const { currentUser } = req;
   try {
     const doc = await TorrentModel.findOne({ slug }).lean();
 
@@ -114,6 +123,7 @@ export const del = async (req: Request, res: Response, next: NextFunction): Prom
     logger.info(`Deleting torrent ${doc.slug}\nFiles: ${Files}`);
 
     await TorrentModel.deleteOne({ _id: doc._id });
+    await UserModel.updateOne({ _id: currentUser.id }, { $pull: { torrents: doc._id } });
     res.send({ message: 'torrent deleted successfully' });
   } catch (error) {
     logger.error(error);
@@ -129,6 +139,8 @@ export const del = async (req: Request, res: Response, next: NextFunction): Prom
 export const add = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { magnet } = req.body;
 
+  const { currentUser } = req;
+
   try {
     const exists = await TorrentModel.findOne({ magnet });
     if (exists) {
@@ -138,6 +150,8 @@ export const add = async (req: Request, res: Response, next: NextFunction): Prom
 
     const doc = new TorrentModel({ magnet, status: TorrentState.ADDED });
     const torrent = await doc.save();
+
+    await UserModel.updateOne({ _id: currentUser.id }, { $push: { torrents: torrent._id } });
 
     rabbitMQ.publisherChannel
       .sendToQueue(QueueName.DOWNLOAD_TORRENT, torrent, { persistent: true, expiration: '86400000' })

@@ -35,6 +35,7 @@ module.exports = {
     'unicorn/filename-case': 'off',
     'no-underscore-dangle': 'off',
     'sonarjs/no-duplicate-string': 'off',
+    'unicorn/no-static-only-class': 'off',
     'no-console': 'off',
     'import/order': [
       'error',
