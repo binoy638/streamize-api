@@ -25,7 +25,8 @@ class VideoProcessor extends SubtitleProcessor {
 
   public async getCompatibleCodecs(): Promise<{ audioCodec: string; videoCodec: string }> {
     return new Promise<{ audioCodec: string; videoCodec: string }>((resolve, reject) => {
-      let audioCodec = 'libmp3lame';
+      // libmp3lame;
+      let audioCodec = 'aac';
       let videoCodec = 'libx264';
       ffmpeg(this.video.path).ffprobe((error, data) => {
         if (!error) {
@@ -62,9 +63,8 @@ class VideoProcessor extends SubtitleProcessor {
     const outputPath = `${this.baseDir}/${this.video.slug}/${this.video.slug}.m3u8`;
     await fs.ensureDir(`${this.baseDir}/${this.video.slug}`);
     return new Promise<string>((resolve, reject) => {
-      console.log(audioCodec);
       ffmpeg(this.video.path)
-        .audioCodec('copy')
+        .audioCodec(audioCodec)
         .audioChannels(2)
         .videoCodec(videoCodec)
         .outputOption(['-sn', '-hls_time 10', '-hls_list_size 0', '-f hls'])
