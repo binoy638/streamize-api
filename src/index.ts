@@ -71,9 +71,9 @@ app.listen(PORT, async () => {
     if (!existingAdmin) {
       await UserModel.create({ username: process.env.ADMIN_USER, password: process.env.ADMIN_PASSWORD, isAdmin: true });
 
-      const Torrents = await TorrentModel.getTorrents();
-      const torrentIds = Torrents.map(torrent => torrent._id);
-      await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $push: { torrents: { $each: torrentIds } } });
+      // const Torrents = await TorrentModel.getTorrents();
+      // const torrentIds = Torrents.map(torrent => torrent._id);
+      // await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $push: { torrents: { $each: torrentIds } } });
     }
   } catch (error) {
     logger.error(error);
