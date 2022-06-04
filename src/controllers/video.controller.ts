@@ -18,13 +18,13 @@ export const streamVideo = async (req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  const options = {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-    },
-  };
+  // const options = {
+  //   headers: {
+  //     'Access-Control-Allow-Origin': '*',
+  //   },
+  // };
   try {
-    res.sendFile(path, options, error => {
+    res.sendFile(path, error => {
       if (error) {
         logger.error(error);
       }

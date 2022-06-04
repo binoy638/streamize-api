@@ -1,4 +1,4 @@
-import { IVideo } from '.';
+import { ITorrent, IVideo, UserPayload } from './index';
 
 export interface IDeleteFilesMessageContent {
   src: string;
@@ -9,9 +9,9 @@ export interface IProcessVideoMessageContent extends IVideo {
   torrentSlug: string;
 }
 
-export interface ITorrentDownloadStatusMessageContent {
-  torrentID: string;
-  torrentInfoHash: string;
+export interface ITorrentDownloadMessageContent {
+  torrent: ITorrent;
+  currentUser: UserPayload;
 }
 
 export interface ISpriteGenerationMessageContent extends IProcessVideoMessageContent {

@@ -46,6 +46,10 @@ services:
       - /home/tmp:/home/app/tmp
       - /home/downloads:/home/app/downloads
       - /home/subtitles:/home/app/subtitles
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_USER=${ADMIN_USER}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     command: npm start
     depends_on:
       mongo:

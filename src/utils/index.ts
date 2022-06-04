@@ -1,13 +1,24 @@
+/* eslint-disable unicorn/no-array-reduce */
 import { ConsumeMessage } from 'amqplib';
 import { Torrent, TorrentFile } from 'webtorrent';
 import checkDiskSpace from 'check-disk-space';
-import { IVideo, IDownloadInfo, IFileDownloadInfo, VideoState, TorrentState, TorrentPath } from '../@types';
+import {
+  IVideo,
+  IDownloadInfo,
+  IFileDownloadInfo,
+  VideoState,
+  TorrentState,
+  TorrentPath,
+  UserPayload,
+  ITorrent,
+} from '../@types';
 import logger from '../config/logger';
 import { TorrentModel } from '../models/torrent.schema';
+import { UserModel } from '../models/user.schema';
 
 /* eslint-disable unicorn/no-static-only-class */
 class Utils {
-  static readonly supportedMediaExtension = new Set(['mp4', 'mkv', 'avi', 'mov', 'flv', 'mp3']);
+  static readonly supportedMediaExtension = new Set(['mp4', 'mkv', 'avi', 'mov', 'flv', 'mp3', 'wmv']);
 
   static getMessageContent<T>(message: ConsumeMessage): T {
     if (typeof message.content === 'string') {
@@ -74,6 +85,31 @@ class Utils {
     } catch (error) {
       logger.error(error);
       return { size: 0, free: 0 };
+    }
+  };
+
+  static getUserDiskUsage = async (user: UserPayload): Promise<{ size: number; free: number }> => {
+    try {
+      if (user.isAdmin) {
+        // eslint-disable-next-line sonarjs/prefer-immediate-return
+        const diskSpace = await Utils.getDiskSpace();
+        return diskSpace;
+      }
+
+      const doc = await UserModel.findOne({ _id: user.id }).populate<{ torrents: ITorrent[] }>('torrents').lean();
+      if (!doc) throw new Error('user not found');
+      const usedSpace = doc.torrents.reduce((acc, torrent) => {
+        if (torrent.status === TorrentState.DONE) {
+          return acc + torrent.size;
+        }
+        return torrent.files.reduce((acc, file) => {
+          return acc + file.size;
+        }, 0);
+      }, 0);
+      return { size: user.allocatedMemory, free: user.allocatedMemory - usedSpace };
+    } catch (error) {
+      logger.error(error);
+      throw new Error('something went wrong while fetching user disk usage');
     }
   };
 }

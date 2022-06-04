@@ -15,6 +15,7 @@ import logger from './config/logger';
 import * as rabbitMQ from './rabbitmq';
 import { TorrentModel } from './models/torrent.schema';
 import authRouter from './routers/auth.router';
+import { UserModel } from './models/user.schema';
 
 dotenv.config();
 
@@ -35,7 +36,7 @@ app.use(
   })
 );
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 app.use('/torrent', torrentRouter);
@@ -61,6 +62,23 @@ app.listen(PORT, async () => {
     logger.info(`Example app listening on port ${PORT}`);
   } catch (error) {
     logger.error(error);
+  }
+  try {
+    if (!process.env.ADMIN_USER && !process.env.ADMIN_PASSWORD && !process.env.JWT_SECRET)
+      throw new Error('Admin credentials not set');
+
+    const existingAdmin = await UserModel.findOne({ username: process.env.ADMIN_USER });
+    if (!existingAdmin) {
+      await UserModel.create({ username: process.env.ADMIN_USER, password: process.env.ADMIN_PASSWORD, isAdmin: true });
+
+      const Torrents = await TorrentModel.getTorrents();
+      const torrentIds = Torrents.map(torrent => torrent._id);
+      await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $push: { torrents: { $each: torrentIds } } });
+    }
+  } catch (error) {
+    logger.error(error);
+    // eslint-disable-next-line unicorn/no-process-exit
+    process.exit();
   }
 });
 

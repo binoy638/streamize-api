@@ -8,6 +8,7 @@ import logger from '../config/logger';
 import { TorrentModel } from '../models/torrent.schema';
 import Utils from '../utils';
 import { UserModel } from '../models/user.schema';
+import { ITorrentDownloadMessageContent } from '../@types/message';
 
 /**
  *
@@ -15,8 +16,18 @@ import { UserModel } from '../models/user.schema';
  */
 
 export const getall = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { currentUser } = req;
   try {
-    const torrents = await TorrentModel.getTorrents();
+    const userDoc = await UserModel.findOne({ _id: currentUser.id })
+      .populate<{ torrents: ITorrent[] }>('torrents')
+      .lean();
+
+    if (!userDoc) {
+      next(boom.notFound('torrent not found'));
+      return;
+    }
+
+    const { torrents } = userDoc;
 
     const torrentsWithDownloadInfo = torrents.map(torrent => {
       if (torrent.status === TorrentState.DOWNLOADING) {
@@ -28,7 +39,9 @@ export const getall = async (req: Request, res: Response, next: NextFunction): P
       }
       return torrent;
     });
-    const diskSpace = await Utils.getDiskSpace();
+
+    //* calculate disk usage
+    const diskSpace = await Utils.getUserDiskUsage(currentUser);
 
     res.send({ torrents: torrentsWithDownloadInfo, diskSpace });
   } catch (error) {
@@ -142,9 +155,17 @@ export const add = async (req: Request, res: Response, next: NextFunction): Prom
   const { currentUser } = req;
 
   try {
-    const exists = await TorrentModel.findOne({ magnet });
-    if (exists) {
-      next(boom.badRequest('torrent already exist'));
+    const existingTorrent = await TorrentModel.findOne({ magnet });
+    if (existingTorrent) {
+      //* check if the request user already have this torrent
+      const existInCurrentUser = await UserModel.findOne({ _id: currentUser.id, torrents: existingTorrent._id });
+      if (existInCurrentUser) {
+        next(boom.badRequest('torrent already exist'));
+        return;
+      }
+      //* add torrent to user
+      await UserModel.updateOne({ _id: currentUser.id }, { $push: { torrents: existingTorrent._id } });
+      res.send({ message: 'torrent added successfully', existingTorrent });
       return;
     }
 
@@ -153,8 +174,10 @@ export const add = async (req: Request, res: Response, next: NextFunction): Prom
 
     await UserModel.updateOne({ _id: currentUser.id }, { $push: { torrents: torrent._id } });
 
+    const data: ITorrentDownloadMessageContent = { currentUser, torrent };
+
     rabbitMQ.publisherChannel
-      .sendToQueue(QueueName.DOWNLOAD_TORRENT, torrent, { persistent: true, expiration: '86400000' })
+      .sendToQueue(QueueName.DOWNLOAD_TORRENT, data, { persistent: true, expiration: '86400000' })
       .then(() => {
         res.send({ message: 'torrent added successfully', torrent });
       })

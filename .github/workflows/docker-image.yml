@@ -10,5 +10,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      - name: set env variables
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ADMIN_USER: ${{ secrets.ADMIN_USER }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
       - name: Rebuild Image and start container
         run: sudo docker-compose up -d --build

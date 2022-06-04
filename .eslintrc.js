@@ -36,6 +36,7 @@ module.exports = {
     'no-underscore-dangle': 'off',
     'sonarjs/no-duplicate-string': 'off',
     'unicorn/no-static-only-class': 'off',
+    'unicorn/numeric-separators-style': 'off',
     'no-console': 'off',
     'import/order': [
       'error',
