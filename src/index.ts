@@ -31,7 +31,8 @@ app.use(
   cookieSession({
     //* avoid encrypting the cookies
     signed: false,
-    sameSite: 'none',
+    // sameSite: 'none',
+
     //* https only cookies
     secure: process.env.NODE_ENV !== 'development',
   })
@@ -72,10 +73,10 @@ app.listen(PORT, async () => {
     if (!existingAdmin) {
       await UserModel.create({ username: process.env.ADMIN_USER, password: process.env.ADMIN_PASSWORD, isAdmin: true });
     }
-    await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $set: { torrents: [] } });
-    const Torrents = await TorrentModel.getTorrents();
-    const torrentIds = Torrents.map(torrent => torrent._id);
-    await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $push: { torrents: { $each: torrentIds } } });
+    // await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $set: { torrents: [] } });
+    // const Torrents = await TorrentModel.getTorrents();
+    // const torrentIds = Torrents.map(torrent => torrent._id);
+    // await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $push: { torrents: { $each: torrentIds } } });
   } catch (error) {
     logger.error(error);
     // eslint-disable-next-line unicorn/no-process-exit
