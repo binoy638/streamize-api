@@ -16,6 +16,7 @@ import * as rabbitMQ from './rabbitmq';
 import { TorrentModel } from './models/torrent.schema';
 import authRouter from './routers/auth.router';
 import { UserModel } from './models/user.schema';
+import mediaShareRouter from './routers/mediaShare.router';
 
 dotenv.config();
 
@@ -46,6 +47,7 @@ app.use(express.json());
 app.use('/torrent', torrentRouter);
 app.use('/video', videoRouter);
 app.use('/auth', authRouter);
+app.use('/share', mediaShareRouter);
 
 app.listen(PORT, async () => {
   try {

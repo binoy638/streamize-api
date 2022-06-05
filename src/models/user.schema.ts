@@ -3,7 +3,7 @@
 import { model, Schema, Document } from 'mongoose';
 import { PasswordManager } from '../libs/passwordManager';
 
-interface UserDoc extends Document {
+export interface UserDoc extends Document {
   username: string;
   password: string;
   torrents: unknown[];

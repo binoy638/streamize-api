@@ -47,7 +47,7 @@ export const signin = async (req: Request, res: Response, next: NextFunction): P
 export const signout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     // eslint-disable-next-line unicorn/no-null
-    req.session = undefined;
+    req.session = null;
     res.send({});
   } catch (error) {
     logger.error(error);

@@ -7,6 +7,7 @@ import { streamVideoValidator } from '../validators/video.validator';
 const videoRouter = Router();
 
 videoRouter.get('/stream/:videoSlug/:filename', getCurrentUser, validator(streamVideoValidator), streamVideo);
+videoRouter.get('/media-share/:id/stream/:videoSlug/:filename', validator(streamVideoValidator), streamVideo);
 
 videoRouter.get('/:videoSlug', getCurrentUser, getVideoInfo);
 
