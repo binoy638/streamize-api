@@ -31,6 +31,7 @@ app.use(
   cookieSession({
     //* avoid encrypting the cookies
     signed: false,
+    sameSite: 'none',
     //* https only cookies
     secure: process.env.NODE_ENV !== 'development',
   })
