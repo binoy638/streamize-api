@@ -27,10 +27,12 @@ app.use(helmet());
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('common'));
 }
+app.set('trust proxy', true);
 app.use(
   cookieSession({
     //* avoid encrypting the cookies
     signed: false,
+    expires: new Date(Date.now() + 60 * 60 * 1000 * 24),
     // sameSite: 'none',
 
     //* https only cookies
