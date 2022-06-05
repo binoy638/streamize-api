@@ -32,7 +32,7 @@ app.use(
     //* avoid encrypting the cookies
     signed: false,
     //* https only cookies
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV !== 'development',
   })
 );
 
