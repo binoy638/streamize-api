@@ -31,8 +31,6 @@ if (process.env.NODE_ENV === 'development') {
 app.set('trust proxy', true);
 app.use(
   cookieSession({
-    //* avoid encrypting the cookies
-    signed: false,
     maxAge: 24 * 60 * 60 * 1000 * 7,
     // sameSite: 'none',
 
