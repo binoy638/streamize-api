@@ -33,7 +33,6 @@ app.set('trust proxy', true);
 app.use(
   cookieSession({
     secret: process.env.COOKIE_SECRET!,
-    keys: [process.env.COOKIE_KEY!],
     maxAge: 24 * 60 * 60 * 1000 * 7,
     // sameSite: 'none',
 
@@ -71,7 +70,7 @@ app.listen(PORT, async () => {
     logger.error(error);
   }
   try {
-    if (!process.env.ADMIN_USER && !process.env.ADMIN_PASSWORD && !process.env.JWT_SECRET)
+    if (!process.env.ADMIN_USER || !process.env.ADMIN_PASSWORD || !process.env.JWT_SECRET || !process.env.COOKIE_SECRET)
       throw new Error('Admin credentials not set');
 
     const existingAdmin = await UserModel.findOne({ username: process.env.ADMIN_USER });
