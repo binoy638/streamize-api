@@ -31,6 +31,8 @@ if (process.env.NODE_ENV === 'development') {
 app.set('trust proxy', true);
 app.use(
   cookieSession({
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    secret: process.env.COOKIE_SECRET!,
     maxAge: 24 * 60 * 60 * 1000 * 7,
     // sameSite: 'none',
 
