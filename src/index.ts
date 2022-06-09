@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import express from 'express';
 import morgan from 'morgan';
 import cors from 'cors';
@@ -31,8 +32,8 @@ if (process.env.NODE_ENV === 'development') {
 app.set('trust proxy', true);
 app.use(
   cookieSession({
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     secret: process.env.COOKIE_SECRET!,
+    keys: [process.env.COOKIE_KEY!],
     maxAge: 24 * 60 * 60 * 1000 * 7,
     // sameSite: 'none',
 
