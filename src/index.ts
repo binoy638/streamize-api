@@ -33,7 +33,7 @@ app.use(
   cookieSession({
     //* avoid encrypting the cookies
     signed: false,
-    expires: new Date(Date.now() + 60 * 60 * 1000 * 24),
+    maxAge: 24 * 60 * 60 * 1000 * 7,
     // sameSite: 'none',
 
     //* https only cookies
