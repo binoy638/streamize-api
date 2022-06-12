@@ -42,7 +42,7 @@ app.use(
   })
 );
 
-app.use(cors({ origin: process.env.ORIGIN_URL!, credentials: true }));
+app.use(cors({ origin: process.env.ORIGIN_URL!, credentials: true, preflightContinue: true }));
 app.use(express.json());
 
 app.use('/torrent', torrentRouter);
