@@ -34,7 +34,7 @@ app.use(
   cookieSession({
     secret: process.env.COOKIE_SECRET!,
     maxAge: 24 * 60 * 60 * 1000 * 7,
-    // sameSite: 'none',
+    sameSite: 'none',
 
     //* https only cookies
     secure: process.env.NODE_ENV !== 'development',
