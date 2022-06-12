@@ -37,13 +37,12 @@ app.use(
     sameSite: 'none',
 
     //* https only cookies
-    // secure: process.env.NODE_ENV !== 'development',
-    // httpOnly: process.env.NODE_ENV! !== 'development',
-    secure: false,
+    secure: process.env.NODE_ENV !== 'development',
+    httpOnly: process.env.NODE_ENV! !== 'development',
   })
 );
 
-app.use(cors({ origin: [process.env.ORIGIN_URL!, 'http://localhost:3000'], credentials: true }));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 app.use('/torrent', torrentRouter);
