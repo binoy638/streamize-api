@@ -34,7 +34,8 @@ app.use(
   cookieSession({
     secret: process.env.COOKIE_SECRET!,
     maxAge: 24 * 60 * 60 * 1000 * 7,
-    // sameSite: 'none',
+    sameSite: 'none',
+
     //* https only cookies
     // secure: process.env.NODE_ENV !== 'development',
     secure: false,
@@ -42,7 +43,7 @@ app.use(
   })
 );
 
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 
 app.use('/torrent', torrentRouter);
