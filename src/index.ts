@@ -37,12 +37,12 @@ app.use(
     sameSite: 'none',
     domain: process.env.ORIGIN_URL!,
     //* https only cookies
-    secure: process.env.NODE_ENV !== 'development',
-    httpOnly: process.env.NODE_ENV !== 'development',
+    secure: true,
+    httpOnly: true,
   })
 );
 
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: process.env.ORIGIN_URL!, credentials: true }));
 app.use(express.json());
 
 app.use('/torrent', torrentRouter);
