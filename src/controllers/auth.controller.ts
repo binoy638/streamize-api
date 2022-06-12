@@ -31,13 +31,13 @@ export const signin = async (req: Request, res: Response, next: NextFunction): P
       return;
     }
     const JWTtoken = jwt.sign(
-      { id: user._id, isAdmin: user.isAdmin, allocatedMemory: user.allocatedMemory },
+      { id: user._id, username: user.username, isAdmin: user.isAdmin, allocatedMemory: user.allocatedMemory },
       process.env.JWT_SECRET || ''
     );
     req.session = {
       jwt: JWTtoken,
     };
-    res.status(200).send({ user: { username: user.username, torrents: user.torrents, isAdmin: user.isAdmin } });
+    res.sendStatus(200);
   } catch (error) {
     logger.error(error);
     next(boom.internal('Internal server error'));
@@ -64,7 +64,9 @@ export const verifyUser = async (req: Request, res: Response, next: NextFunction
       next(boom.unauthorized('User not found'));
       return;
     }
-    res.sendStatus(200);
+    res.send({
+      user: { id: user._id, username: user.username, isAdmin: user.isAdmin, allocatedMemory: user.allocatedMemory },
+    });
   } catch (error) {
     logger.error(error);
     next(boom.internal('Internal server error'));
