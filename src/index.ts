@@ -36,7 +36,9 @@ app.use(
     maxAge: 24 * 60 * 60 * 1000 * 7,
     // sameSite: 'none',
     //* https only cookies
-    secure: process.env.NODE_ENV !== 'development',
+    // secure: process.env.NODE_ENV !== 'development',
+    secure: false,
+    httpOnly: false,
   })
 );
 
