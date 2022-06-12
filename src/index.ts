@@ -35,10 +35,10 @@ app.use(
     secret: process.env.COOKIE_SECRET!,
     maxAge: 24 * 60 * 60 * 1000 * 7,
     sameSite: 'none',
-
+    domain: process.env.ORIGIN_URL!,
     //* https only cookies
     secure: process.env.NODE_ENV !== 'development',
-    httpOnly: process.env.NODE_ENV! !== 'development',
+    httpOnly: process.env.NODE_ENV !== 'development',
   })
 );
 
