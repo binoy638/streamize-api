@@ -17,12 +17,14 @@ jobs:
           ADMIN_USER: ${{ secrets.ADMIN_USER }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           COOKIE_SECRET: ${{ secrets.COOKIE_SECRET }}
+          ORIGIN_URL: ${{ secrets.ORIGIN_URL }}
         run: |
           cat <<EOF > .env
           JWT_SECRET=$JWT_SECRET
           ADMIN_USER=$ADMIN_USER
           ADMIN_PASSWORD=$ADMIN_PASSWORD
           COOKIE_SECRET=$COOKIE_SECRET
+          ORIGIN_URL=$ORIGIN_URL
           EOF
           echo "cat .env"
           cat .env
