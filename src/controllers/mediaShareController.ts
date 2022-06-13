@@ -24,7 +24,6 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
 
 export const getPlaylist = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { slug } = req.params;
-  console.log('inside');
   try {
     const sharedMedia = await MediaShareModel.findOne({ slug })
       .populate<{ torrent: ITorrent; user: UserDoc }>('torrent user')

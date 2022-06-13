@@ -37,8 +37,8 @@ app.use(
     sameSite: 'none',
     domain: process.env.ORIGIN_URL!,
     //* https only cookies
-    secure: true,
-    httpOnly: true,
+    secure: process.env.NODE_ENV !== 'development',
+    httpOnly: process.env.NODE_ENV !== 'development',
   })
 );
 

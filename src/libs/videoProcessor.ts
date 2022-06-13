@@ -3,6 +3,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs-extra';
 import { IVideo, TorrentPath, TorrentState, VideoState } from '../@types';
 import logger from '../config/logger';
+import { config } from '../config/stream';
 import { TorrentModel } from '../models/torrent.schema';
 import SubtitleProcessor from './subtitleProcessor';
 
@@ -67,7 +68,7 @@ class VideoProcessor extends SubtitleProcessor {
         .audioCodec(audioCodec)
         .audioChannels(2)
         .videoCodec(videoCodec)
-        .outputOption(['-sn', '-hls_time 10', '-hls_list_size 0', '-f hls'])
+        .outputOption(['-sn', `-hls_time ${config.hls_time}`, '-hls_list_size 0', '-f hls'])
         .output(outputPath)
         .on('start', async () => {
           await this.updateTorrentStatus(TorrentState.PROCESSING);
