@@ -6,14 +6,16 @@ import { ITorrent } from '../@types';
 import { UserDoc } from '../models/user.schema';
 
 export const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const { body } = req;
+  const { torrent, mediaId, isTorrent, expiresIn } = req.body;
 
   const { currentUser } = req;
   try {
     const doc = await MediaShareModel.create({
-      ...body,
       user: currentUser.id,
-      expiresIn: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+      torrent,
+      mediaId,
+      isTorrent,
+      expiresIn: new Date(expiresIn),
     });
     res.status(201).send(doc);
   } catch (error) {
@@ -25,13 +27,14 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
 export const getPlaylist = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { slug } = req.params;
   try {
-    const sharedMedia = await MediaShareModel.findOne({ slug })
+    const sharedMedia = await MediaShareModel.findOne({ slug, expiresIn: { $gt: new Date() } })
       .populate<{ torrent: ITorrent; user: UserDoc }>('torrent user')
       .lean();
     if (!sharedMedia) {
       next(boom.notFound('Media not found'));
       return;
     }
+
     if (sharedMedia.isTorrent) {
       res.send({ torrent: sharedMedia.torrent, user: sharedMedia.user.username });
       return;

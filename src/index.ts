@@ -18,6 +18,8 @@ import { TorrentModel } from './models/torrent.schema';
 import authRouter from './routers/auth.router';
 import { UserModel } from './models/user.schema';
 import mediaShareRouter from './routers/mediaShare.router';
+import { UserVideoProgressModel } from './models/userVideoProgress.schema';
+import { MediaShareModel } from './models/MediaShare';
 
 dotenv.config();
 
@@ -64,6 +66,8 @@ app.listen(PORT, async () => {
       rabbitMQ.fileManagerChannel.ackAll();
       rabbitMQ.nonCpuIntensiveVideoProcessingChannel.ackAll();
       await TorrentModel.deleteMany({});
+      await UserVideoProgressModel.deleteMany({});
+      await MediaShareModel.deleteMany({});
     }
 
     logger.info(`Example app listening on port ${PORT}`);

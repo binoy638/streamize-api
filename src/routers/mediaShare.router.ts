@@ -31,15 +31,15 @@ mediaShareRouter.get(
 
 mediaShareRouter.post(
   '/create',
+  getCurrentUser,
   validator({
     body: Yup.object().shape({
       torrent: Yup.string().required(),
       mediaId: Yup.string().required(),
       isTorrent: Yup.boolean().required(),
-      //   expiresIn: Yup.date().required(),
+      expiresIn: Yup.date().required(),
     }),
   }),
-  getCurrentUser,
   mediaShareController.create
 );
 

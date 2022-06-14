@@ -9,6 +9,8 @@ import { TorrentModel } from '../models/torrent.schema';
 import Utils from '../utils';
 import { UserModel } from '../models/user.schema';
 import { ITorrentDownloadMessageContent } from '../@types/message';
+import { MediaShareModel } from '../models/MediaShare';
+import { UserVideoProgressModel } from '../models/userVideoProgress.schema';
 
 /**
  *
@@ -222,6 +224,8 @@ export const clearAll = async (req: Request, res: Response, next: NextFunction):
     rabbitMQ.fileManagerChannel.ackAll();
     rabbitMQ.nonCpuIntensiveVideoProcessingChannel.ackAll();
     await TorrentModel.deleteMany({});
+    await UserVideoProgressModel.deleteMany({});
+    await MediaShareModel.deleteMany({});
     res.send({ message: 'All torrents deleted' });
   } catch (error) {
     logger.error(error);
