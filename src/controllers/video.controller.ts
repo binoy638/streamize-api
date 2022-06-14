@@ -5,7 +5,6 @@ import fs from 'fs-extra';
 import { TorrentPath } from '../@types';
 import logger from '../config/logger';
 import Utils from '../utils';
-import { config } from '../config/stream';
 import { UserVideoProgressModel } from '../models/userVideoProgress.schema';
 
 export const streamVideo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -107,22 +106,38 @@ export const getVideoInfo = async (req: Request, res: Response, next: NextFuncti
   res.status(200).send(video);
 };
 
-export const userVideoProgress = async (req: Request, res: Response): Promise<void> => {
-  const { videoSlug, filename } = req.params;
+export const saveUserVideoProgress = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { videoSlug } = req.params;
+  const { progress } = req.body;
   const { currentUser } = req;
-  const chunkCount = Number(filename.replace(videoSlug, ''));
+
   try {
-    const progress = config.hls_time * chunkCount;
-    const doc = await UserVideoProgressModel.findOneAndUpdate(
+    await UserVideoProgressModel.findOneAndUpdate(
       { user: currentUser.id, video: videoSlug },
       { progress },
       { upsert: true, new: true }
     );
-    logger.debug(doc);
-    res.sendStatus(200);
+    res.sendStatus(204);
   } catch (error) {
     logger.error(error);
 
-    res.sendStatus(200);
+    next(boom.internal('Internal server error'));
+  }
+};
+
+export const getUserVideoProgress = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { videoSlug } = req.params;
+  const { currentUser } = req;
+
+  try {
+    const doc = await UserVideoProgressModel.findOne({ user: currentUser.id, video: videoSlug });
+    if (doc && doc.progress > 0) {
+      res.status(200).send({ progress: doc.progress });
+      return;
+    }
+    res.sendStatus(404);
+  } catch (error) {
+    logger.error(error);
+    next(boom.internal('Internal server error'));
   }
 };
