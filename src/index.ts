@@ -69,7 +69,6 @@ app.listen(PORT, async () => {
       await UserVideoProgressModel.deleteMany({});
       await MediaShareModel.deleteMany({});
     }
-    rabbitMQ.torrentChannel.ackAll();
     logger.info(`Example app listening on port ${PORT}`);
   } catch (error) {
     logger.error(error);
