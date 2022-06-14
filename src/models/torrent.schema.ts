@@ -17,7 +17,7 @@ const subtitleSchema: Schema = new Schema<ISubtitle>({
 
 const fileSchema: Schema = new Schema<IVideo>({
   name: { type: String },
-  slug: { type: String, default: () => nanoid(5).toLowerCase(), unique: true },
+  slug: { type: String, default: () => nanoid(5).toLowerCase() },
   path: { type: String, unique: true },
   size: { type: Number },
   ext: { type: String },
@@ -35,7 +35,7 @@ const fileSchema: Schema = new Schema<IVideo>({
 
 const torrentSchema = new Schema<ITorrent, ITorrentModel>(
   {
-    slug: { type: String, default: () => nanoid(5).toLowerCase() },
+    slug: { type: String, default: () => nanoid(5).toLowerCase(), unique: true },
     magnet: {
       type: String,
       required: true,
