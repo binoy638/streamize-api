@@ -12,9 +12,7 @@ import Utils from '../../utils';
 const handleCompletedTorrent = async (
   torrentInClient: Torrent,
   downloadedTorrent: ITorrent,
-  publisherChannel: ChannelWrapper,
-  consumerChannel: Channel,
-  message: ConsumeMessage
+  publisherChannel: ChannelWrapper
 ) => {
   //* sending all video files to process-video queue
   downloadedTorrent.files.map(file =>
@@ -30,7 +28,6 @@ const handleCompletedTorrent = async (
   );
   await TorrentModel.updateOne({ _id: downloadedTorrent._id }, { status: TorrentState.QUEUED });
 
-  consumerChannel.ack(message);
   logger.info(`${downloadedTorrent.name} torrent downloaded now deleting torrent`);
   torrentInClient.destroy();
 };
@@ -48,7 +45,7 @@ export const downloadTorrent =
         torrent.on('error', error => {
           logger.error(`Torrent error: ' ${addedTorrent} `);
           logger.error(error);
-          channel.ack(message);
+          torrent.destroy({ destroyStore: true });
         });
 
         const diskSpace = await Utils.getUserDiskUsage(currentUser);
@@ -58,7 +55,6 @@ export const downloadTorrent =
           torrent.destroy({ destroyStore: true });
           logger.error(`Not enough space to download torrent ${addedTorrent.name}`);
           await TorrentModel.updateOne({ _id: addedTorrent._id }, { status: TorrentState.ERROR });
-          channel.ack(message);
           return;
         }
 
@@ -81,7 +77,7 @@ export const downloadTorrent =
           torrent.destroy({ destroyStore: true });
           logger.info({ message: 'no video files found, deleting torrent', addedTorrent });
           await TorrentModel.updateOne({ _id: addedTorrent._id }, { status: TorrentState.ERROR, isMedia: false });
-          channel.ack(message);
+
           return;
         }
 
@@ -101,20 +97,19 @@ export const downloadTorrent =
 
         if (!SavedTorrent) {
           logger.error(`torrent not saved ${addedTorrent}`);
-          channel.ack(message);
+          torrent.destroy({ destroyStore: true });
           return;
         }
         if (torrent.progress === 1) {
           logger.info(`torrent already downloaded, inside ready`);
-          await handleCompletedTorrent(torrent, SavedTorrent, publisherChannel, channel, message);
+          await handleCompletedTorrent(torrent, SavedTorrent, publisherChannel);
         }
         torrent.on('done', async () => {
-          await handleCompletedTorrent(torrent, SavedTorrent, publisherChannel, channel, message);
+          await handleCompletedTorrent(torrent, SavedTorrent, publisherChannel);
         });
       });
     } catch (error) {
       logger.error(error);
       await Utils.updateTorrentStatus(addedTorrent._id, TorrentState.ERROR);
-      channel.ack(message);
     }
   };

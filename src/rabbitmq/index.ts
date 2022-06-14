@@ -36,10 +36,8 @@ export const torrentChannel = connection.createChannel({
   json: true,
   setup: function (channel: Channel) {
     return Promise.all([
-      channel.prefetch(5),
-
       channel.assertQueue(QueueName.DOWNLOAD_TORRENT, { durable: true }),
-      channel.consume(QueueName.DOWNLOAD_TORRENT, downloadTorrent(channel, publisherChannel)),
+      channel.consume(QueueName.DOWNLOAD_TORRENT, downloadTorrent(channel, publisherChannel), { noAck: true }),
     ]);
   },
 });
