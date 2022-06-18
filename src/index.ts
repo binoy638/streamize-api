@@ -6,12 +6,14 @@ import cookieSession from 'cookie-session';
 import helmet from 'helmet';
 import fs from 'fs-extra';
 import dotenv from 'dotenv';
+import http from 'http';
+import { Server, Socket } from 'socket.io';
 import torrentRouter from './routers/torrent.router';
 import videoRouter from './routers/video.router';
 import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
-import { TorrentPath } from './@types';
+import { SyncStreamsEvents, TorrentPath } from './@types';
 import logger from './config/logger';
 import * as rabbitMQ from './rabbitmq';
 import { TorrentModel } from './models/torrent.schema';
@@ -20,12 +22,18 @@ import { UserModel } from './models/user.schema';
 import mediaShareRouter from './routers/mediaShare.router';
 import { UserVideoProgressModel } from './models/userVideoProgress.schema';
 import { MediaShareModel } from './models/MediaShare';
+import { SyncStreams, Stream } from './libs/sync-streams';
 
 dotenv.config();
 
 const PORT = 3000;
 
 const app = express();
+
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: ['http://localhost:3000', process.env.ORIGIN_URL!] } });
+
+const syncStreams = new SyncStreams();
 
 app.use(helmet());
 if (process.env.NODE_ENV === 'development') {
@@ -52,7 +60,34 @@ app.use('/video', videoRouter);
 app.use('/auth', authRouter);
 app.use('/share', mediaShareRouter);
 
-app.listen(PORT, async () => {
+const onConnection = (socket: Socket): void => {
+  console.log('a user connected :', socket.id);
+  socket.on(SyncStreamsEvents.CREATED, (data: Stream) => {
+    socket.join(data.id);
+    syncStreams.addStream(data);
+  });
+  socket.on(SyncStreamsEvents.NEW_MEMBER_JOINED, (data: { streamId: string; member: string }) => {
+    socket.join(data.streamId);
+    syncStreams.addMember(data.streamId, data.member);
+  });
+  socket.on(SyncStreamsEvents.PLAY, (data: { streamId: string }) => {
+    console.log(data);
+    socket.to(data.streamId).emit(SyncStreamsEvents.PLAY, data);
+  });
+  socket.on(SyncStreamsEvents.PAUSE, (data: { streamId: string }) => {
+    socket.to(data.streamId).emit(SyncStreamsEvents.PAUSE);
+  });
+  socket.on(SyncStreamsEvents.SEEKED, (data: { streamId: string; seekTime: number }) => {
+    socket.to(data.streamId).emit(SyncStreamsEvents.SEEKED, data);
+  });
+  socket.on('disconnect', () => {
+    console.log('a user disconnected :', socket.id);
+  });
+};
+
+io.on('connection', onConnection);
+
+server.listen(PORT, async () => {
   try {
     await connectMongo();
     if (process.env.NODE_ENV === 'development') {

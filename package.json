@@ -76,6 +76,7 @@
     "nanoid": "^3.2.0",
     "pretty-bytes": "^5.6.0",
     "redis": "^4.0.3",
+    "socket.io": "^4.5.1",
     "sprite-vtt-generator": "^1.0.7",
     "ts-node-dev": "^1.1.8",
     "webtorrent": "^1.7.1",
