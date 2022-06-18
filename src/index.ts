@@ -31,7 +31,7 @@ const PORT = 3000;
 const app = express();
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: ['http://localhost:3000', process.env.ORIGIN_URL!] } });
+const io = new Server(server, { cors: { origin: ['http://localhost:3000', 'http://127.0.0.1:5347'] } });
 
 const syncStreams = new SyncStreams();
 
