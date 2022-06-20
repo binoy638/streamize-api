@@ -117,7 +117,7 @@ export const del = async (req: Request, res: Response, next: NextFunction): Prom
       return;
     }
 
-    const torrent = client.get(doc.infoHash);
+    const torrent = client.get(doc.magnet);
     if (torrent) {
       torrent.destroy();
     }

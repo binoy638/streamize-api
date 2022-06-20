@@ -110,6 +110,11 @@ export const downloadTorrent =
       });
     } catch (error) {
       logger.error(error);
+      const torrent = client.get(addedTorrent.magnet);
+      if (torrent) {
+        torrent.destroy();
+        logger.info('torrent destroyed');
+      }
       await Utils.updateTorrentStatus(addedTorrent._id, TorrentState.ERROR);
     }
   };
