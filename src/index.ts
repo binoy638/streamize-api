@@ -8,6 +8,7 @@ import fs from 'fs-extra';
 import dotenv from 'dotenv';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
+import { ApolloServer, gql } from 'apollo-server-express';
 import torrentRouter from './routers/torrent.router';
 import videoRouter from './routers/video.router';
 import notFoundHandler from './middlewares/notFoundHandler';
@@ -26,105 +27,141 @@ import { SyncStreams, Stream } from './libs/sync-streams';
 
 dotenv.config();
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const PORT = 3000;
 
-const app = express();
+const typeDefs = gql`
+  type Query {
+    hello: String
+  }
+`;
 
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: true, credentials: true, preflightContinue: true } });
-// ['http://localhost:3000', 'http://127.0.0.1:5347'];
-const syncStreams = new SyncStreams();
-
-app.use(helmet());
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('common'));
-}
-app.set('trust proxy', true);
-app.use(
-  cookieSession({
-    secret: process.env.COOKIE_SECRET!,
-    maxAge: 24 * 60 * 60 * 1000 * 7,
-    sameSite: 'none',
-    domain: process.env.ORIGIN_URL!,
-    //* https only cookies
-    secure: process.env.NODE_ENV !== 'development',
-    httpOnly: process.env.NODE_ENV !== 'development',
-  })
-);
-
-app.use(cors({ origin: true, credentials: true, preflightContinue: true }));
-app.use(express.json());
-
-app.use('/torrent', torrentRouter);
-app.use('/video', videoRouter);
-app.use('/auth', authRouter);
-app.use('/share', mediaShareRouter);
-
-const onConnection = (socket: Socket): void => {
-  console.log('a user connected :', socket.id);
-  socket.on(SyncStreamsEvents.CREATED, (data: Stream) => {
-    socket.join(data.id);
-    syncStreams.addStream(data);
-  });
-  socket.on(SyncStreamsEvents.NEW_MEMBER_JOINED, (data: { streamId: string; member: string }) => {
-    socket.join(data.streamId);
-    syncStreams.addMember(data.streamId, data.member);
-  });
-  socket.on(SyncStreamsEvents.PLAY, (data: { streamId: string }) => {
-    console.log(data);
-    socket.to(data.streamId).emit(SyncStreamsEvents.PLAY, data);
-  });
-  socket.on(SyncStreamsEvents.PAUSE, (data: { streamId: string }) => {
-    socket.to(data.streamId).emit(SyncStreamsEvents.PAUSE);
-  });
-  socket.on(SyncStreamsEvents.SEEKED, (data: { streamId: string; seekTime: number }) => {
-    socket.to(data.streamId).emit(SyncStreamsEvents.SEEKED, data);
-  });
-  socket.on('disconnect', () => {
-    console.log('a user disconnected :', socket.id);
-  });
+const resolvers = {
+  Query: {
+    hello: () => 'Hello world!',
+  },
 };
 
-io.on('connection', onConnection);
+const apolloServer = new ApolloServer({ typeDefs, resolvers });
 
-server.listen(PORT, async () => {
-  try {
-    await connectMongo();
-    if (process.env.NODE_ENV === 'development') {
-      await fs.emptyDir(TorrentPath.DOWNLOAD);
-      await fs.emptyDir(TorrentPath.TMP);
-      await fs.emptyDir(TorrentPath.SUBTITLES);
-      rabbitMQ.publisherChannel.ackAll();
-      rabbitMQ.torrentChannel.ackAll();
-      rabbitMQ.cpuIntensiveVideoProcessingChannel.ackAll();
-      rabbitMQ.videoInspectionChannel.ackAll();
-      rabbitMQ.fileManagerChannel.ackAll();
-      rabbitMQ.nonCpuIntensiveVideoProcessingChannel.ackAll();
-      await TorrentModel.deleteMany({});
-      await UserVideoProgressModel.deleteMany({});
-      await MediaShareModel.deleteMany({});
-    }
-    logger.info(`Example app listening on port ${PORT}`);
-  } catch (error) {
-    logger.error(error);
-  }
-  try {
-    if (!process.env.ADMIN_USER || !process.env.ADMIN_PASSWORD || !process.env.JWT_SECRET || !process.env.COOKIE_SECRET)
-      throw new Error('Admin credentials not set');
+apolloServer.start().then(() => {
+  const app = express();
 
-    const existingAdmin = await UserModel.findOne({ username: process.env.ADMIN_USER });
-    if (!existingAdmin) {
-      await UserModel.create({ username: process.env.ADMIN_USER, password: process.env.ADMIN_PASSWORD, isAdmin: true });
-    }
-    // await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $set: { torrents: [] } });
-    // const Torrents = await TorrentModel.getTorrents();
-    // const torrentIds = Torrents.map(torrent => torrent._id);
-    // await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $push: { torrents: { $each: torrentIds } } });
-  } catch (error) {
-    logger.error(error);
-    // eslint-disable-next-line unicorn/no-process-exit
-    process.exit();
+  const server = http.createServer(app);
+  const io = new Server(server, { cors: { origin: true, credentials: true, preflightContinue: true } });
+  // ['http://localhost:3000', 'http://127.0.0.1:5347'];
+  const syncStreams = new SyncStreams();
+
+  app.use(
+    helmet({
+      crossOriginEmbedderPolicy: !isDevelopment,
+      contentSecurityPolicy: !isDevelopment,
+    })
+  );
+  if (isDevelopment) {
+    app.use(morgan('common'));
   }
+  app.set('trust proxy', true);
+  app.use(
+    cookieSession({
+      secret: process.env.COOKIE_SECRET!,
+      maxAge: 24 * 60 * 60 * 1000 * 7,
+      sameSite: 'none',
+      domain: process.env.ORIGIN_URL!,
+      //* https only cookies
+      secure: process.env.NODE_ENV !== 'development',
+      httpOnly: process.env.NODE_ENV !== 'development',
+    })
+  );
+
+  app.use(cors({ origin: true, credentials: true, preflightContinue: true }));
+  app.use(express.json());
+
+  app.use('/torrent', torrentRouter);
+  app.use('/video', videoRouter);
+  app.use('/auth', authRouter);
+  app.use('/share', mediaShareRouter);
+
+  const onConnection = (socket: Socket): void => {
+    console.log('a user connected :', socket.id);
+    socket.on(SyncStreamsEvents.CREATED, (data: Stream) => {
+      socket.join(data.id);
+      syncStreams.addStream(data);
+    });
+    socket.on(SyncStreamsEvents.NEW_MEMBER_JOINED, (data: { streamId: string; member: string }) => {
+      socket.join(data.streamId);
+      syncStreams.addMember(data.streamId, data.member);
+    });
+    socket.on(SyncStreamsEvents.PLAY, (data: { streamId: string }) => {
+      console.log(data);
+      socket.to(data.streamId).emit(SyncStreamsEvents.PLAY, data);
+    });
+    socket.on(SyncStreamsEvents.PAUSE, (data: { streamId: string }) => {
+      socket.to(data.streamId).emit(SyncStreamsEvents.PAUSE);
+    });
+    socket.on(SyncStreamsEvents.SEEKED, (data: { streamId: string; seekTime: number }) => {
+      socket.to(data.streamId).emit(SyncStreamsEvents.SEEKED, data);
+    });
+    socket.on('disconnect', () => {
+      console.log('a user disconnected :', socket.id);
+    });
+  };
+
+  io.on('connection', onConnection);
+  apolloServer.applyMiddleware({ app });
+
+  server.listen(PORT, async () => {
+    try {
+      await connectMongo();
+      if (process.env.NODE_ENV === 'development') {
+        await fs.emptyDir(TorrentPath.DOWNLOAD);
+        await fs.emptyDir(TorrentPath.TMP);
+        await fs.emptyDir(TorrentPath.SUBTITLES);
+        rabbitMQ.publisherChannel.ackAll();
+        rabbitMQ.torrentChannel.ackAll();
+        rabbitMQ.cpuIntensiveVideoProcessingChannel.ackAll();
+        rabbitMQ.videoInspectionChannel.ackAll();
+        rabbitMQ.fileManagerChannel.ackAll();
+        rabbitMQ.nonCpuIntensiveVideoProcessingChannel.ackAll();
+        await TorrentModel.deleteMany({});
+        await UserVideoProgressModel.deleteMany({});
+        await MediaShareModel.deleteMany({});
+      }
+      logger.info(`Example app listening on port ${PORT}`);
+    } catch (error) {
+      logger.error(error);
+    }
+    try {
+      if (
+        !process.env.ADMIN_USER ||
+        !process.env.ADMIN_PASSWORD ||
+        !process.env.JWT_SECRET ||
+        !process.env.COOKIE_SECRET
+      )
+        throw new Error('Admin credentials not set');
+
+      const existingAdmin = await UserModel.findOne({ username: process.env.ADMIN_USER });
+      if (!existingAdmin) {
+        await UserModel.create({
+          username: process.env.ADMIN_USER,
+          password: process.env.ADMIN_PASSWORD,
+          isAdmin: true,
+        });
+      }
+      // await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $set: { torrents: [] } });
+      // const Torrents = await TorrentModel.getTorrents();
+      // const torrentIds = Torrents.map(torrent => torrent._id);
+      // await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $push: { torrents: { $each: torrentIds } } });
+    } catch (error) {
+      logger.error(error);
+      // eslint-disable-next-line unicorn/no-process-exit
+      process.exit();
+    }
+  });
+  app.on('error', error => logger.error(error));
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 });
 
 process.on('uncaughtException', error => {
@@ -134,8 +171,3 @@ process.on('uncaughtException', error => {
 process.on('unhandledRejection', error => {
   logger.error(error);
 });
-
-app.on('error', error => logger.error(error));
-
-app.use(notFoundHandler);
-app.use(errorHandler);
