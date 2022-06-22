@@ -4,17 +4,20 @@ import morgan from 'morgan';
 import cors from 'cors';
 import cookieSession from 'cookie-session';
 import helmet from 'helmet';
+import jwt from 'jsonwebtoken';
+import 'reflect-metadata';
 import fs from 'fs-extra';
 import dotenv from 'dotenv';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
-import { ApolloServer, gql } from 'apollo-server-express';
+import { ApolloServer } from 'apollo-server-express';
+import { buildSchema } from 'type-graphql';
 import torrentRouter from './routers/torrent.router';
 import videoRouter from './routers/video.router';
 import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
-import { SyncStreamsEvents, TorrentPath } from './@types';
+import { SyncStreamsEvents, TorrentPath, UserPayload } from './@types';
 import logger from './config/logger';
 import * as rabbitMQ from './rabbitmq';
 import { TorrentModel } from './models/torrent.schema';
@@ -24,6 +27,7 @@ import mediaShareRouter from './routers/mediaShare.router';
 import { UserVideoProgressModel } from './models/userVideoProgress.schema';
 import { MediaShareModel } from './models/MediaShare';
 import { SyncStreams, Stream } from './libs/sync-streams';
+import { TorrentResolver } from './schema/Torrent/torrent.resolvers';
 
 dotenv.config();
 
@@ -31,25 +35,29 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 
 const PORT = 3000;
 
-const typeDefs = gql`
-  type Query {
-    hello: String
-  }
-`;
+(async () => {
+  const apolloServer = new ApolloServer({
+    schema: await buildSchema({
+      resolvers: [TorrentResolver],
+      validate: false,
+    }),
+    context: ({ req }) => {
+      let user: undefined | UserPayload;
+      const JWTcookies = req.session?.jwt;
+      if (JWTcookies) {
+        const payload = jwt.verify(JWTcookies, process.env.JWT_SECRET!) as UserPayload;
+        user = payload;
+      }
+      return { user };
+    },
+    debug: isDevelopment,
+  });
+  await apolloServer.start();
 
-const resolvers = {
-  Query: {
-    hello: () => 'Hello world!',
-  },
-};
-
-const apolloServer = new ApolloServer({ typeDefs, resolvers });
-
-apolloServer.start().then(() => {
   const app = express();
 
   const server = http.createServer(app);
-  const io = new Server(server, { cors: { origin: true, credentials: true, preflightContinue: true } });
+  const io = new Server(server, { cors: { origin: true, credentials: true } });
   // ['http://localhost:3000', 'http://127.0.0.1:5347'];
   const syncStreams = new SyncStreams();
 
@@ -63,19 +71,23 @@ apolloServer.start().then(() => {
     app.use(morgan('common'));
   }
   app.set('trust proxy', true);
+
   app.use(
     cookieSession({
       secret: process.env.COOKIE_SECRET!,
       maxAge: 24 * 60 * 60 * 1000 * 7,
-      sameSite: 'none',
-      domain: process.env.ORIGIN_URL!,
-      //* https only cookies
-      secure: process.env.NODE_ENV !== 'development',
-      httpOnly: process.env.NODE_ENV !== 'development',
+      sameSite: isDevelopment ? false : 'none',
+      secure: !isDevelopment,
+      httpOnly: !isDevelopment,
     })
   );
 
-  app.use(cors({ origin: true, credentials: true, preflightContinue: true }));
+  app.use(
+    cors({
+      origin: ['http://localhost:3000', 'https://studio.apollographql.com', process.env.ORIGIN_URL!],
+      credentials: true,
+    })
+  );
   app.use(express.json());
 
   app.use('/torrent', torrentRouter);
@@ -109,7 +121,10 @@ apolloServer.start().then(() => {
   };
 
   io.on('connection', onConnection);
-  apolloServer.applyMiddleware({ app });
+  apolloServer.applyMiddleware({
+    app,
+    cors: false,
+  });
 
   server.listen(PORT, async () => {
     try {
@@ -162,7 +177,7 @@ apolloServer.start().then(() => {
   app.on('error', error => logger.error(error));
   app.use(notFoundHandler);
   app.use(errorHandler);
-});
+})();
 
 process.on('uncaughtException', error => {
   logger.error(error);

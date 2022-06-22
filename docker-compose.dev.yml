@@ -4,8 +4,7 @@ services:
   mongo:
     container_name: streamize-mongo
     image: mongo
-    logging:
-      driver: "none"
+    command: mongod --quiet --logpath /dev/null 
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongo mongo:27017/test --quiet
       interval: 30s
