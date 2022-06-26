@@ -40,6 +40,9 @@ class VideoDownloadInfo {
 
 @ObjectType()
 class Subtitles {
+  @Field(type => ID)
+  _id!: string;
+
   @Field()
   fileName!: string;
 
@@ -56,7 +59,7 @@ class Subtitles {
 @ObjectType()
 export class Video {
   @Field(type => ID)
-  id!: string;
+  _id!: string;
 
   @Field()
   slug!: string;
@@ -110,7 +113,7 @@ class DownloadInfo {
 @ObjectType()
 export class Torrent {
   @Field(type => ID)
-  id!: string;
+  _id!: string;
 
   @Field()
   slug!: string;
@@ -148,6 +151,9 @@ export class DiskUsage {
 
 @ObjectType()
 export class User {
+  @Field(type => ID)
+  _id!: string;
+
   @Field(type => ID)
   username!: string;
 
