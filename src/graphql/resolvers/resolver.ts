@@ -37,7 +37,7 @@ export class TorrentResolver {
     return torrentsWithDownloadInfo;
   }
 
-  @Query(() => Torrent, { nullable: true })
+  @Query(() => Torrent)
   async torrent(@Arg('slug') slug: string, @Ctx() ctx: { user: UserPayload }) {
     if (!ctx.user) throw new Error('User not found');
     const torrentDoc = await TorrentModel.findOne({ slug }).lean();
