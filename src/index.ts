@@ -43,7 +43,6 @@ const PORT = 3000;
     }),
     context: ({ req }) => {
       let user: undefined | UserPayload;
-      console.log(req.session);
       const JWTcookies = req.session?.jwt;
       if (JWTcookies) {
         const payload = jwt.verify(JWTcookies, process.env.JWT_SECRET!) as UserPayload;
