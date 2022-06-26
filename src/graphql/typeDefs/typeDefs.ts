@@ -139,10 +139,10 @@ export class Torrent {
 
 @ObjectType()
 export class DiskUsage {
-  @Field(type => Int)
+  @Field()
   size!: number;
 
-  @Field(type => Int)
+  @Field()
   free!: number;
 }
 
