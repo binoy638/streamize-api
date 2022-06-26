@@ -2,20 +2,17 @@
   "name": "streamize-api",
   "version": "1.0.0",
   "description": "A node js video streaming server with torrent downloading support",
-  "main": "index.js",
+  "main": "src/index.ts",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "start": "node ./dist/src/index.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
     "format:check": "prettier -c \"**/*.{js,ts,json}\"",
     "format": "prettier -w \"**/*.{js,ts,json}\"",
     "lint": "eslint --fix ./src/*",
     "install:husky": "husky install",
-    "pre-commit": "npm run typecheck && lint-staged && jest"
+    "pre-commit": "npm run typecheck && lint-staged"
   },
   "lint-staged": {
     "src/**/*.{js,ts}": "eslint",
@@ -52,7 +49,6 @@
     "husky": "^7.0.1",
     "lint-staged": "^11.1.1",
     "prettier": "^2.3.2",
-    "ts-jest": "^27.0.4",
     "ts-node": "^10.1.0",
     "tsconfig-paths": "^3.10.1",
     "typescript": "^4.7.4"

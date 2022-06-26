@@ -59,6 +59,23 @@ class VideoProcessor extends SubtitleProcessor {
     });
   }
 
+  // TODO: check video bitrate and adjust hls conversion settings
+  // static async getVideoBitrate(path: string): Promise<number> {
+  //   return new Promise<number>((resolve, reject) => {
+  //     ffmpeg(path).ffprobe((error, data) => {
+  //       if (!error) {
+  //         if (data.format.bit_rate) {
+  //           resolve(data.format.bit_rate / 1000);
+  //         } else {
+  //           resolve(0);
+  //         }
+  //       } else {
+  //         reject(error);
+  //       }
+  //     });
+  //   });
+  // }
+
   public async convertToHLS(): Promise<string> {
     const { audioCodec, videoCodec } = await this.getCompatibleCodecs();
     const outputPath = `${this.baseDir}/${this.video.slug}/${this.video.slug}.m3u8`;
@@ -67,6 +84,7 @@ class VideoProcessor extends SubtitleProcessor {
       ffmpeg(this.video.path)
         .audioCodec(audioCodec)
         .audioChannels(2)
+
         .videoCodec(videoCodec)
         .outputOption(['-sn', `-hls_time ${config.hls_time}`, '-hls_list_size 0', '-f hls'])
         .output(outputPath)

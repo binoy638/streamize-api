@@ -27,7 +27,7 @@ import mediaShareRouter from './routers/mediaShare.router';
 import { UserVideoProgressModel } from './models/userVideoProgress.schema';
 import { MediaShareModel } from './models/MediaShare';
 import { SyncStreams, Stream } from './libs/sync-streams';
-import { TorrentResolver } from './schema/Torrent/torrent.resolvers';
+import { VideoResolver, TorrentResolver, UserResolver } from './graphql/resolvers/resolver';
 
 dotenv.config();
 
@@ -38,16 +38,18 @@ const PORT = 3000;
 (async () => {
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
-      resolvers: [TorrentResolver],
+      resolvers: [TorrentResolver, VideoResolver, UserResolver],
       validate: false,
     }),
     context: ({ req }) => {
       let user: undefined | UserPayload;
+      console.log(req.session);
       const JWTcookies = req.session?.jwt;
       if (JWTcookies) {
         const payload = jwt.verify(JWTcookies, process.env.JWT_SECRET!) as UserPayload;
         user = payload;
       }
+
       return { user };
     },
     debug: isDevelopment,
@@ -76,7 +78,7 @@ const PORT = 3000;
     cookieSession({
       secret: process.env.COOKIE_SECRET!,
       maxAge: 24 * 60 * 60 * 1000 * 7,
-      sameSite: isDevelopment ? false : 'none',
+      sameSite: 'none',
       secure: !isDevelopment,
       httpOnly: !isDevelopment,
     })
@@ -123,7 +125,10 @@ const PORT = 3000;
   io.on('connection', onConnection);
   apolloServer.applyMiddleware({
     app,
-    cors: false,
+    cors: {
+      origin: ['http://localhost:3000', 'https://studio.apollographql.com', process.env.ORIGIN_URL!],
+      credentials: true,
+    },
   });
 
   server.listen(PORT, async () => {
@@ -143,7 +148,7 @@ const PORT = 3000;
         await UserVideoProgressModel.deleteMany({});
         await MediaShareModel.deleteMany({});
       }
-      logger.info(`Example app listening on port ${PORT}`);
+      logger.info(`🚀 Listening at http://localhost:${PORT}`);
     } catch (error) {
       logger.error(error);
     }
