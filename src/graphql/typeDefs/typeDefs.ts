@@ -136,7 +136,7 @@ export class Torrent {
   @Field(type => [Video])
   files!: Video[];
 
-  @Field(type => TorrentState)
+  @Field(type => TorrentState, { nullable: true })
   status!: TorrentState;
 
   @Field(type => DownloadInfo, { nullable: true })
