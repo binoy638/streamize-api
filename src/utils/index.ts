@@ -51,7 +51,7 @@ class Utils {
       // eslint-disable-next-line unicorn/no-null
       if (!doc) return null;
       if (downloaded === true) {
-        return doc.files.find(file => file.slug === videoSlug && file.status === 'done');
+        return doc.files.find(file => file.slug === videoSlug && file.status === VideoState.DONE);
       }
       return doc.files.find(file => file.slug === videoSlug);
     } catch (error) {

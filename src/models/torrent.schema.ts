@@ -24,7 +24,7 @@ const fileSchema: Schema = new Schema<IVideo>({
   progressPreview: { type: Boolean, default: false },
   subtitles: { type: [subtitleSchema], default: [] },
   status: {
-    type: String,
+    type: Number,
     enum: [VideoState.DOWNLOADING, VideoState.PROCESSING, VideoState.DONE, VideoState.ERROR, VideoState.QUEUED],
   },
   transcodingPercent: {

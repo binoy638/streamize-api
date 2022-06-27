@@ -4,21 +4,21 @@
 import { ObjectType, Field, ID, Int, registerEnumType, Float } from 'type-graphql';
 
 enum VideoState {
-  DOWNLOADING = 'downloading',
-  PROCESSING = 'processing',
-  DONE = 'done',
-  ERROR = 'error',
-  QUEUED = 'queued',
+  DOWNLOADING,
+  PROCESSING,
+  DONE,
+  ERROR,
+  QUEUED,
 }
 
 enum TorrentState {
-  DOWNLOADING = 'downloading',
-  PAUSED = 'paused',
-  DONE = 'done',
-  QUEUED = 'queued',
-  ERROR = 'error',
-  ADDED = 'added',
-  PROCESSING = 'processing',
+  DOWNLOADING,
+  PAUSED,
+  DONE,
+  QUEUED,
+  ERROR,
+  ADDED,
+  PROCESSING,
 }
 
 registerEnumType(TorrentState, {
