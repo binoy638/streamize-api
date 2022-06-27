@@ -137,10 +137,11 @@ export class SharedPlaylistResolver {
   @Query(() => Video)
   async sharedPlaylistVideo(@Arg('input') input: SharedPlaylistVideoInput) {
     const playlist = await MediaShareModel.findOne({ slug: input.slug, expiresIn: { $gt: new Date() } })
-      .populate<{ torrent: ITorrent; user: UserDoc }>('torrent user')
+      .populate<{ torrent: ITorrent }>('torrent')
       .lean();
     if (!playlist) throw new Error('Playlist not found');
     const video = playlist.torrent.files.filter(file => file.slug === input.videoSlug);
+    console.log(video);
     if (!video) throw new Error('Video not found');
     return video;
   }
