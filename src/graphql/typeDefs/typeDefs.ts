@@ -31,10 +31,10 @@ registerEnumType(VideoState, {
 
 @ObjectType()
 class VideoDownloadInfo {
-  @Field(() => Int)
+  @Field()
   downloaded!: number;
 
-  @Field(() => Float)
+  @Field()
   progress!: number;
 }
 
@@ -91,22 +91,22 @@ export class Video {
 
 @ObjectType()
 class DownloadInfo {
-  @Field(type => Int)
+  @Field()
   downloadSpeed!: number;
 
-  @Field(type => Int)
+  @Field()
   uploadSpeed!: number;
 
-  @Field(type => Float)
+  @Field()
   progress!: number;
 
-  @Field(type => Int)
+  @Field()
   timeRemaining!: number;
 
-  @Field(type => Int)
+  @Field()
   paused!: boolean;
 
-  @Field(type => Int)
+  @Field()
   completed!: boolean;
 }
 
