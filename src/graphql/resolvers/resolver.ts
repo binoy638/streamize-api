@@ -95,7 +95,7 @@ export class VideoResolver {
   async videoProgress(@Arg('videoSlug') videoSlug: string, @Ctx() ctx: { user: UserPayload }) {
     if (!ctx.user) throw new AuthenticationError('User not found');
     const doc = await UserVideoProgressModel.findOne({ user: ctx.user.id, video: videoSlug });
-    if (!doc) throw new Error('Video Progress not found');
+    if (!doc) return 0;
     return doc.progress;
   }
 }
