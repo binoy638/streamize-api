@@ -12,7 +12,7 @@ import { TorrentModel } from '../../models/torrent.schema';
 import { UserDoc, UserModel } from '../../models/user.schema';
 import { UserVideoProgressModel } from '../../models/userVideoProgress.schema';
 import Utils from '../../utils';
-import { DiskUsage, SharedPlaylist, SharedPlaylistVideo, Torrent, Video } from '../typeDefs/typeDefs';
+import { DiskUsage, SharedPlaylist, Torrent, Video } from '../typeDefs/typeDefs';
 
 @Resolver()
 export class TorrentResolver {
@@ -134,7 +134,7 @@ export class SharedPlaylistResolver {
     return playlist;
   }
 
-  @Query(() => SharedPlaylistVideo)
+  @Query(() => Video)
   async sharedPlaylistVideo(@Arg('input') input: SharedPlaylistVideoInput) {
     const playlist = await MediaShareModel.findOne({ slug: input.slug, expiresIn: { $gt: new Date() } })
       .populate<{ torrent: ITorrent; user: UserDoc }>('torrent user')
@@ -142,7 +142,6 @@ export class SharedPlaylistResolver {
     if (!playlist) throw new Error('Playlist not found');
     const video = playlist.torrent.files.filter(file => file.slug === input.videoSlug);
     if (!video) throw new Error('Video not found');
-    const { _id, slug, user, expiresIn } = playlist;
-    return { _id, slug, user, expiresIn, video };
+    return video;
   }
 }

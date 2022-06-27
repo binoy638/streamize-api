@@ -193,21 +193,3 @@ export class SharedPlaylist {
   @Field()
   expiresIn!: Date;
 }
-
-@ObjectType()
-export class SharedPlaylistVideo {
-  @Field(type => ID)
-  _id!: string;
-
-  @Field()
-  slug!: string;
-
-  @Field(() => User)
-  user!: User;
-
-  @Field(() => Video)
-  video!: Video;
-
-  @Field()
-  expiresIn!: Date;
-}
