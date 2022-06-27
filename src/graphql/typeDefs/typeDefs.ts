@@ -1,7 +1,7 @@
 /* eslint-disable max-classes-per-file */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable class-methods-use-this */
-import { ObjectType, Field, ID, Int, registerEnumType, Float } from 'type-graphql';
+import { ObjectType, Field, ID, registerEnumType, Float } from 'type-graphql';
 
 enum VideoState {
   DOWNLOADING,
@@ -67,7 +67,7 @@ export class Video {
   @Field()
   name!: string;
 
-  @Field(type => Int)
+  @Field()
   size!: number;
 
   @Field()
@@ -130,7 +130,7 @@ export class Torrent {
   @Field({ nullable: true })
   name?: string;
 
-  @Field(type => Int, { nullable: true })
+  @Field({ nullable: true })
   size?: number;
 
   @Field(type => [Video])
@@ -163,7 +163,7 @@ export class User {
   @Field()
   torrents!: string;
 
-  @Field(type => Int)
+  @Field()
   allocatedMemory!: number;
 
   @Field()

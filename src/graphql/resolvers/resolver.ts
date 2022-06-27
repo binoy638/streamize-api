@@ -4,7 +4,7 @@
 
 /* eslint-disable class-methods-use-this */
 import { AuthenticationError, ForbiddenError } from 'apollo-server-express';
-import { Resolver, Query, Arg, InputType, Field, Ctx, Int } from 'type-graphql';
+import { Resolver, Query, Arg, InputType, Field, Ctx, Float } from 'type-graphql';
 import { ITorrent, TorrentState, UserPayload } from '../../@types';
 import client from '../../config/webtorrent';
 import { MediaShareModel } from '../../models/MediaShare';
@@ -101,7 +101,7 @@ export class VideoResolver {
     return video;
   }
 
-  @Query(() => Int)
+  @Query(() => Float)
   async videoProgress(@Arg('videoSlug') videoSlug: string, @Ctx() ctx: { user: UserPayload }) {
     if (!ctx.user) throw new AuthenticationError('User not found');
     const doc = await UserVideoProgressModel.findOne({ user: ctx.user.id, video: videoSlug });
