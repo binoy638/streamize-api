@@ -17,7 +17,7 @@ import videoRouter from './routers/video.router';
 import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
-import { SyncStreamsEvents, TorrentPath, UserPayload } from './@types';
+import { SyncStreamsEvents, TorrentPath, TorrentState, UserPayload } from './@types';
 import logger from './config/logger';
 import * as rabbitMQ from './rabbitmq';
 import { TorrentModel } from './models/torrent.schema';
@@ -165,10 +165,8 @@ const PORT = 3000;
           isAdmin: true,
         });
       }
-      // await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $set: { torrents: [] } });
-      // const Torrents = await TorrentModel.getTorrents();
-      // const torrentIds = Torrents.map(torrent => torrent._id);
-      // await UserModel.updateOne({ username: process.env.ADMIN_USER }, { $push: { torrents: { $each: torrentIds } } });
+      //* change all incomplete torrent status to error
+      await TorrentModel.updateMany({ status: TorrentState.DOWNLOADING }, { status: TorrentState.ERROR });
     } catch (error) {
       logger.error(error);
       // eslint-disable-next-line unicorn/no-process-exit
