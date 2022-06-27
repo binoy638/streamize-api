@@ -7,11 +7,12 @@ import { AuthenticationError, ForbiddenError } from 'apollo-server-express';
 import { Resolver, Query, Arg, InputType, Field, Ctx, Int } from 'type-graphql';
 import { ITorrent, TorrentState, UserPayload } from '../../@types';
 import client from '../../config/webtorrent';
+import { MediaShareModel } from '../../models/MediaShare';
 import { TorrentModel } from '../../models/torrent.schema';
-import { UserModel } from '../../models/user.schema';
+import { UserDoc, UserModel } from '../../models/user.schema';
 import { UserVideoProgressModel } from '../../models/userVideoProgress.schema';
 import Utils from '../../utils';
-import { DiskUsage, Torrent, Video } from '../typeDefs/typeDefs';
+import { DiskUsage, SharedPlaylist, Torrent, Video } from '../typeDefs/typeDefs';
 
 @Resolver()
 export class TorrentResolver {
@@ -107,5 +108,20 @@ export class UserResolver {
     if (!ctx.user) throw new AuthenticationError('User not found');
     const usage = await Utils.getUserDiskUsage(ctx.user);
     return usage;
+  }
+}
+
+@Resolver()
+export class SharedPlaylistResolver {
+  @Query(() => SharedPlaylist)
+  async sharedPlaylist(@Arg('slug') slug: string) {
+    const playlist = await MediaShareModel.findOne({ slug, expiresIn: { $gt: new Date() } })
+      .populate<{ torrent: ITorrent; user: UserDoc }>('torrent user')
+      .lean();
+    if (!playlist) throw new Error('Playlist not found');
+    if (playlist.isTorrent) return playlist;
+    const filteredTorrentFiles = playlist.torrent.files.filter(file => file.slug === playlist.mediaId);
+    playlist.torrent.files = filteredTorrentFiles;
+    return playlist;
   }
 }

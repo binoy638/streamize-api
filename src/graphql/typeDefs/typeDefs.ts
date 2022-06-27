@@ -169,3 +169,24 @@ export class User {
   @Field()
   isAdmin!: boolean;
 }
+
+@ObjectType()
+export class SharedPlaylist {
+  @Field(type => ID)
+  _id!: string;
+
+  @Field(() => User)
+  user!: User;
+
+  @Field(() => Torrent)
+  torrent!: Torrent;
+
+  @Field()
+  mediaId!: string;
+
+  @Field()
+  isTorrent!: boolean;
+
+  @Field()
+  expiresIn!: Date;
+}
