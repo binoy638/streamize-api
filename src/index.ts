@@ -124,10 +124,7 @@ const PORT = 3000;
   io.on('connection', onConnection);
   apolloServer.applyMiddleware({
     app,
-    cors: {
-      origin: ['http://localhost:3000', 'https://studio.apollographql.com', process.env.ORIGIN_URL!],
-      credentials: true,
-    },
+    cors: false,
   });
 
   server.listen(PORT, async () => {
