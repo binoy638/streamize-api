@@ -85,7 +85,7 @@ export class Video {
   @Field(type => VideoState)
   status!: VideoState;
 
-  @Field(() => VideoDownloadInfo)
+  @Field(() => VideoDownloadInfo, { nullable: true })
   downloadInfo?: VideoDownloadInfo;
 }
 
@@ -121,13 +121,13 @@ export class Torrent {
   @Field()
   magnet!: string;
 
-  @Field()
+  @Field({ nullable: true })
   infoHash?: string;
 
-  @Field()
+  @Field({ nullable: true })
   name?: string;
 
-  @Field(type => Int)
+  @Field(type => Int, { nullable: true })
   size?: number;
 
   @Field(type => [Video])
@@ -136,7 +136,7 @@ export class Torrent {
   @Field(type => TorrentState)
   status!: TorrentState;
 
-  @Field(type => DownloadInfo)
+  @Field(type => DownloadInfo, { nullable: true })
   downloadInfo?: DownloadInfo;
 }
 
