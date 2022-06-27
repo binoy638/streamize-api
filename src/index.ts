@@ -27,7 +27,7 @@ import mediaShareRouter from './routers/mediaShare.router';
 import { UserVideoProgressModel } from './models/userVideoProgress.schema';
 import { MediaShareModel } from './models/MediaShare';
 import { SyncStreams, Stream } from './libs/sync-streams';
-import { VideoResolver, TorrentResolver, UserResolver } from './graphql/resolvers/resolver';
+import { VideoResolver, TorrentResolver, UserResolver, SharedPlaylistResolver } from './graphql/resolvers/resolver';
 
 dotenv.config();
 
@@ -38,7 +38,7 @@ const PORT = 3000;
 (async () => {
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
-      resolvers: [TorrentResolver, VideoResolver, UserResolver],
+      resolvers: [TorrentResolver, VideoResolver, UserResolver, SharedPlaylistResolver],
       validate: false,
     }),
     context: ({ req }) => {
