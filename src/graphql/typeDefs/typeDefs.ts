@@ -175,6 +175,9 @@ export class SharedPlaylist {
   @Field(type => ID)
   _id!: string;
 
+  @Field()
+  slug!: string;
+
   @Field(() => User)
   user!: User;
 
