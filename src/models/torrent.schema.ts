@@ -61,7 +61,6 @@ const torrentSchema = new Schema<ITorrent, ITorrentModel>(
         TorrentState.ADDED,
         TorrentState.PROCESSING,
       ],
-      default: TorrentState.QUEUED,
     },
   },
   { timestamps: true }

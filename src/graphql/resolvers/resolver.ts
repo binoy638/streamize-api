@@ -25,16 +25,18 @@ export class TorrentResolver {
       .lean();
     if (!userDoc) throw new AuthenticationError('User not found');
     const { torrents } = userDoc;
-    const torrentsWithDownloadInfo = torrents.map(torrent => {
-      if (torrent.status === TorrentState.DOWNLOADING) {
-        const torrentInClient = client.get(torrent.infoHash);
-        if (torrentInClient) {
-          return { ...torrent, downloadInfo: Utils.getDataFromTorrent(torrentInClient) };
+    const torrentsWithDownloadInfo = torrents
+      .map(torrent => {
+        if (torrent.status === TorrentState.DOWNLOADING) {
+          const torrentInClient = client.get(torrent.infoHash);
+          if (torrentInClient) {
+            return { ...torrent, downloadInfo: Utils.getDataFromTorrent(torrentInClient) };
+          }
+          return torrent;
         }
         return torrent;
-      }
-      return torrent;
-    });
+      })
+      .filter(torrent => torrent.status !== null);
     return torrentsWithDownloadInfo;
   }
 
