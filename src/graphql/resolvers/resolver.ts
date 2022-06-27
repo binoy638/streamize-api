@@ -75,6 +75,15 @@ class VideoInput {
   videoSlug!: string;
 }
 
+@InputType()
+class SharedPlaylistVideoInput {
+  @Field()
+  slug!: string;
+
+  @Field()
+  videoSlug!: string;
+}
+
 @Resolver()
 export class VideoResolver {
   @Query(() => Video)
@@ -123,5 +132,16 @@ export class SharedPlaylistResolver {
     const filteredTorrentFiles = playlist.torrent.files.filter(file => file.slug === playlist.mediaId);
     playlist.torrent.files = filteredTorrentFiles;
     return playlist;
+  }
+
+  @Query(() => Video)
+  async sharedPlaylistVideo(@Arg('input') input: SharedPlaylistVideoInput) {
+    const playlist = await MediaShareModel.findOne({ slug: input.slug, expiresIn: { $gt: new Date() } })
+      .populate<{ torrent: ITorrent; user: UserDoc }>('torrent user')
+      .lean();
+    if (!playlist) throw new Error('Playlist not found');
+    const video = playlist.torrent.files.filter(file => file.slug === input.videoSlug);
+    if (!video) throw new Error('Video not found');
+    return video;
   }
 }
