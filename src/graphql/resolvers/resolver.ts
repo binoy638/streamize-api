@@ -140,8 +140,7 @@ export class SharedPlaylistResolver {
       .populate<{ torrent: ITorrent }>('torrent')
       .lean();
     if (!playlist) throw new Error('Playlist not found');
-    const video = playlist.torrent.files.filter(file => file.slug === input.videoSlug);
-    console.log(video);
+    const video = playlist.torrent.files.find(file => file.slug === input.videoSlug);
     if (!video) throw new Error('Video not found');
     return video;
   }
