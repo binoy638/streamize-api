@@ -3,6 +3,7 @@
 /* eslint-disable max-classes-per-file */
 
 /* eslint-disable class-methods-use-this */
+import { AuthenticationError, ForbiddenError } from 'apollo-server-express';
 import { Resolver, Query, Arg, InputType, Field, Ctx, Int } from 'type-graphql';
 import { ITorrent, TorrentState, UserPayload } from '../../@types';
 import client from '../../config/webtorrent';
@@ -17,12 +18,11 @@ export class TorrentResolver {
   @Query(() => [Torrent])
   //! pagination
   async torrents(@Ctx() ctx: { user: UserPayload }) {
-    if (!ctx.user) throw new Error('User not found');
+    if (!ctx.user) throw new AuthenticationError('User not found');
     const userDoc = await UserModel.findOne({ __id: ctx.user.id })
       .populate<{ torrents: ITorrent[] }>('torrents')
       .lean();
-    if (!userDoc) throw new Error('User not found');
-
+    if (!userDoc) throw new AuthenticationError('User not found');
     const { torrents } = userDoc;
     const torrentsWithDownloadInfo = torrents.map(torrent => {
       if (torrent.status === TorrentState.DOWNLOADING) {
@@ -39,11 +39,11 @@ export class TorrentResolver {
 
   @Query(() => Torrent)
   async torrent(@Arg('slug') slug: string, @Ctx() ctx: { user: UserPayload }) {
-    if (!ctx.user) throw new Error('User not found');
+    if (!ctx.user) throw new AuthenticationError('User not found');
     const torrentDoc = await TorrentModel.findOne({ slug }).lean();
     if (!torrentDoc) throw new Error('Torrent not found');
     const haveAccess = await UserModel.find({ _id: ctx.user.id, torrents: { $in: [torrentDoc._id] } });
-    if (!haveAccess) throw new Error('Unauthorized');
+    if (!haveAccess) throw new ForbiddenError('No access');
     if (torrentDoc.status === TorrentState.DOWNLOADING) {
       const torrent = client.get(torrentDoc.infoHash);
       if (torrent) {
@@ -78,13 +78,13 @@ class VideoInput {
 export class VideoResolver {
   @Query(() => Video)
   async video(@Arg('input') input: VideoInput, @Ctx() ctx: { user: UserPayload }) {
-    if (!ctx.user) throw new Error('User not found');
+    if (!ctx.user) throw new AuthenticationError('User not found');
     const torrent = await TorrentModel.findOne({ slug: input.torrentSlug }).lean();
     if (!torrent) throw new Error('Video not found');
 
     const haveAccess = await UserModel.find({ _id: ctx.user.id, torrents: { $in: [torrent._id] } });
 
-    if (!haveAccess) throw new Error('Unauthorized');
+    if (!haveAccess) throw new ForbiddenError('No access');
 
     const video = torrent.files.find(file => file.slug === input.videoSlug);
     if (!video) throw new Error('Video not found');
@@ -93,7 +93,7 @@ export class VideoResolver {
 
   @Query(() => Int)
   async videoProgress(@Arg('videoSlug') videoSlug: string, @Ctx() ctx: { user: UserPayload }) {
-    if (!ctx.user) throw new Error('User not found');
+    if (!ctx.user) throw new AuthenticationError('User not found');
     const doc = await UserVideoProgressModel.findOne({ user: ctx.user.id, video: videoSlug });
     if (!doc) throw new Error('Video Progress not found');
     return doc.progress;
@@ -104,7 +104,7 @@ export class VideoResolver {
 export class UserResolver {
   @Query(() => DiskUsage)
   async diskUsage(@Ctx() ctx: { user: UserPayload }) {
-    if (!ctx.user) throw new Error('User not found');
+    if (!ctx.user) throw new AuthenticationError('User not found');
     const usage = await Utils.getUserDiskUsage(ctx.user);
     return usage;
   }
