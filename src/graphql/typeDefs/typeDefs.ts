@@ -87,6 +87,9 @@ export class Video {
 
   @Field(() => VideoDownloadInfo, { nullable: true })
   downloadInfo?: VideoDownloadInfo;
+
+  @Field(type => Float)
+  transcodingPercent!: number;
 }
 
 @ObjectType()
