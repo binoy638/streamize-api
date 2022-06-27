@@ -24,7 +24,7 @@ const fileSchema: Schema = new Schema<IVideo>({
   progressPreview: { type: Boolean, default: false },
   subtitles: { type: [subtitleSchema], default: [] },
   status: {
-    type: Number,
+    type: String,
     enum: [VideoState.DOWNLOADING, VideoState.PROCESSING, VideoState.DONE, VideoState.ERROR, VideoState.QUEUED],
   },
   transcodingPercent: {
@@ -52,6 +52,7 @@ const torrentSchema = new Schema<ITorrent, ITorrentModel>(
       default: [],
     },
     status: {
+      type: String,
       enum: [
         TorrentState.DOWNLOADING,
         TorrentState.PAUSED,

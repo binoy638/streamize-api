@@ -19,21 +19,21 @@ export interface IFileDownloadInfo {
 }
 
 export enum VideoState {
-  DOWNLOADING,
-  PROCESSING,
-  DONE,
-  ERROR,
-  QUEUED,
+  DOWNLOADING = 'DOWNLOADING',
+  PROCESSING = 'PROCESSING',
+  DONE = 'DONE',
+  ERROR = 'ERROR',
+  QUEUED = 'QUEUED',
 }
 
 export enum TorrentState {
-  DOWNLOADING,
-  PAUSED,
-  DONE,
-  QUEUED,
-  ERROR,
-  ADDED,
-  PROCESSING,
+  DOWNLOADING = 'DOWNLOADING',
+  PAUSED = 'PAUSED',
+  DONE = 'DONE',
+  QUEUED = 'QUEUED',
+  ERROR = 'ERROR',
+  ADDED = 'ADDED',
+  PROCESSING = 'PROCESSING',
 }
 
 export interface ISubtitle {

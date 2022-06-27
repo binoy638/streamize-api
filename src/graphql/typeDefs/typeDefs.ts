@@ -2,24 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable class-methods-use-this */
 import { ObjectType, Field, ID, registerEnumType, Float } from 'type-graphql';
-
-enum VideoState {
-  DOWNLOADING,
-  PROCESSING,
-  DONE,
-  ERROR,
-  QUEUED,
-}
-
-enum TorrentState {
-  DOWNLOADING,
-  PAUSED,
-  DONE,
-  QUEUED,
-  ERROR,
-  ADDED,
-  PROCESSING,
-}
+import { TorrentState, VideoState } from '../../@types';
 
 registerEnumType(TorrentState, {
   name: 'TorrentState',
