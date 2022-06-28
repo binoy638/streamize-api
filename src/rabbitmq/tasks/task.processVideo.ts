@@ -27,6 +27,12 @@ export const processVideo =
 
     logger.info(`Received new file to convert.. file:${file.name}`);
     const video = await Utils.getVideoFile(file.slug, false);
+
+    if (!video) {
+      logger.error(`Video not found ${file.slug}`);
+      channel.ack(message);
+      return;
+    }
     //* Checking if the video is already getting converted
     if (video && isProcessed(video) === false) {
       const videoProcessor = new VideoProcessor(file.torrentID, video);
