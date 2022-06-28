@@ -90,12 +90,6 @@ class Utils {
 
   static getUserDiskUsage = async (user: UserPayload): Promise<{ size: number; free: number }> => {
     try {
-      if (user.isAdmin) {
-        // eslint-disable-next-line sonarjs/prefer-immediate-return
-        const diskSpace = await Utils.getDiskSpace();
-        return diskSpace;
-      }
-
       const doc = await UserModel.findOne({ _id: user.id }).populate<{ torrents: ITorrent[] }>('torrents').lean();
       if (!doc) throw new Error('user not found');
       const usedSpace = doc.torrents.reduce((acc, torrent) => {
@@ -106,6 +100,20 @@ class Utils {
           return acc + file.size;
         }, 0);
       }, 0);
+
+      if (user.isAdmin) {
+        const users = await UserModel.find({ isAdmin: false });
+
+        const spaceAllocatedToOthers = users.reduce((acc, user) => {
+          return acc + user.allocatedMemory;
+        }, 0);
+
+        // eslint-disable-next-line sonarjs/prefer-immediate-return
+        const diskSpace = await Utils.getDiskSpace();
+        const adminTotalSpace = diskSpace.size - spaceAllocatedToOthers;
+        return { size: adminTotalSpace, free: adminTotalSpace - usedSpace };
+      }
+
       return { size: user.allocatedMemory, free: user.allocatedMemory - usedSpace };
     } catch (error) {
       logger.error(error);
