@@ -17,7 +17,7 @@ import videoRouter from './routers/video.router';
 import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
-import { SyncStreamsEvents, TorrentPath, TorrentState, UserPayload } from './@types';
+import { SyncStreamsEvents, TorrentPath, TorrentState, UserPayload, VideoState } from './@types';
 import logger from './config/logger';
 import * as rabbitMQ from './rabbitmq';
 import { TorrentModel } from './models/torrent.schema';
@@ -132,11 +132,16 @@ const PORT = 3000;
       await connectMongo();
       //* change all incomplete torrent status to error
       await TorrentModel.updateMany({ status: TorrentState.DOWNLOADING }, { status: TorrentState.ERROR });
+      await TorrentModel.updateMany(
+        { 'files.$.status': VideoState.DOWNLOADING },
+        { $set: { 'files.$.status': VideoState.ERROR } }
+      );
 
       //* change all processing torrent status to queued
-      await TorrentModel.updateMany({ status: TorrentState.PROCESSING }, { status: TorrentState.QUEUED });
-
-      rabbitMQ.connection.reconnect();
+      await TorrentModel.updateMany(
+        { 'files.$.status': VideoState.PROCESSING },
+        { $set: { 'files.$.status': VideoState.QUEUED } }
+      );
 
       if (process.env.NODE_ENV === 'development') {
         await fs.emptyDir(TorrentPath.DOWNLOAD);
