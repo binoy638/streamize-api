@@ -167,6 +167,9 @@ const PORT = 3000;
       }
       //* change all incomplete torrent status to error
       await TorrentModel.updateMany({ status: TorrentState.DOWNLOADING }, { status: TorrentState.ERROR });
+
+      //* change all processing torrent status to queued
+      await TorrentModel.updateMany({ status: TorrentState.PROCESSING }, { status: TorrentState.QUEUED });
     } catch (error) {
       logger.error(error);
       // eslint-disable-next-line unicorn/no-process-exit
