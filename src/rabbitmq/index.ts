@@ -10,7 +10,7 @@ import { generateSprite } from './tasks/task.generateSprite';
 import { inspectVideo } from './tasks/task.inspectVideo';
 import { processVideo } from './tasks/task.processVideo';
 
-const connection = amqp.connect(['amqp://rabbitmq:5672']);
+export const connection = amqp.connect(['amqp://rabbitmq:5672']);
 
 connection.on('connect', function () {
   logger.info('Rabbitmq Connected!');

@@ -130,6 +130,14 @@ const PORT = 3000;
   server.listen(PORT, async () => {
     try {
       await connectMongo();
+      //* change all incomplete torrent status to error
+      await TorrentModel.updateMany({ status: TorrentState.DOWNLOADING }, { status: TorrentState.ERROR });
+
+      //* change all processing torrent status to queued
+      await TorrentModel.updateMany({ status: TorrentState.PROCESSING }, { status: TorrentState.QUEUED });
+
+      rabbitMQ.connection.reconnect();
+
       if (process.env.NODE_ENV === 'development') {
         await fs.emptyDir(TorrentPath.DOWNLOAD);
         await fs.emptyDir(TorrentPath.TMP);
@@ -165,11 +173,6 @@ const PORT = 3000;
           isAdmin: true,
         });
       }
-      //* change all incomplete torrent status to error
-      await TorrentModel.updateMany({ status: TorrentState.DOWNLOADING }, { status: TorrentState.ERROR });
-
-      //* change all processing torrent status to queued
-      await TorrentModel.updateMany({ status: TorrentState.PROCESSING }, { status: TorrentState.QUEUED });
     } catch (error) {
       logger.error(error);
       // eslint-disable-next-line unicorn/no-process-exit
