@@ -137,8 +137,12 @@ export const del = async (req: Request, res: Response, next: NextFunction): Prom
 
     logger.info(`Deleting torrent ${doc.slug}\nFiles: ${Files}`);
 
+    const videos = doc.files.map(file => file.slug);
+
     await TorrentModel.deleteOne({ _id: doc._id });
     await UserModel.updateOne({ _id: currentUser.id }, { $pull: { torrents: doc._id } });
+    await MediaShareModel.deleteMany({ torrent: doc._id });
+    await UserVideoProgressModel.deleteMany({ video: { $in: videos } });
     res.send({ message: 'torrent deleted successfully' });
   } catch (error) {
     logger.error(error);
