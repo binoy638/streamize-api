@@ -86,7 +86,7 @@ class DownloadInfo {
   @Field()
   progress!: number;
 
-  @Field()
+  @Field({ nullable: true })
   timeRemaining!: number;
 
   @Field()
