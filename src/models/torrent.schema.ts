@@ -49,7 +49,6 @@ const torrentSchema = new Schema<ITorrent, ITorrentModel>(
     },
     files: {
       type: [fileSchema],
-      default: [],
     },
     status: {
       type: String,
