@@ -116,7 +116,7 @@ export class Torrent {
   @Field({ nullable: true })
   size?: number;
 
-  @Field(type => [Video])
+  @Field(type => [Video], { nullable: true })
   files!: Video[];
 
   @Field(type => TorrentState, { nullable: true })
