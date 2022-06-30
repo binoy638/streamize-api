@@ -115,7 +115,8 @@ export class UserResolver {
   @Query(() => DiskUsage)
   async diskUsage(@Ctx() ctx: { user: UserPayload }) {
     if (!ctx.user) throw new AuthenticationError('User not found');
-    const usage = await Utils.getUserDiskUsage(ctx.user);
+    //! temp fix
+    const usage = await Utils.getDiskSpace();
     return usage;
   }
 }

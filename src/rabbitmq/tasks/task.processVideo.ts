@@ -8,6 +8,7 @@ import {
 } from '../../@types/message';
 import logger from '../../config/logger';
 import VideoProcessor from '../../libs/videoProcessor';
+import { TorrentModel } from '../../models/torrent.schema';
 import Utils from '../../utils';
 
 //! temp solution
@@ -42,6 +43,10 @@ export const processVideo =
         const inputPath = await videoProcessor.convertToHLS();
 
         logger.info(`file converted successfully file: ${file.name}`);
+        await TorrentModel.updateOne(
+          { _id: file.torrentID, 'files.slug': file.slug },
+          { $set: { 'files.$.status': VideoState.DONE } }
+        );
         const deleteFiledata: IDeleteFilesMessageContent = {
           src: file.path,
         };
