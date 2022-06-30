@@ -130,7 +130,11 @@ const PORT = 3000;
   server.listen(PORT, async () => {
     try {
       await connectMongo();
+      const index = await TorrentModel.collection.getIndexes();
+      logger.info('Indexs');
+      console.log(index);
       //* change all incomplete torrent status to error
+      //! check for other states as well
       await TorrentModel.updateMany({ status: TorrentState.DOWNLOADING }, { status: TorrentState.ERROR });
       await TorrentModel.updateMany(
         { 'files.$.status': VideoState.DOWNLOADING },
