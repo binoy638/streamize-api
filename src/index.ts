@@ -130,6 +130,8 @@ const PORT = 3000;
   server.listen(PORT, async () => {
     try {
       await connectMongo();
+      await TorrentModel.collection.dropIndex('files.path_1');
+      await TorrentModel.collection.dropIndex('files.slug_1');
       const index = await TorrentModel.collection.getIndexes();
       logger.info('Indexs');
       console.log(index);
