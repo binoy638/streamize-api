@@ -76,7 +76,7 @@ export class Video {
 }
 
 @ObjectType()
-class DownloadInfo {
+export class DownloadInfo {
   @Field()
   downloadSpeed!: number;
 

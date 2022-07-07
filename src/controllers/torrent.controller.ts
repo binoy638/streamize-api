@@ -81,7 +81,6 @@ export const get = async (req: Request, res: Response, next: NextFunction): Prom
       const torrent = client.get(torrentDoc.infoHash);
       if (torrent) {
         const downloadInfo = Utils.getDataFromTorrent(torrent);
-
         const filesWithDownloadInfo = torrentDoc.files.map(docFile => {
           const file = torrent.files.find(file => file.name === docFile.name);
           if (file) {
