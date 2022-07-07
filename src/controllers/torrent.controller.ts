@@ -161,7 +161,7 @@ export const add = async (req: Request, res: Response, next: NextFunction): Prom
 
   try {
     const existingTorrent = await TorrentModel.findOne({ magnet });
-    if (existingTorrent) {
+    if (existingTorrent && existingTorrent.status !== TorrentState.ERROR) {
       //* check if the request user already have this torrent
       const existInCurrentUser = await UserModel.findOne({ _id: currentUser.id, torrents: existingTorrent._id });
       if (existInCurrentUser) {
