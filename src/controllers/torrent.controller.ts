@@ -160,8 +160,27 @@ export const add = async (req: Request, res: Response, next: NextFunction): Prom
   const { currentUser } = req;
 
   try {
-    const existingTorrent = await TorrentModel.findOne({ magnet });
-    if (existingTorrent && existingTorrent.status !== TorrentState.ERROR) {
+    const existingTorrent = await TorrentModel.findOne({ magnet }).lean();
+
+    //* check if the torrent already exists
+    if (existingTorrent) {
+      //* if it's in error state add it to queue again
+      if (existingTorrent.status === TorrentState.ERROR) {
+        await TorrentModel.findByIdAndUpdate(existingTorrent._id, { status: TorrentState.ADDED });
+        const data: ITorrentDownloadMessageContent = { currentUser, torrent: existingTorrent };
+
+        rabbitMQ.publisherChannel
+          .sendToQueue(QueueName.DOWNLOAD_TORRENT, data, { persistent: true, expiration: '86400000' })
+          .then(() => {
+            res.send({ message: 'torrent readded successfully', existingTorrent });
+          })
+          .catch(error => {
+            logger.error(error);
+            next(boom.internal('Internal server error'));
+          });
+        return;
+      }
+
       //* check if the request user already have this torrent
       const existInCurrentUser = await UserModel.findOne({ _id: currentUser.id, torrents: existingTorrent._id });
       if (existInCurrentUser) {
