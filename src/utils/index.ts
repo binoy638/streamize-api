@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-globals */
 /* eslint-disable unicorn/no-array-reduce */
 import { ConsumeMessage } from 'amqplib';
 import { Torrent, TorrentFile } from 'webtorrent';
@@ -33,8 +32,7 @@ class Utils {
       downloadSpeed: torrent.downloadSpeed,
       uploadSpeed: torrent.uploadSpeed,
       progress: torrent.progress,
-      // eslint-disable-next-line unicorn/prefer-number-properties
-      timeRemaining: isNaN(torrent.timeRemaining) ? 0 : torrent.timeRemaining,
+      timeRemaining: torrent.timeRemaining === Number.POSITIVE_INFINITY ? 0 : torrent.timeRemaining,
       paused: torrent.paused,
       completed: torrent.done,
     };
