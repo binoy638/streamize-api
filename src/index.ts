@@ -132,7 +132,10 @@ const PORT = 3000;
       await connectMongo();
       //* change all incomplete torrent status to error
       //! check for other states as well
-      await TorrentModel.updateMany({ status: TorrentState.DOWNLOADING }, { status: TorrentState.ERROR });
+      await TorrentModel.updateMany(
+        { $or: [{ status: TorrentState.DOWNLOADING }, { status: TorrentState.ADDED }] },
+        { status: TorrentState.ERROR }
+      );
       await TorrentModel.updateMany(
         { 'files.$.status': VideoState.DOWNLOADING },
         { $set: { 'files.$.status': VideoState.ERROR } }
