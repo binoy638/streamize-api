@@ -32,7 +32,7 @@ class Utils {
       downloadSpeed: torrent.downloadSpeed,
       uploadSpeed: torrent.uploadSpeed,
       progress: torrent.progress,
-      timeRemaining: torrent.timeRemaining ? torrent.timeRemaining : 0,
+      timeRemaining: torrent.timeRemaining === null ? 0 : torrent.timeRemaining,
       paused: torrent.paused,
       completed: torrent.done,
     };
