@@ -8,7 +8,7 @@ You need to have docker installed to run this project.
 Run the following command to launch the project inside a docker container
 
 ```bash
-  docker-compose -f docker-compose.dev.yml up
+  docker-compose -f docker-compose.dev.yml up --build
 ```
 
 ## Run production docker container
