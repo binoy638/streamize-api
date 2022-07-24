@@ -114,7 +114,34 @@ export class TorrentWithoutInfo {
 @ObjectType()
 export class TorrentWithInfo {
   @Field(type => TorrentState)
-  status!: TorrentState.DOWNLOADING | TorrentState.PAUSED | TorrentState.PROCESSING | TorrentState.QUEUED;
+  status!: TorrentState.PAUSED | TorrentState.PROCESSING | TorrentState.QUEUED;
+
+  @Field(type => ID)
+  _id!: string;
+
+  @Field()
+  slug!: string;
+
+  @Field()
+  magnet!: string;
+
+  @Field()
+  infoHash!: string;
+
+  @Field()
+  name!: string;
+
+  @Field()
+  size!: number;
+
+  @Field(type => [Video])
+  files!: Video[];
+}
+
+@ObjectType()
+export class TorrentWithInfoDownload {
+  @Field(type => TorrentState)
+  status!: TorrentState.DOWNLOADING;
 
   @Field(type => ID)
   _id!: string;
@@ -141,42 +168,15 @@ export class TorrentWithInfo {
   downloadInfo!: DownloadInfo;
 }
 
-// @ObjectType()
-// export class Torrent {
-//   @Field(type => ID)
-//   _id!: string;
-
-//   @Field()
-//   slug!: string;
-
-//   @Field()
-//   magnet!: string;
-
-//   @Field({ nullable: true })
-//   infoHash?: string;
-
-//   @Field({ nullable: true })
-//   name?: string;
-
-//   @Field({ nullable: true })
-//   size?: number;
-
-//   @Field(type => [Video])
-//   files!: Video[];
-
-//   @Field(type => TorrentState)
-//   status!: TorrentState;
-
-//   @Field(type => DownloadInfo, { nullable: true })
-//   downloadInfo?: DownloadInfo;
-// }
-
 export const Torrent = createUnionType({
   name: 'Torrent', // the name of the GraphQL union
-  types: () => [TorrentWithInfo, TorrentWithoutInfo] as const,
+  types: () => [TorrentWithInfo, TorrentWithoutInfo, TorrentWithInfoDownload] as const,
   resolveType: value => {
+    if (value.status === TorrentState.DOWNLOADING) {
+      return TorrentWithInfoDownload;
+    }
     if ('name' in value) {
-      return TorrentWithInfo; // we can return object type class (the one with `@ObjectType()`)
+      return TorrentWithInfo;
     }
 
     return TorrentWithoutInfo;
