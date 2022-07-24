@@ -114,7 +114,7 @@ export class TorrentWithoutInfo {
 @ObjectType()
 export class TorrentWithInfo {
   @Field(type => TorrentState)
-  status!: TorrentState.PAUSED | TorrentState.PROCESSING | TorrentState.QUEUED;
+  status!: TorrentState.DONE | TorrentState.PAUSED | TorrentState.PROCESSING | TorrentState.QUEUED;
 
   @Field(type => ID)
   _id!: string;
@@ -140,7 +140,7 @@ export class TorrentWithInfo {
 
 @ObjectType()
 export class TorrentWithInfoDownload {
-  @Field(type => TorrentState)
+  @Field()
   status!: TorrentState.DOWNLOADING;
 
   @Field(type => ID)
