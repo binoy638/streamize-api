@@ -1,7 +1,7 @@
 /* eslint-disable max-classes-per-file */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable class-methods-use-this */
-import { ObjectType, Field, ID, registerEnumType, Float } from 'type-graphql';
+import { ObjectType, Field, ID, registerEnumType, Float, createUnionType } from 'type-graphql';
 import { TorrentState, VideoState } from '../../@types';
 
 registerEnumType(TorrentState, {
@@ -86,7 +86,7 @@ export class DownloadInfo {
   @Field()
   progress!: number;
 
-  @Field({ nullable: true })
+  @Field()
   timeRemaining!: number;
 
   @Field()
@@ -97,7 +97,25 @@ export class DownloadInfo {
 }
 
 @ObjectType()
-export class Torrent {
+export class TorrentWithoutInfo {
+  @Field(type => TorrentState)
+  status!: TorrentState.ADDED | TorrentState.ERROR;
+
+  @Field(type => ID)
+  _id!: string;
+
+  @Field()
+  slug!: string;
+
+  @Field()
+  magnet!: string;
+}
+
+@ObjectType()
+export class TorrentWithInfo {
+  @Field(type => TorrentState)
+  status!: TorrentState.DOWNLOADING | TorrentState.PAUSED | TorrentState.PROCESSING | TorrentState.QUEUED;
+
   @Field(type => ID)
   _id!: string;
 
@@ -107,24 +125,56 @@ export class Torrent {
   @Field()
   magnet!: string;
 
-  @Field({ nullable: true })
-  infoHash?: string;
+  @Field()
+  infoHash!: string;
 
-  @Field({ nullable: true })
-  name?: string;
+  @Field()
+  name!: string;
 
-  @Field({ nullable: true })
-  size?: number;
+  @Field()
+  size!: number;
 
   @Field(type => [Video])
   files!: Video[];
 
-  @Field(type => TorrentState)
-  status!: TorrentState;
-
-  @Field(type => DownloadInfo, { nullable: true })
-  downloadInfo?: DownloadInfo;
+  @Field(type => DownloadInfo)
+  downloadInfo!: DownloadInfo;
 }
+
+// @ObjectType()
+// export class Torrent {
+//   @Field(type => ID)
+//   _id!: string;
+
+//   @Field()
+//   slug!: string;
+
+//   @Field()
+//   magnet!: string;
+
+//   @Field({ nullable: true })
+//   infoHash?: string;
+
+//   @Field({ nullable: true })
+//   name?: string;
+
+//   @Field({ nullable: true })
+//   size?: number;
+
+//   @Field(type => [Video])
+//   files!: Video[];
+
+//   @Field(type => TorrentState)
+//   status!: TorrentState;
+
+//   @Field(type => DownloadInfo, { nullable: true })
+//   downloadInfo?: DownloadInfo;
+// }
+
+export const Torrent = createUnionType({
+  name: 'Torrent', // the name of the GraphQL union
+  types: () => [TorrentWithInfo, TorrentWithoutInfo] as const, // function that returns tuple of object types classes
+});
 
 @ObjectType()
 export class DiskUsage {
@@ -165,7 +215,7 @@ export class SharedPlaylist {
   user!: User;
 
   @Field(() => Torrent)
-  torrent!: Torrent;
+  torrent!: typeof Torrent;
 
   @Field()
   mediaId!: string;
