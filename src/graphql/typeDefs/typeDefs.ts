@@ -141,7 +141,7 @@ export class TorrentWithInfo {
 @ObjectType()
 export class TorrentWithInfoDownload {
   @Field()
-  status!: TorrentState.DOWNLOADING;
+  status!: 'DOWNLOADING';
 
   @Field(type => ID)
   _id!: string;
