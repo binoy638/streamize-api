@@ -173,7 +173,14 @@ export class TorrentWithInfo {
 
 export const Torrent = createUnionType({
   name: 'Torrent', // the name of the GraphQL union
-  types: () => [TorrentWithInfo, TorrentWithoutInfo] as const, // function that returns tuple of object types classes
+  types: () => [TorrentWithInfo, TorrentWithoutInfo] as const,
+  resolveType: value => {
+    if ('name' in value) {
+      return TorrentWithInfo; // we can return object type class (the one with `@ObjectType()`)
+    }
+
+    return TorrentWithoutInfo;
+  },
 });
 
 @ObjectType()
