@@ -140,7 +140,10 @@ const PORT = 3000;
         { 'files.$.status': VideoState.DOWNLOADING },
         { $set: { 'files.$.status': VideoState.ERROR } }
       );
-
+      await TorrentModel.updateMany(
+        { 'files.$.status': VideoState.QUEUED },
+        { $set: { 'files.$.status': VideoState.DONE } }
+      );
       //* change all processing torrent status to queued
       await TorrentModel.updateMany(
         { 'files.$.status': VideoState.PROCESSING },

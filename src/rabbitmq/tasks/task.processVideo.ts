@@ -44,7 +44,7 @@ export const processVideo =
 
         logger.info(`file converted successfully file: ${file.name}`);
         await TorrentModel.updateOne(
-          { _id: file.torrentID, 'files.slug': file.slug },
+          { _id: file.torrentID, 'files.$.slug': file.slug },
           { $set: { 'files.$.status': VideoState.DONE } }
         );
         const deleteFiledata: IDeleteFilesMessageContent = {
