@@ -136,20 +136,24 @@ const PORT = 3000;
         { $or: [{ status: TorrentState.DOWNLOADING }, { status: TorrentState.ADDED }] },
         { status: TorrentState.ERROR }
       );
+
       await TorrentModel.updateMany(
         { 'files.$.status': VideoState.DOWNLOADING },
         { $set: { 'files.$.status': VideoState.ERROR } }
       );
-      await TorrentModel.updateMany(
-        { 'files.$.status': VideoState.QUEUED },
-        { $set: { 'files.$.status': VideoState.DONE } }
-      );
+
+      const beforeQ = await TorrentModel.find({ 'files.$.status': VideoState.QUEUED }).lean();
+
+      console.log(beforeQ);
       //* change all processing torrent status to queued
       await TorrentModel.updateMany(
         { 'files.$.status': VideoState.PROCESSING },
         { $set: { 'files.$.status': VideoState.QUEUED } }
       );
 
+      const afterQ = await TorrentModel.find({ 'files.$.status': VideoState.QUEUED }).lean();
+
+      console.log(afterQ);
       if (process.env.NODE_ENV === 'development') {
         await fs.emptyDir(TorrentPath.DOWNLOAD);
         await fs.emptyDir(TorrentPath.TMP);
