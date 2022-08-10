@@ -148,7 +148,7 @@ const PORT = 3000;
       //* change all processing torrent status to queued
       await TorrentModel.updateMany(
         { 'files.$.status': VideoState.PROCESSING },
-        { $set: { 'files.$.status': VideoState.QUEUED } },
+        { 'files.$.status': VideoState.QUEUED },
         { multi: true }
       );
 
