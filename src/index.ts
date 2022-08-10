@@ -142,13 +142,14 @@ const PORT = 3000;
         { $set: { 'files.$.status': VideoState.ERROR } }
       );
 
-      const beforeQ = await TorrentModel.find({ 'files.$.status': VideoState.QUEUED }).lean();
+      // const beforeQ = await TorrentModel.find({ 'files.$.status': VideoState.QUEUED }).lean();
 
-      console.log(beforeQ);
+      // console.log(beforeQ);
       //* change all processing torrent status to queued
       await TorrentModel.updateMany(
         { 'files.$.status': VideoState.PROCESSING },
-        { $set: { 'files.$.status': VideoState.QUEUED } }
+        { $set: { 'files.$.status': VideoState.QUEUED } },
+        { multi: true }
       );
 
       const afterQ = await TorrentModel.find({ 'files.$.status': VideoState.QUEUED }).lean();
