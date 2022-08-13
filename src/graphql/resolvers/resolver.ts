@@ -20,7 +20,7 @@ export class TorrentResolver {
   //! pagination
   async torrents(@Ctx() ctx: { user: UserPayload }) {
     if (!ctx.user) throw new AuthenticationError('User not found');
-    const userDoc = await UserModel.findOne({ _id: ctx.user.id }).populate<{ torrents: ITorrent[] }>('torrents').lean();
+    const userDoc = await UserModel.findById(ctx.user.id).populate<{ torrents: ITorrent[] }>('torrents').lean();
     if (!userDoc) throw new AuthenticationError('User not found');
     const { torrents } = userDoc;
     const torrentsWithDownloadInfo = torrents.map(torrent => {
@@ -41,7 +41,7 @@ export class TorrentResolver {
     if (!ctx.user) throw new AuthenticationError('User not found');
     const torrentDoc = await TorrentModel.findOne({ slug }).lean();
     if (!torrentDoc) throw new Error('Torrent not found');
-    const haveAccess = await UserModel.find({ _id: ctx.user.id, torrents: { $in: [torrentDoc._id] } });
+    const haveAccess = await UserModel.findOne({ _id: ctx.user.id, torrents: { $in: [torrentDoc._id] } });
     if (!haveAccess) throw new ForbiddenError('No access');
     if (torrentDoc.status === TorrentState.DOWNLOADING) {
       const torrent = client.get(torrentDoc.infoHash);
