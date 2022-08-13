@@ -184,13 +184,14 @@ const PORT = 3000;
         });
       }
 
+      await UserModel.deleteOne({ username: 'guest' });
       const guestUser = await UserModel.findOne({ username: 'guest' });
 
       if (!guestUser) {
         await UserModel.create({
           username: process.env.GUEST_USER,
           password: process.env.GUEST_PASSWORD,
-          allocatedMemory: 2000000000,
+          allocatedMemory: 20000000000,
         });
       }
     } catch (error) {

@@ -80,6 +80,7 @@ class Utils {
   static getDiskSpace = async (): Promise<{ size: number; free: number }> => {
     try {
       const diskSpace = await checkDiskSpace(TorrentPath.DOWNLOAD);
+      // eslint-disable-next-line unicorn/numeric-separators-style
       return { size: diskSpace.size - 2000000000, free: diskSpace.free - 2000000000 };
     } catch (error) {
       logger.error(error);
@@ -92,12 +93,8 @@ class Utils {
       const doc = await UserModel.findOne({ _id: user.id }).populate<{ torrents: ITorrent[] }>('torrents').lean();
       if (!doc) throw new Error('user not found');
       const usedSpace = doc.torrents.reduce((acc, torrent) => {
-        if (torrent.status === TorrentState.DONE) {
-          return acc + torrent.size;
-        }
-        return torrent.files.reduce((acc, file) => {
-          return acc + file.size;
-        }, 0);
+        if (torrent.status === TorrentState.ADDED) return acc + 0;
+        return acc + torrent.size;
       }, 0);
 
       if (user.isAdmin) {
