@@ -80,7 +80,6 @@ class Utils {
   static getDiskSpace = async (): Promise<{ size: number; free: number }> => {
     try {
       const diskSpace = await checkDiskSpace(TorrentPath.DOWNLOAD);
-      // eslint-disable-next-line unicorn/numeric-separators-style
       return { size: diskSpace.size - 2000000000, free: diskSpace.free - 2000000000 };
     } catch (error) {
       logger.error(error);

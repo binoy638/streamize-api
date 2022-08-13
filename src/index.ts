@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import express from 'express';
 import morgan from 'morgan';
@@ -180,6 +181,16 @@ const PORT = 3000;
           username: process.env.ADMIN_USER,
           password: process.env.ADMIN_PASSWORD,
           isAdmin: true,
+        });
+      }
+
+      const guestUser = await UserModel.findOne({ username: 'guest' });
+
+      if (!guestUser) {
+        await UserModel.create({
+          username: process.env.GUEST_USER,
+          password: process.env.GUEST_PASSWORD,
+          allocatedMemory: 2000000000,
         });
       }
     } catch (error) {
