@@ -184,7 +184,6 @@ const PORT = 3000;
         });
       }
 
-      await UserModel.deleteOne({ username: 'guest' });
       const guestUser = await UserModel.findOne({ username: 'guest' });
 
       if (!guestUser) {
