@@ -132,20 +132,29 @@ const PORT = 3000;
     try {
       await connectMongo();
       //* change all incomplete torrent status to error
-      //! check for other states as well
+
       await TorrentModel.updateMany(
         { $or: [{ status: TorrentState.DOWNLOADING }, { status: TorrentState.ADDED }] },
         { status: TorrentState.ERROR }
       );
+
+      //* change the status of videos which were downloading to error (as the torrent will be removed while app crash)
       await TorrentModel.updateMany(
-        { 'files.$.status': VideoState.DOWNLOADING },
-        { $set: { 'files.$.status': VideoState.ERROR } }
+        {},
+        { $set: { 'files.$[elem].status': VideoState.ERROR } },
+        {
+          arrayFilters: [{ 'elem.status': VideoState.DOWNLOADING }],
+        }
       );
 
-      //* change all processing torrent status to queued
+      //* change the status of videos which were processing to queued so they get processed from the beginning
+
       await TorrentModel.updateMany(
-        { 'files.$.status': VideoState.PROCESSING },
-        { $set: { 'files.$.status': VideoState.QUEUED } }
+        {},
+        { $set: { 'files.$[elem].status': VideoState.QUEUED } },
+        {
+          arrayFilters: [{ 'elem.status': VideoState.PROCESSING }],
+        }
       );
 
       if (process.env.NODE_ENV === 'development') {
