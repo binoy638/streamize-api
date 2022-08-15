@@ -83,5 +83,8 @@
     "webtorrent": "^1.7.1",
     "winston": "^3.5.1",
     "yup": "^0.32.11"
-  }
+  },  
+  "author": "Binoy Barman <binoy638@gmail.com>",
+  "license": "MIT",
+  "repository": "https://github.com/binoy638/streamize-api.git"
 }
