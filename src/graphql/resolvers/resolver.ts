@@ -22,7 +22,7 @@ export class TorrentResolver {
     if (!ctx.user) throw new AuthenticationError('User not found');
     const userDoc = await UserModel.findById(ctx.user.id)
       .sort({ createdAt: 1 })
-      .populate<{ torrents: ITorrent[] }>({ path: 'torrents', options: { sort: { createdAt: 1 } } })
+      .populate<{ torrents: ITorrent[] }>({ path: 'torrents', options: { sort: { createdAt: -1 } } })
       .lean();
     if (!userDoc) throw new AuthenticationError('User not found');
     const { torrents } = userDoc;
