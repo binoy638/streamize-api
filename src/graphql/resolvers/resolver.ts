@@ -20,7 +20,10 @@ export class TorrentResolver {
   //! pagination
   async torrents(@Ctx() ctx: { user: UserPayload }) {
     if (!ctx.user) throw new AuthenticationError('User not found');
-    const userDoc = await UserModel.findById(ctx.user.id).populate<{ torrents: ITorrent[] }>('torrents').lean();
+    const userDoc = await UserModel.findById(ctx.user.id)
+      .sort({ createdAt: 1 })
+      .populate<{ torrents: ITorrent[] }>('torrents')
+      .lean();
     if (!userDoc) throw new AuthenticationError('User not found');
     const { torrents } = userDoc;
     const torrentsWithDownloadInfo = torrents.map(torrent => {
