@@ -29,6 +29,7 @@ import { UserVideoProgressModel } from './models/userVideoProgress.schema';
 import { MediaShareModel } from './models/MediaShare';
 import { SyncStreams, Stream } from './libs/sync-streams';
 import { VideoResolver, TorrentResolver, UserResolver, SharedPlaylistResolver } from './graphql/resolvers/resolver';
+import watchPartyRouter from './routers/watchparty.router';
 
 dotenv.config();
 
@@ -96,6 +97,7 @@ const PORT = 3000;
   app.use('/video', videoRouter);
   app.use('/auth', authRouter);
   app.use('/share', mediaShareRouter);
+  app.use('/watch-party', watchPartyRouter);
 
   const onConnection = (socket: Socket): void => {
     console.log('a user connected :', socket.id);
