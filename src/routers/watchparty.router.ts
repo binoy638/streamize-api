@@ -12,7 +12,7 @@ watchPartyRouter.post(
   validator({
     body: Yup.object().shape({
       host: Yup.string().required(),
-      torrents: Yup.array().of(Yup.string()).required(),
+      maxViewers: Yup.number().required(),
       partyPlayerControl: Yup.boolean().required(),
     }),
   }),

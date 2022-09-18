@@ -10,7 +10,7 @@ services:
     networks:
       - nginx-network
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo mongo:27017/test --quiet
+      test: echo 'db.runCommand({serverStatus:1}).ok'
       interval: 30s
       timeout: 30s
       retries: 3
