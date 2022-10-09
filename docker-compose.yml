@@ -56,7 +56,8 @@ services:
 
      
 
-networks:
-  nginx-network:
-    external: true
 
+networks:
+  default:
+    external: true
+    name: nginx-network

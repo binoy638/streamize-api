@@ -50,3 +50,8 @@ services:
         condition: service_healthy
 
 
+networks:
+  default:
+    external: true
+    name: streamize-network
+

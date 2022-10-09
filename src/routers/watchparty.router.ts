@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as Yup from 'yup';
-import * as mediaShareController from '../controllers/mediaShareController';
+import * as watchPartyController from '../controllers/watchParty.controller';
 import { getCurrentUser } from '../middlewares/currentUser.middleware';
 import { validator } from '../middlewares/validator.middleware';
 
@@ -11,12 +11,21 @@ watchPartyRouter.post(
   getCurrentUser,
   validator({
     body: Yup.object().shape({
-      host: Yup.string().required(),
       maxViewers: Yup.number().required(),
       partyPlayerControl: Yup.boolean().required(),
     }),
   }),
-  mediaShareController.create
+  watchPartyController.create
+);
+
+watchPartyRouter.get(
+  '/:slug',
+  validator({
+    params: Yup.object().shape({
+      slug: Yup.string().min(5).max(5).required(),
+    }),
+  }),
+  watchPartyController.getWatchParty
 );
 
 export default watchPartyRouter;
