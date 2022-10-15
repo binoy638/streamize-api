@@ -1,11 +1,12 @@
-interface Member {
+/* eslint-disable unicorn/no-null */
+export interface Member {
   id: string; // socket id
   name: string;
   isHost: boolean;
   isWatching: boolean; // keep track of whether the member is watching the stream
 }
 
-interface PlayerInfo {
+export interface PlayerInfo {
   video: {
     torrentID: string;
     slug: string;
@@ -16,18 +17,27 @@ interface PlayerInfo {
   isPlaying: boolean;
 }
 
-interface Party {
-  id: string;
+// data required to create a watch party
+export interface PartyConstructor {
+  name: string;
   slug: string;
   maxViewers: number;
   partyPlayerControl: boolean;
   host: string;
+}
+
+export interface RoomInfo {
+  slug: string;
+  name: string;
+  maxViewers: number;
+  partyPlayerControl: boolean;
+  host: string;
   members: Member[];
-  playerInfo: PlayerInfo;
+  playerInfo: PlayerInfo | null;
 }
 
 class WatchParty {
-  public id: string;
+  public name: string;
 
   public slug: string;
 
@@ -39,16 +49,16 @@ class WatchParty {
 
   public members: Member[];
 
-  public playerInfo: PlayerInfo;
+  public playerInfo: PlayerInfo | null;
 
-  constructor(party: Party) {
-    this.id = party.id;
+  constructor(party: PartyConstructor) {
+    this.name = party.name;
     this.slug = party.slug;
     this.maxViewers = party.maxViewers;
     this.partyPlayerControl = party.partyPlayerControl;
     this.host = party.host;
-    this.members = party.members;
-    this.playerInfo = party.playerInfo;
+    this.members = [];
+    this.playerInfo = null;
   }
 
   public addMember(member: Member): void {
@@ -63,6 +73,18 @@ class WatchParty {
     return this.members.find(m => m.id === memberId);
   }
 
+  public getRoomInfo(): RoomInfo {
+    return {
+      name: this.name,
+      slug: this.slug,
+      maxViewers: this.maxViewers,
+      partyPlayerControl: this.partyPlayerControl,
+      host: this.host,
+      members: this.members,
+      playerInfo: this.playerInfo,
+    };
+  }
+
   public allowPlayerControl(bool: boolean): void {
     this.partyPlayerControl = bool;
   }
@@ -71,20 +93,27 @@ class WatchParty {
     this.playerInfo = playerInfo;
   }
 
-  public getPlayerInfo(): PlayerInfo {
+  public getPlayerInfo(): PlayerInfo | null {
     return this.playerInfo;
   }
 
   public setVideoCurrentTime(time: number): void {
-    this.playerInfo.currentTime = time;
+    if (this.playerInfo) {
+      this.playerInfo.currentTime = time;
+    }
   }
 
-  public getVideoCurrentTime(): number {
-    return this.playerInfo.currentTime;
+  public getVideoCurrentTime(): number | undefined {
+    if (this.playerInfo) {
+      return this.playerInfo.currentTime;
+    }
+    return undefined;
   }
 
   public setIsPlaying(bool: boolean): void {
-    this.playerInfo.isPlaying = bool;
+    if (this.playerInfo) {
+      this.playerInfo.isPlaying = bool;
+    }
   }
 }
 

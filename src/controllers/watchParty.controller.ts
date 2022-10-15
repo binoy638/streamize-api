@@ -4,12 +4,13 @@ import logger from '../config/logger';
 import { WatchPartyModel } from '../models/watchParty';
 
 export const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const { maxViewers, partyPlayerControl } = req.body;
+  const { maxViewers, partyPlayerControl, name } = req.body;
 
   const { currentUser } = req;
   try {
     const doc = await WatchPartyModel.create({
       host: currentUser.id,
+      name,
       partyPlayerControl,
       maxViewers,
     });

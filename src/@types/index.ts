@@ -95,11 +95,3 @@ export interface UserPayload {
   username: boolean;
   allocatedMemory: number;
 }
-
-export enum SyncStreamsEvents {
-  CREATED = 'created',
-  NEW_MEMBER_JOINED = 'new-member-joined',
-  PLAY = 'play',
-  PAUSE = 'pause',
-  SEEKED = 'seeked',
-}

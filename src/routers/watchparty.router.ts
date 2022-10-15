@@ -11,6 +11,7 @@ watchPartyRouter.post(
   getCurrentUser,
   validator({
     body: Yup.object().shape({
+      name: Yup.string().required(),
       maxViewers: Yup.number().required(),
       partyPlayerControl: Yup.boolean().required(),
     }),

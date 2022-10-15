@@ -10,7 +10,7 @@ import 'reflect-metadata';
 import fs from 'fs-extra';
 import dotenv from 'dotenv';
 import http from 'http';
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
 import { ApolloServer } from 'apollo-server-express';
 import { buildSchema } from 'type-graphql';
 import torrentRouter from './routers/torrent.router';
@@ -18,7 +18,7 @@ import videoRouter from './routers/video.router';
 import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
-import { SyncStreamsEvents, TorrentPath, TorrentState, UserPayload, VideoState } from './@types';
+import { TorrentPath, TorrentState, UserPayload, VideoState } from './@types';
 import logger from './config/logger';
 import * as rabbitMQ from './rabbitmq';
 import { TorrentModel } from './models/torrent.schema';
@@ -27,9 +27,9 @@ import { UserModel } from './models/user.schema';
 import mediaShareRouter from './routers/mediaShare.router';
 import { UserVideoProgressModel } from './models/userVideoProgress.schema';
 import { MediaShareModel } from './models/MediaShare';
-import { SyncStreams, Stream } from './libs/sync-streams';
 import { VideoResolver, TorrentResolver, UserResolver, SharedPlaylistResolver } from './graphql/resolvers/resolver';
 import watchPartyRouter from './routers/watchparty.router';
+import socketHandler from './libs/socketHandler';
 
 dotenv.config();
 
@@ -62,7 +62,6 @@ const PORT = 3000;
   const server = http.createServer(app);
   const io = new Server(server, { cors: { origin: true, credentials: true } });
   // ['http://localhost:3000', 'http://127.0.0.1:5347'];
-  const syncStreams = new SyncStreams();
 
   app.use(
     helmet({
@@ -99,32 +98,8 @@ const PORT = 3000;
   app.use('/share', mediaShareRouter);
   app.use('/watch-party', watchPartyRouter);
 
-  const onConnection = (socket: Socket): void => {
-    console.log('a user connected :', socket.id);
-    socket.on(SyncStreamsEvents.CREATED, (data: Stream) => {
-      socket.join(data.id);
-      syncStreams.addStream(data);
-    });
-    socket.on(SyncStreamsEvents.NEW_MEMBER_JOINED, (data: { streamId: string; member: string }) => {
-      socket.join(data.streamId);
-      syncStreams.addMember(data.streamId, data.member);
-    });
-    socket.on(SyncStreamsEvents.PLAY, (data: { streamId: string }) => {
-      console.log(data);
-      socket.to(data.streamId).emit(SyncStreamsEvents.PLAY, data);
-    });
-    socket.on(SyncStreamsEvents.PAUSE, (data: { streamId: string }) => {
-      socket.to(data.streamId).emit(SyncStreamsEvents.PAUSE);
-    });
-    socket.on(SyncStreamsEvents.SEEKED, (data: { streamId: string; seekTime: number }) => {
-      socket.to(data.streamId).emit(SyncStreamsEvents.SEEKED, data);
-    });
-    socket.on('disconnect', () => {
-      console.log('a user disconnected :', socket.id);
-    });
-  };
+  io.on('connection', socketHandler);
 
-  io.on('connection', onConnection);
   apolloServer.applyMiddleware({
     app,
     cors: false,
