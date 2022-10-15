@@ -20,6 +20,7 @@ const fileSchema: Schema = new Schema<IVideo>({
   slug: { type: String, default: () => nanoid(5).toLowerCase() },
   path: { type: String },
   size: { type: Number },
+  duration: { type: Number },
   ext: { type: String },
   progressPreview: { type: Boolean, default: false },
   subtitles: { type: [subtitleSchema], default: [] },

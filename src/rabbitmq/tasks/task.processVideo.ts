@@ -42,6 +42,15 @@ export const processVideo =
         await videoProcessor.extractSubs();
         const inputPath = await videoProcessor.convertToHLS();
 
+        const videoDuration = await videoProcessor.getVideoDuration();
+
+        if (videoDuration) {
+          await TorrentModel.updateOne(
+            { _id: file.torrentID, 'files.slug': file.slug },
+            { $set: { 'files.$.duration': videoDuration } }
+          );
+        }
+
         logger.info(`file converted successfully file: ${file.name}`);
         await TorrentModel.updateOne(
           { _id: file.torrentID, 'files.slug': file.slug },

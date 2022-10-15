@@ -57,6 +57,9 @@ export class Video {
   path!: string;
 
   @Field()
+  duration?: number;
+
+  @Field()
   ext!: string;
 
   @Field()

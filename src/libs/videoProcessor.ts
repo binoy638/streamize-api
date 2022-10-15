@@ -59,6 +59,18 @@ class VideoProcessor extends SubtitleProcessor {
     });
   }
 
+  public async getVideoDuration(): Promise<number | undefined> {
+    return new Promise<number | undefined>((resolve, reject) => {
+      ffmpeg(this.video.path).ffprobe((error, data) => {
+        if (!error) {
+          resolve(data.format.duration);
+        } else {
+          reject(error);
+        }
+      });
+    });
+  }
+
   // TODO: check video bitrate and adjust hls conversion settings
   // static async getVideoBitrate(path: string): Promise<number> {
   //   return new Promise<number>((resolve, reject) => {

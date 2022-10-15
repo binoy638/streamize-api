@@ -48,6 +48,7 @@ export interface IVideo {
   slug: string;
   size: number;
   path: string;
+  duration: number;
   ext: string;
   progressPreview: boolean;
   subtitles: ISubtitle[];

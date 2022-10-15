@@ -1,3 +1,4 @@
+/* eslint-disable max-classes-per-file */
 /* eslint-disable unicorn/no-null */
 export interface Member {
   id: string; // socket id
@@ -7,6 +8,17 @@ export interface Member {
 }
 
 export interface PlayerInfo {
+  video: {
+    torrentID: string;
+    slug: string;
+    title: string;
+  };
+  currentTime: number;
+  totalDuration: number;
+  isPlaying: boolean;
+}
+
+export interface PlayerConstructor {
   video: {
     torrentID: string;
     slug: string;
@@ -35,6 +47,8 @@ export interface RoomInfo {
   members: Member[];
   playerInfo: PlayerInfo | null;
 }
+
+// class Player {}
 
 class WatchParty {
   public name: string;
