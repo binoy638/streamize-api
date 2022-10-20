@@ -33,8 +33,13 @@ enum RoomEvent {
   PLAY = 'play',
   PAUSE = 'pause',
   SEEKED = 'seeked',
-  // emitted when a user joins a room successfully
-  JOINED = 'joined',
+  PLAYER_UPDATE = 'playerUpdate',
+
+  // client events
+
+  JOINED = 'joined', // emitted when a user joins a room successfully
+  PLAYED = 'played',
+  PLAYER_UPDATED = 'playerUpdated',
 }
 
 enum RoomErrorEvent {
@@ -81,9 +86,46 @@ const socketHandler = (socket: Socket): void => {
     room.addMember({ ...member, id: socket.id });
     socket.join(slug);
 
-    const roomInfo = room.getRoomInfo();
-    socket.emit(RoomEvent.JOINED, roomInfo);
+    const { roomInfo } = room;
+
+    socket.to(slug).emit(RoomEvent.JOINED, roomInfo);
   });
+
+  // socket.on(RoomEvent.PLAYER_UPDATE, (data: { slug: string; playerInfo: PlayerInfo }) => {
+  //   const { slug, playerInfo } = data;
+  //   const room = ROOMS.get(slug);
+  //   if (!room) {
+  //     logger.error(`room not found: ${slug}`);
+  //     return;
+  //   }
+  //   room.playerInfo = playerInfo;
+  //   socket.to(slug).emit(RoomEvent.PLAYER_UPDATED, playerInfo);
+  // });
+
+  // socket.on(RoomEvent.PLAY, (data: { slug: string }) => {
+  //   const { slug } = data;
+  //   const room = ROOMS.get(slug);
+  //   if (!room) {
+  //     logger.error(`room not found: ${slug}`);
+  //     return;
+  //   }
+
+  //   const { playerInfo } = room;
+
+  //   if (!playerInfo) {
+  //     logger.error(`player info not found: ${slug}`);
+  //     return;
+  //   }
+
+  //   if (playerInfo.isPlaying) {
+  //     logger.error(`player is already playing: ${slug}`);
+  //     return;
+  //   }
+
+  //   room.isPlaying = true;
+
+  //   socket.to(slug).emit(RoomEvent.PLAYED);
+  // });
 
   socket.on('disconnect', () => {
     logger.debug(`a user disconnected : ${socket.id}`);
