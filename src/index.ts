@@ -7,28 +7,34 @@ import cookieSession from 'cookie-session';
 import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
 import 'reflect-metadata';
-import fs from 'fs-extra';
+// import fs from 'fs-extra';
 import dotenv from 'dotenv';
 import http from 'http';
 import { Server } from 'socket.io';
 import { ApolloServer } from 'apollo-server-express';
+import { ApolloServerPluginLandingPageLocalDefault } from 'apollo-server-core';
 import { buildSchema } from 'type-graphql';
 import torrentRouter from './routers/torrent.router';
 import videoRouter from './routers/video.router';
 import notFoundHandler from './middlewares/notFoundHandler';
 import errorHandler from './middlewares/errorHandler';
 import connectMongo from './config/mongo';
-import { TorrentPath, TorrentState, UserPayload, VideoState } from './@types';
+import { TorrentState, UserPayload, VideoState } from './@types';
 import logger from './config/logger';
-import * as rabbitMQ from './rabbitmq';
+// import * as rabbitMQ from './rabbitmq';
 import { TorrentModel } from './models/torrent.schema';
 import authRouter from './routers/auth.router';
 import { UserModel } from './models/user.schema';
 import mediaShareRouter from './routers/mediaShare.router';
-import { UserVideoProgressModel } from './models/userVideoProgress.schema';
-import { MediaShareModel } from './models/MediaShare';
-import { VideoResolver, TorrentResolver, UserResolver, SharedPlaylistResolver } from './graphql/resolvers/resolver';
-import watchPartyRouter from './routers/watchparty.router';
+// import { UserVideoProgressModel } from './models/userVideoProgress.schema';
+// import { MediaShareModel } from './models/MediaShare';
+import {
+  VideoResolver,
+  TorrentResolver,
+  UserResolver,
+  SharedPlaylistResolver,
+  WatchPartyResolver,
+} from './graphql/resolvers/resolver';
 import socketHandler from './libs/socketHandler';
 
 dotenv.config();
@@ -40,7 +46,7 @@ const PORT = 3000;
 (async () => {
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
-      resolvers: [TorrentResolver, VideoResolver, UserResolver, SharedPlaylistResolver],
+      resolvers: [TorrentResolver, VideoResolver, UserResolver, SharedPlaylistResolver, WatchPartyResolver],
       validate: false,
     }),
     context: ({ req }) => {
@@ -53,7 +59,15 @@ const PORT = 3000;
 
       return { user };
     },
+    formatError(error) {
+      logger.error(`Apollo Server Error ${JSON.stringify(error)}`);
+      return error;
+    },
     debug: isDevelopment,
+    plugins:
+      process.env.NODE_ENV === 'development'
+        ? [ApolloServerPluginLandingPageLocalDefault({ footer: false, embed: true })]
+        : [],
   });
   await apolloServer.start();
 
@@ -96,7 +110,6 @@ const PORT = 3000;
   app.use('/video', videoRouter);
   app.use('/auth', authRouter);
   app.use('/share', mediaShareRouter);
-  app.use('/watch-party', watchPartyRouter);
 
   io.on('connection', socketHandler);
 
@@ -135,18 +148,18 @@ const PORT = 3000;
       );
 
       if (process.env.NODE_ENV === 'development') {
-        await fs.emptyDir(TorrentPath.DOWNLOAD);
-        await fs.emptyDir(TorrentPath.TMP);
-        await fs.emptyDir(TorrentPath.SUBTITLES);
-        rabbitMQ.publisherChannel.ackAll();
-        rabbitMQ.torrentChannel.ackAll();
-        rabbitMQ.cpuIntensiveVideoProcessingChannel.ackAll();
-        rabbitMQ.videoInspectionChannel.ackAll();
-        rabbitMQ.fileManagerChannel.ackAll();
-        rabbitMQ.nonCpuIntensiveVideoProcessingChannel.ackAll();
-        await TorrentModel.deleteMany({});
-        await UserVideoProgressModel.deleteMany({});
-        await MediaShareModel.deleteMany({});
+        // await fs.emptyDir(TorrentPath.DOWNLOAD);
+        // await fs.emptyDir(TorrentPath.TMP);
+        // await fs.emptyDir(TorrentPath.SUBTITLES);
+        // rabbitMQ.publisherChannel.ackAll();
+        // rabbitMQ.torrentChannel.ackAll();
+        // rabbitMQ.cpuIntensiveVideoProcessingChannel.ackAll();
+        // rabbitMQ.videoInspectionChannel.ackAll();
+        // rabbitMQ.fileManagerChannel.ackAll();
+        // rabbitMQ.nonCpuIntensiveVideoProcessingChannel.ackAll();
+        // await TorrentModel.deleteMany({});
+        // await UserVideoProgressModel.deleteMany({});
+        // await MediaShareModel.deleteMany({});
       }
       logger.info(`🚀 Listening at http://localhost:${PORT}`);
     } catch (error) {

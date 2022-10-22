@@ -1,44 +1,28 @@
 import { Socket } from 'socket.io';
 import logger from '../config/logger';
 import { WatchPartyModel } from '../models/watchParty';
-import WatchParty, { Member, PartyConstructor } from './watchParty';
-// const onConnection = (socket: Socket): void => {
-//   console.log('a user connected :', socket.id);
-//   socket.on(SyncStreamsEvents.CREATED, (data: Stream) => {
-//     socket.join(data.id);
-//     syncStreams.addStream(data);
-//   });
-//   socket.on(SyncStreamsEvents.NEW_MEMBER_JOINED, (data: { streamId: string; member: string }) => {
-//     socket.join(data.streamId);
-//     syncStreams.addMember(data.streamId, data.member);
-//   });
-//   socket.on(SyncStreamsEvents.PLAY, (data: { streamId: string }) => {
-//     console.log(data);
-//     socket.to(data.streamId).emit(SyncStreamsEvents.PLAY, data);
-//   });
-//   socket.on(SyncStreamsEvents.PAUSE, (data: { streamId: string }) => {
-//     socket.to(data.streamId).emit(SyncStreamsEvents.PAUSE);
-//   });
-//   socket.on(SyncStreamsEvents.SEEKED, (data: { streamId: string; seekTime: number }) => {
-//     socket.to(data.streamId).emit(SyncStreamsEvents.SEEKED, data);
-//   });
-//   socket.on('disconnect', () => {
-//     console.log('a user disconnected :', socket.id);
-//   });
-// };
+import WatchParty, { IPlayer, Member, PartyConstructor, Player } from './watchParty';
 
 enum RoomEvent {
   // emitted when a user tries to join a room
-  JOIN = 'join',
+  MEMBER_JOIN = 'join',
+  MEMBER_LEAVE = 'leave',
   PLAY = 'play',
   PAUSE = 'pause',
-  SEEKED = 'seeked',
+  RESUME = 'resume',
+  SEEK_TO = 'seekTo',
+  CURRENT_TIME_UPDATE = 'currentTimeUpdate',
   PLAYER_UPDATE = 'playerUpdate',
 
   // client events
 
-  JOINED = 'joined', // emitted when a user joins a room successfully
+  MEMBER_JOINED = 'joined', // emitted when a user joins a room successfully
+  MEMBER_LEFT = 'left', // emitted when a user leaves a room
   PLAYED = 'played',
+  RESUMED = 'resumed',
+  SEEKED_TO = 'seekedTo',
+  PAUSED = 'paused',
+  CURRENT_TIME_UPDATED = 'currentTimeUpdated',
   PLAYER_UPDATED = 'playerUpdated',
 }
 
@@ -49,6 +33,22 @@ enum RoomErrorEvent {
 // INFO: it contains all the watch parties
 const ROOMS = new Map<string, WatchParty>();
 
+const getRoomPlayer = (slug: string): Player => {
+  const room = ROOMS.get(slug);
+  if (!room) {
+    logger.error(`room not found: ${slug}`);
+    throw new Error('room not found');
+  }
+
+  const player = room.getPlayer();
+
+  if (!player) {
+    throw new Error('player not found');
+  }
+
+  return player;
+};
+
 interface JoinRoomData {
   slug: string;
   member: Omit<Member, 'id'>;
@@ -57,7 +57,7 @@ interface JoinRoomData {
 const socketHandler = (socket: Socket): void => {
   logger.debug(`a user connected : ${socket.id}`);
 
-  socket.on(RoomEvent.JOIN, async (data: JoinRoomData) => {
+  socket.on(RoomEvent.MEMBER_JOIN, async (data: JoinRoomData) => {
     const { slug, member } = data;
 
     const roomData = await WatchPartyModel.findOne({ slug });
@@ -88,44 +88,120 @@ const socketHandler = (socket: Socket): void => {
 
     const { roomInfo } = room;
 
-    socket.to(slug).emit(RoomEvent.JOINED, roomInfo);
+    socket.to(slug).emit(RoomEvent.MEMBER_JOINED, roomInfo);
   });
 
-  // socket.on(RoomEvent.PLAYER_UPDATE, (data: { slug: string; playerInfo: PlayerInfo }) => {
-  //   const { slug, playerInfo } = data;
-  //   const room = ROOMS.get(slug);
-  //   if (!room) {
-  //     logger.error(`room not found: ${slug}`);
-  //     return;
-  //   }
-  //   room.playerInfo = playerInfo;
-  //   socket.to(slug).emit(RoomEvent.PLAYER_UPDATED, playerInfo);
-  // });
-
-  // socket.on(RoomEvent.PLAY, (data: { slug: string }) => {
+  // socket.on(RoomEvent.MEMBER_LEFT, async (data: JoinRoomData) => {
   //   const { slug } = data;
+
+  //   const roomData = await WatchPartyModel.findOne({ slug });
+
+  //   if (!roomData) {
+  //     socket.emit(RoomErrorEvent.ROOM_NOT_FOUND, { slug });
+  //     socket.disconnect();
+  //     return;
+  //   }
+
   //   const room = ROOMS.get(slug);
   //   if (!room) {
   //     logger.error(`room not found: ${slug}`);
   //     return;
   //   }
+  //   room.removeMember(socket.id);
 
-  //   const { playerInfo } = room;
-
-  //   if (!playerInfo) {
-  //     logger.error(`player info not found: ${slug}`);
-  //     return;
-  //   }
-
-  //   if (playerInfo.isPlaying) {
-  //     logger.error(`player is already playing: ${slug}`);
-  //     return;
-  //   }
-
-  //   room.isPlaying = true;
-
-  //   socket.to(slug).emit(RoomEvent.PLAYED);
+  //   socket.to(slug).emit(RoomEvent.MEMBER_LEFT);
   // });
+
+  socket.on(RoomEvent.PLAYER_UPDATE, (data: { slug: string; playerInfo: IPlayer }) => {
+    try {
+      const { slug, playerInfo } = data;
+
+      const player = getRoomPlayer(slug);
+
+      player.playerInfo = playerInfo;
+
+      logger.debug(`player updated: ${JSON.stringify(player.playerInfo)}`);
+
+      socket.to(slug).emit(RoomEvent.PLAYER_UPDATED, player.playerInfo);
+    } catch (error) {
+      logger.error(error);
+    }
+  });
+
+  socket.on(RoomEvent.PLAY, (data: { slug: string }) => {
+    try {
+      const { slug } = data;
+      const player = getRoomPlayer(slug);
+
+      player.status = 'playing';
+
+      logger.debug('player played');
+
+      socket.to(slug).emit(RoomEvent.PLAYED);
+    } catch (error) {
+      logger.error(error);
+    }
+  });
+
+  socket.on(RoomEvent.PAUSE, (data: { slug: string }) => {
+    try {
+      const { slug } = data;
+      const player = getRoomPlayer(slug);
+
+      player.status = 'paused';
+
+      logger.debug('player paused');
+
+      socket.to(slug).emit(RoomEvent.PAUSED);
+    } catch (error) {
+      logger.error(error);
+    }
+  });
+
+  socket.on(RoomEvent.RESUME, (data: { slug: string }) => {
+    try {
+      const { slug } = data;
+      const player = getRoomPlayer(slug);
+
+      player.status = 'playing';
+
+      logger.debug('player resumed');
+
+      socket.to(slug).emit(RoomEvent.RESUMED);
+    } catch (error) {
+      logger.error(error);
+    }
+  });
+
+  socket.on(RoomEvent.SEEK_TO, (data: { slug: string; seekTime: number }) => {
+    try {
+      const { slug } = data;
+      const player = getRoomPlayer(slug);
+
+      if (!player) {
+        throw new Error('player not found');
+      }
+
+      logger.debug('player seeked');
+
+      socket.to(slug).emit(RoomEvent.SEEKED_TO, data);
+    } catch (error) {
+      logger.error(error);
+    }
+  });
+
+  socket.on(RoomEvent.CURRENT_TIME_UPDATE, (data: { slug: string; currentTime: number }) => {
+    try {
+      const { slug, currentTime } = data;
+      const player = getRoomPlayer(slug);
+
+      player.currentTime = currentTime;
+
+      logger.debug('player current time updated');
+    } catch (error) {
+      logger.error(error);
+    }
+  });
 
   socket.on('disconnect', () => {
     logger.debug(`a user disconnected : ${socket.id}`);

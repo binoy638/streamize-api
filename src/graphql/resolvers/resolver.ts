@@ -4,15 +4,16 @@
 
 /* eslint-disable class-methods-use-this */
 import { AuthenticationError, ForbiddenError } from 'apollo-server-express';
-import { Resolver, Query, Arg, InputType, Field, Ctx, Float } from 'type-graphql';
+import { Resolver, Query, Arg, InputType, Field, Ctx, Float, Mutation } from 'type-graphql';
 import { ITorrent, TorrentState, UserPayload } from '../../@types';
 import client from '../../config/webtorrent';
 import { MediaShareModel } from '../../models/MediaShare';
 import { TorrentModel } from '../../models/torrent.schema';
 import { UserDoc, UserModel } from '../../models/user.schema';
 import { UserVideoProgressModel } from '../../models/userVideoProgress.schema';
+import { WatchPartyModel } from '../../models/watchParty';
 import Utils from '../../utils';
-import { DiskUsage, SharedPlaylist, Torrent, Video } from '../typeDefs/typeDefs';
+import { DiskUsage, SharedPlaylist, Torrent, Video, WatchParty } from '../typeDefs/typeDefs';
 
 @Resolver()
 export class TorrentResolver {
@@ -145,5 +146,64 @@ export class SharedPlaylistResolver {
     const video = playlist.torrent.files.find(file => file.slug === input.videoSlug);
     if (!video) throw new Error('Video not found');
     return video;
+  }
+}
+
+@InputType({ description: 'New watch party data' })
+class AddWatchPartyInput implements Partial<WatchParty> {
+  @Field()
+  name!: string;
+
+  @Field()
+  maxViewers!: number;
+
+  @Field()
+  partyPlayerControl!: boolean;
+}
+
+@Resolver()
+export class WatchPartyResolver {
+  @Query(() => WatchParty)
+  async getWatchParty(@Arg('slug') slug: string) {
+    const party = await WatchPartyModel.findOne({ slug }).populate<{ host: UserDoc }>('host').lean();
+    if (!party) throw new Error('watch party not found');
+    return party;
+  }
+
+  @Query(() => [WatchParty])
+  async getUserWatchParties(@Ctx() ctx: { user: UserPayload }) {
+    if (!ctx.user) throw new AuthenticationError('User not found');
+    const parties = await WatchPartyModel.find({ host: ctx.user.id }).populate<{ host: UserDoc }>('host').lean();
+
+    return parties;
+  }
+
+  @Mutation(() => WatchParty)
+  async addWatchParty(@Arg('data') newWatchPartyData: AddWatchPartyInput, @Ctx() ctx: { user: UserPayload }) {
+    if (!ctx.user) throw new AuthenticationError('User not found');
+    const { name, partyPlayerControl, maxViewers } = newWatchPartyData;
+
+    const exists = await WatchPartyModel.findOne({ name });
+
+    if (exists) throw new Error('Watch party with that name already exists');
+
+    const newWatchParty = await WatchPartyModel.create({
+      host: ctx.user.id,
+      name,
+      partyPlayerControl,
+      maxViewers,
+    });
+
+    return newWatchParty;
+  }
+
+  @Mutation(() => Boolean)
+  async removeWatchParty(@Arg('slug') slug: string, @Ctx() ctx: { user: UserPayload }) {
+    if (!ctx.user) throw new AuthenticationError('User not found');
+
+    const party = await WatchPartyModel.findOne({ slug, host: ctx.user.id });
+    if (!party) throw new Error('Watch party not found');
+    await party.remove();
+    return true;
   }
 }

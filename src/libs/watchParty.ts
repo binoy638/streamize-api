@@ -37,7 +37,7 @@ export interface RoomInfo {
   playerInfo: IPlayer | null;
 }
 
-class Player {
+export class Player {
   private _torrentID: string;
 
   private _slug: string;
@@ -68,6 +68,15 @@ class Player {
       duration: this._duration,
       status: this._status,
     };
+  }
+
+  set playerInfo(playerInfo: IPlayer) {
+    this._torrentID = playerInfo.torrentID;
+    this._slug = playerInfo.slug;
+    this._title = playerInfo.title;
+    this._currentTime = playerInfo.currentTime;
+    this._duration = playerInfo.duration;
+    this._status = playerInfo.status;
   }
 
   set torrentID(torrentID: string) {
@@ -148,8 +157,8 @@ class WatchParty {
     this._members.push(member);
   }
 
-  public removeMember(member: Member): void {
-    this._members = this._members.filter(m => m.id !== member.id);
+  public removeMember(id: string): void {
+    this._members = this._members.filter(m => m.id !== id);
   }
 
   public getMember(memberId: string): Member | undefined {

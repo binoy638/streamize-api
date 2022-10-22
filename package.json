@@ -19,7 +19,7 @@
     "**/*.{js,ts,json}": "prettier --write"
   },
   "keywords": [],
-  "author": "binoy638",
+  "author": "Binoy Barman <binoy638@gmail.com>",
   "license": "MIT",
   "devDependencies": {
     "@types/amqplib": "^0.8.2",
@@ -57,6 +57,7 @@
     "@hapi/boom": "^9.1.4",
     "amqp-connection-manager": "^4.0.1",
     "amqplib": "^0.8.0",
+    "apollo-server-core": "^3.10.3",
     "apollo-server-express": "^3.9.0",
     "bcrypt": "^5.0.1",
     "check-disk-space": "^3.3.0",
@@ -83,8 +84,6 @@
     "webtorrent": "^1.7.1",
     "winston": "^3.5.1",
     "yup": "^0.32.11"
-  },  
-  "author": "Binoy Barman <binoy638@gmail.com>",
-  "license": "MIT",
+  },
   "repository": "https://github.com/binoy638/streamize-api.git"
 }

@@ -236,3 +236,24 @@ export class SharedPlaylist {
   @Field()
   expiresIn!: Date;
 }
+
+@ObjectType()
+export class WatchParty {
+  @Field(type => ID)
+  _id!: string;
+
+  @Field()
+  slug!: string;
+
+  @Field()
+  name!: string;
+
+  @Field(() => User)
+  host!: User;
+
+  @Field(() => Boolean)
+  partyPlayerControl!: boolean;
+
+  @Field()
+  maxViewers!: number;
+}
