@@ -18,11 +18,6 @@ export const streamVideo = async (req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  // const options = {
-  //   headers: {
-  //     'Access-Control-Allow-Origin': '*',
-  //   },
-  // };
   try {
     res.sendFile(path, error => {
       if (error) {

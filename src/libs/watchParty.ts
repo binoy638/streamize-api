@@ -169,6 +169,10 @@ class WatchParty {
     return this._members;
   }
 
+  get slug(): string {
+    return this._slug;
+  }
+
   get roomInfo(): RoomInfo {
     return {
       name: this._name,

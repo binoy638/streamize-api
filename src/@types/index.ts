@@ -93,6 +93,6 @@ export interface RequestPayload {
 export interface UserPayload {
   id: string;
   isAdmin: boolean;
-  username: boolean;
+  username: string;
   allocatedMemory: number;
 }

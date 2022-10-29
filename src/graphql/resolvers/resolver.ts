@@ -20,6 +20,7 @@ export class TorrentResolver {
   @Query(() => [Torrent])
   //! pagination
   async torrents(@Ctx() ctx: { user: UserPayload }) {
+    console.log(ctx);
     if (!ctx.user) throw new AuthenticationError('User not found');
     const userDoc = await UserModel.findById(ctx.user.id)
       .sort({ createdAt: 1 })
@@ -143,6 +144,9 @@ export class SharedPlaylistResolver {
       .populate<{ torrent: ITorrent }>('torrent')
       .lean();
     if (!playlist) throw new Error('Playlist not found');
+
+    //! check if playlist is torrent
+
     const video = playlist.torrent.files.find(file => file.slug === input.videoSlug);
     if (!video) throw new Error('Video not found');
     return video;
@@ -161,6 +165,18 @@ class AddWatchPartyInput implements Partial<WatchParty> {
   partyPlayerControl!: boolean;
 }
 
+@InputType()
+class WatchPartyVideoInput {
+  @Field()
+  watchPartySlug!: string;
+
+  @Field()
+  torrentSlug!: string;
+
+  @Field()
+  videoSlug!: string;
+}
+
 @Resolver()
 export class WatchPartyResolver {
   @Query(() => WatchParty)
@@ -176,6 +192,23 @@ export class WatchPartyResolver {
     const parties = await WatchPartyModel.find({ host: ctx.user.id }).populate<{ host: UserDoc }>('host').lean();
 
     return parties;
+  }
+
+  @Query(() => Video)
+  async getWatchPartyVideo(@Arg('input') input: WatchPartyVideoInput) {
+    const party = await WatchPartyModel.findOne({ slug: input.watchPartySlug });
+
+    if (!party) throw new Error('Watch party not found');
+    const torrent = await TorrentModel.findOne({ slug: input.torrentSlug }).lean();
+    if (!torrent) throw new Error('Torrent not found');
+
+    const haveAccess = await UserModel.find({ _id: party.host, torrents: { $in: [torrent._id] } });
+
+    if (!haveAccess) throw new ForbiddenError('No access');
+
+    const video = torrent.files.find(file => file.slug === input.videoSlug);
+    if (!video) throw new Error('Video not found');
+    return video;
   }
 
   @Mutation(() => WatchParty)

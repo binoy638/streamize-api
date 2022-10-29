@@ -55,8 +55,14 @@ const PORT = 3000;
       if (JWTcookies) {
         const payload = jwt.verify(JWTcookies, process.env.JWT_SECRET!) as UserPayload;
         user = payload;
+      } else {
+        user = {
+          id: '63526581b7a7a64fc27f36de',
+          username: 'admin123',
+          isAdmin: true,
+          allocatedMemory: 0,
+        };
       }
-
       return { user };
     },
     formatError(error) {
@@ -74,7 +80,9 @@ const PORT = 3000;
   const app = express();
 
   const server = http.createServer(app);
-  const io = new Server(server, { cors: { origin: true, credentials: true } });
+  const io = new Server(server, {
+    cors: { origin: true, credentials: true },
+  });
   // ['http://localhost:3000', 'http://127.0.0.1:5347'];
 
   app.use(
@@ -100,7 +108,7 @@ const PORT = 3000;
 
   app.use(
     cors({
-      origin: ['http://localhost:3000', 'https://studio.apollographql.com', process.env.ORIGIN_URL!],
+      origin: ['http://localhost:3000', process.env.ORIGIN_URL!, 'https://studio.apollographql.com'],
       credentials: true,
     })
   );

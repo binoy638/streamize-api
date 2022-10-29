@@ -1,7 +1,7 @@
-import { Socket } from 'socket.io';
+import type { Socket } from 'socket.io';
 import logger from '../config/logger';
 import { WatchPartyModel } from '../models/watchParty';
-import WatchParty, { IPlayer, Member, PartyConstructor, Player } from './watchParty';
+import WatchParty, { IPlayer, Member, PartyConstructor, Player, RoomInfo } from './watchParty';
 
 enum RoomEvent {
   // emitted when a user tries to join a room
@@ -30,6 +30,32 @@ enum RoomErrorEvent {
   ROOM_NOT_FOUND = 'room-not-found',
 }
 
+interface JoinRoomData {
+  slug: string;
+  member: Member;
+}
+
+interface ServerToClientEvents {
+  [RoomEvent.MEMBER_JOINED]: (data: RoomInfo) => void;
+  [RoomErrorEvent.ROOM_NOT_FOUND]: (data: { slug: string }) => void;
+  [RoomEvent.PLAYER_UPDATED]: (data: IPlayer) => void;
+  [RoomEvent.PLAYED]: () => void;
+  [RoomEvent.PAUSED]: () => void;
+  [RoomEvent.RESUMED]: () => void;
+  [RoomEvent.SEEKED_TO]: (data: { slug: string; seekTime: number }) => void;
+  [RoomEvent.MEMBER_LEFT]: (data: Member) => void;
+}
+
+interface ClientToServerEvents {
+  [RoomEvent.PLAYER_UPDATE]: (data: { slug: string; playerInfo: IPlayer }) => void;
+  [RoomEvent.PLAY]: (data: { slug: string }) => void;
+  [RoomEvent.PAUSE]: (data: { slug: string }) => void;
+  [RoomEvent.RESUME]: (data: { slug: string }) => void;
+  [RoomEvent.SEEK_TO]: (data: { slug: string; seekTime: number }) => void;
+  [RoomEvent.MEMBER_JOIN]: (data: JoinRoomData) => void;
+  [RoomEvent.CURRENT_TIME_UPDATE]: (data: { slug: string; currentTime: number }) => void;
+}
+
 // INFO: it contains all the watch parties
 const ROOMS = new Map<string, WatchParty>();
 
@@ -49,21 +75,17 @@ const getRoomPlayer = (slug: string): Player => {
   return player;
 };
 
-interface JoinRoomData {
-  slug: string;
-  member: Omit<Member, 'id'>;
-}
+const socketHandler = (socket: Socket<ClientToServerEvents, ServerToClientEvents>): void => {
+  logger.info(`a user connected : ${socket.id}`);
 
-const socketHandler = (socket: Socket): void => {
-  logger.debug(`a user connected : ${socket.id}`);
-
-  socket.on(RoomEvent.MEMBER_JOIN, async (data: JoinRoomData) => {
+  socket.on(RoomEvent.MEMBER_JOIN, async data => {
     const { slug, member } = data;
-
+    logger.debug(`member join: ${slug}`);
     const roomData = await WatchPartyModel.findOne({ slug });
 
     if (!roomData) {
       socket.emit(RoomErrorEvent.ROOM_NOT_FOUND, { slug });
+      logger.debug(`room not found: ${slug}`);
       socket.disconnect();
       return;
     }
@@ -83,7 +105,12 @@ const socketHandler = (socket: Socket): void => {
       room = new WatchParty(roomConstructor);
       ROOMS.set(slug, room);
     }
-    room.addMember({ ...member, id: socket.id });
+
+    // Initially the is will contain the host id so that we can check if the host is the one who is joining the room
+
+    const isHost = String(roomData.host) === member.id;
+
+    room.addMember({ ...member, isHost, id: socket.id });
     socket.join(slug);
 
     const { roomInfo } = room;
@@ -112,7 +139,7 @@ const socketHandler = (socket: Socket): void => {
   //   socket.to(slug).emit(RoomEvent.MEMBER_LEFT);
   // });
 
-  socket.on(RoomEvent.PLAYER_UPDATE, (data: { slug: string; playerInfo: IPlayer }) => {
+  socket.on(RoomEvent.PLAYER_UPDATE, data => {
     try {
       const { slug, playerInfo } = data;
 
@@ -204,7 +231,24 @@ const socketHandler = (socket: Socket): void => {
   });
 
   socket.on('disconnect', () => {
-    logger.debug(`a user disconnected : ${socket.id}`);
+    logger.info(`a user disconnected : ${socket.id}`);
+
+    // eslint-disable-next-line unicorn/no-array-for-each
+    ROOMS.forEach(room => {
+      // remove the member from the room array and emit a event to the clients of the room
+      const member = room.getMember(socket.id);
+      if (member) {
+        logger.info(`member left: ${member.id}`);
+        room.removeMember(socket.id);
+        socket.to(room.slug).emit(RoomEvent.MEMBER_LEFT, member);
+      }
+
+      // if room is empty then remove the room from the map
+      if (room.members.length === 0) {
+        logger.info(`deleting empty room: ${room.slug}`);
+        ROOMS.delete(room.slug);
+      }
+    });
   });
 };
 
