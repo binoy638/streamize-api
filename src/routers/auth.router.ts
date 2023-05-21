@@ -28,6 +28,8 @@ authRouter.post('/signin', validator(loginValidator), authController.signin);
 
 authRouter.post('/verify', getCurrentUser, authController.verifyUser);
 
+authRouter.post('/log', authController.log);
+
 authRouter.post('/signout', authController.signout);
 
 export default authRouter;

@@ -17,6 +17,16 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+export const log = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    logger.info(JSON.stringify(req.body));
+    res.sendStatus(200);
+  } catch (error) {
+    logger.error(error);
+    next(boom.internal('Internal server error'));
+  }
+};
+
 export const signin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { username, password } = req.body;
   try {
