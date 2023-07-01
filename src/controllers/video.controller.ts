@@ -2,10 +2,11 @@
 import { NextFunction, Request, Response } from 'express';
 import boom from '@hapi/boom';
 import fs from 'fs-extra';
-import { TorrentPath } from '../@types';
+import { ISubtitle, TorrentPath } from '../@types';
 import logger from '../config/logger';
 import Utils from '../utils';
 import { UserVideoProgressModel } from '../models/userVideoProgress.schema';
+import { TorrentModel } from '../models/torrent.schema';
 
 export const streamVideo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { videoSlug, filename } = req.params;
@@ -136,6 +137,58 @@ export const getUserVideoProgress = async (req: Request, res: Response, next: Ne
       return;
     }
     res.sendStatus(404);
+  } catch (error) {
+    logger.error(error);
+    next(boom.internal('Internal server error'));
+  }
+};
+
+export const addSubtitle = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { torrentSlug, videoSlug, language, title, index } = req.body;
+
+    if (!videoSlug || !language || !title || !index) {
+      next(boom.badRequest('Invalid payload'));
+      return;
+    }
+
+    const torrent = await TorrentModel.findOne({ slug: torrentSlug });
+
+    if (!torrent) {
+      next(boom.notFound('torrent does not exists'));
+      return;
+    }
+
+    const video = await Utils.getVideoFile(videoSlug, false);
+    if (!video) {
+      next(boom.notFound('video not found'));
+      return;
+    }
+
+    const { file } = req;
+    const filename = `${videoSlug}-${language}-${index}.vtt`;
+    const path = `${TorrentPath.SUBTITLES}/${videoSlug}/${filename}`;
+
+    logger.debug(`${filename}`);
+    logger.debug(`${path}`);
+
+    if (file) {
+      fs.moveSync(file.path, path);
+    }
+
+    const sub: ISubtitle = {
+      fileName: filename,
+      title,
+      language,
+      path,
+    };
+
+    await TorrentModel.updateOne(
+      { _id: torrent._id, 'files.slug': videoSlug },
+      { $push: { 'files.$.subtitles': sub } }
+    );
+
+    res.sendStatus(204);
   } catch (error) {
     logger.error(error);
     next(boom.internal('Internal server error'));

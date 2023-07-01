@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import * as videoController from '../controllers/video.controller';
 import { getCurrentUser } from '../middlewares/currentUser.middleware';
 import { validator } from '../middlewares/validator.middleware';
@@ -9,6 +10,8 @@ import {
 } from '../validators/video.validator';
 
 const videoRouter = Router();
+
+const upload = multer({ dest: 'uploads/' });
 
 videoRouter.get(
   '/stream/:videoSlug/:filename',
@@ -41,5 +44,13 @@ videoRouter.get(
   validator(videoProgressGetValidator),
   videoController.getUserVideoProgress
 );
+
+videoRouter.get(
+  '/progress/:videoSlug',
+  getCurrentUser,
+  validator(videoProgressGetValidator),
+  videoController.getUserVideoProgress
+);
+videoRouter.post('/subtitle', upload.single('file'), videoController.addSubtitle);
 
 export default videoRouter;

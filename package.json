@@ -19,7 +19,7 @@
     "**/*.{js,ts,json}": "prettier --write"
   },
   "keywords": [],
-  "author": "binoy638",
+  "author": "Binoy Barman <binoy638@gmail.com>",
   "license": "MIT",
   "devDependencies": {
     "@types/amqplib": "^0.8.2",
@@ -33,6 +33,7 @@
     "@types/jest": "^26.0.24",
     "@types/jsonwebtoken": "^8.5.8",
     "@types/morgan": "^1.9.3",
+    "@types/multer": "^1.4.7",
     "@types/node": "^16.4.12",
     "@types/webtorrent": "^0.109.3",
     "@typescript-eslint/eslint-plugin": "^4.29.0",
@@ -72,6 +73,7 @@
     "jsonwebtoken": "^8.5.1",
     "mongoose": "^6.1.8",
     "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
     "nanoid": "^3.2.0",
     "pretty-bytes": "^5.6.0",
     "redis": "^4.0.3",
@@ -83,8 +85,6 @@
     "webtorrent": "^1.7.1",
     "winston": "^3.5.1",
     "yup": "^0.32.11"
-  },  
-  "author": "Binoy Barman <binoy638@gmail.com>",
-  "license": "MIT",
+  },
   "repository": "https://github.com/binoy638/streamize-api.git"
 }
