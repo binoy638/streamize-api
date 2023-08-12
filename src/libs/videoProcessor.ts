@@ -77,15 +77,15 @@ class VideoProcessor extends SubtitleProcessor {
   // }
 
   public async convertToHLS(): Promise<string> {
-    const { audioCodec, videoCodec } = await this.getCompatibleCodecs();
+    const { audioCodec } = await this.getCompatibleCodecs();
     const outputPath = `${this.baseDir}/${this.video.slug}/${this.video.slug}.m3u8`;
     await fs.ensureDir(`${this.baseDir}/${this.video.slug}`);
     return new Promise<string>((resolve, reject) => {
       ffmpeg(this.video.path)
         .audioCodec(audioCodec)
         .audioChannels(2)
-
-        .videoCodec(videoCodec)
+        // .videoCodec(videoCodec)
+        .size('854x480')
         .outputOption(['-sn', `-hls_time ${config.hls_time}`, '-hls_list_size 0', '-f hls'])
         .output(outputPath)
         .on('start', async () => {
