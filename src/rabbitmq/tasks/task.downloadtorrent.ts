@@ -49,11 +49,11 @@ export const downloadTorrent =
         });
 
         const diskSpace = await Utils.getUserDiskUsage(currentUser);
-        console.log({ diskSpace });
         //* need double the size of the torrent for HLS conversion
         if (torrent.length * 2 > diskSpace.free) {
           torrent.destroy({ destroyStore: true });
-          logger.error(`Not enough space to download torrent ${addedTorrent.name}`);
+          logger.error(`Not enough space to download torrent ${addedTorrent.slug}`);
+          logger.error(JSON.stringify({ free: diskSpace.free, torrentSize: torrent.length }));
           await TorrentModel.updateOne({ _id: addedTorrent._id }, { status: TorrentState.ERROR });
           return;
         }
