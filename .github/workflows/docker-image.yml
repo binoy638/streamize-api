@@ -20,6 +20,7 @@ jobs:
           ORIGIN_URL: ${{ secrets.ORIGIN_URL }}
           GUEST_USER: ${{ secrets.GUEST_USER }}
           GUEST_PASSWORD: ${{ secrets.GUEST_PASSWORD }}
+          GUEST_STORAGE: ${{ secrets.GUEST_STORAGE }}
         run: |
           cat <<EOF > .env
           JWT_SECRET=$JWT_SECRET
@@ -29,6 +30,7 @@ jobs:
           ORIGIN_URL=$ORIGIN_URL
           GUEST_USER=$GUEST_USER
           GUEST_PASSWORD=$GUEST_PASSWORD
+          GUEST_STORAGE=$GUEST_STORAGE
           EOF
           echo "cat .env"
           cat .env
