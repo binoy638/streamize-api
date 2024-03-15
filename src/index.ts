@@ -70,9 +70,9 @@ const PORT = 3000;
       contentSecurityPolicy: !isDevelopment,
     })
   );
-  if (isDevelopment) {
-    app.use(morgan('common'));
-  }
+  // if (isDevelopment) {
+  app.use(morgan('common'));
+  // }
   app.set('trust proxy', true);
 
   app.use(
