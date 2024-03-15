@@ -196,15 +196,18 @@ const PORT = 3000;
       }
 
       if (process.env.GUEST_USER && process.env.GUEST_PASSWORD && process.env.GUEST_STORAGE) {
-        // const guestUser = await UserModel.findOneAndDelete({ username: 'guest' });
-        await UserModel.findOneAndDelete({ username: 'guest' });
-        // if (!guestUser) {
-        await UserModel.create({
-          username: process.env.GUEST_USER,
-          password: process.env.GUEST_PASSWORD,
-          allocatedMemory: process.env.GUEST_STORAGE,
-        });
-        // }
+        const guestUser = await UserModel.findOne({ username: 'guest' });
+        if (!guestUser) {
+          logger.info('Guest user not found');
+          logger.info('Creating guest user.....');
+          await UserModel.create({
+            username: process.env.GUEST_USER,
+            password: process.env.GUEST_PASSWORD,
+            allocatedMemory: process.env.GUEST_STORAGE,
+          });
+        } else {
+          logger.info('Guest user found');
+        }
       }
     } catch (error) {
       logger.error(error);
