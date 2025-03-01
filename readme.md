@@ -1,5 +1,5 @@
 
-# Streamize - Stream Torrent Videos Online (Server)
+# Streamize - Stream Torrent Videos Online (Server).
 
 Streamize is a web app which allows you to download torrents in a remote server and stream them right from your browser.
 
