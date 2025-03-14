@@ -1,5 +1,5 @@
 version: "3.7"
- 
+
 services:
   mongo:
     container_name: streamize-mongo
@@ -41,22 +41,20 @@ services:
     container_name: streamize-api
     networks:
       - nginx-network
-    restart: on-failure:5 
+    restart: on-failure:5
     volumes:
       - /home/tmp:/home/app/tmp
       - /home/downloads:/home/app/downloads
       - /home/subtitles:/home/app/subtitles
 
     command: npm start
+    ports: -"3000:3000"
     depends_on:
       mongo:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
-     
-
 networks:
   nginx-network:
     external: true
-
