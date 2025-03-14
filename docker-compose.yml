@@ -48,7 +48,8 @@ services:
       - /home/subtitles:/home/app/subtitles
 
     command: npm start
-    ports: -"3000:3000"
+    ports:
+      - "3000:3000"
     depends_on:
       mongo:
         condition: service_healthy
