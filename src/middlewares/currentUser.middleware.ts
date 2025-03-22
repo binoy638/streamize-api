@@ -16,6 +16,7 @@ declare global {
 
 export const getCurrentUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   if (!req.session?.jwt) {
+    logger.error("jwt not found")
     next(boom.unauthorized('Not authorized'));
     return;
   }
@@ -26,6 +27,7 @@ export const getCurrentUser = async (req: Request, res: Response, next: NextFunc
     next();
   } catch (error) {
     logger.error(error);
+    logger.error("error while verifying jwt")
     next(boom.unauthorized('Not authorized'));
   }
 };
