@@ -73,7 +73,7 @@ const PORT = 3000;
   // if (isDevelopment) {
   app.use(morgan('common'));
   // }
-  app.set('trust proxy', true);
+  // app.set('trust proxy', true);
 
   app.use(
     cookieSession({
