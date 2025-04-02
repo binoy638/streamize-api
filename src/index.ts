@@ -80,8 +80,9 @@ const PORT = 3000;
       secret: process.env.COOKIE_SECRET!,
       maxAge: 24 * 60 * 60 * 1000 * 7,
       sameSite: 'none',
-      secure: false,
+      secure: true,
       httpOnly: !isDevelopment,
+       domain: '.backendev.com',
       path: '/'
     })
   );
