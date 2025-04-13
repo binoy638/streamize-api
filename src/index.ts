@@ -73,7 +73,7 @@ const PORT = 3000;
   // if (isDevelopment) {
   app.use(morgan('common'));
   // }
-  // app.set('trust proxy', true);
+  app.set('trust proxy', 1);
 
   app.use(
     cookieSession({
@@ -82,8 +82,8 @@ const PORT = 3000;
       sameSite: 'none',
       secure: true,
       httpOnly: !isDevelopment,
-       domain: '.backendev.com',
-      path: '/'
+      domain: '.backendev.com',
+      path: '/',
     })
   );
 
