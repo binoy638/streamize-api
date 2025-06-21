@@ -64,5 +64,6 @@ export const processVideo =
       }
     } else {
       logger.error(`file already converted file: ${file.name}`);
+      channel.ack(message);
     }
   };
