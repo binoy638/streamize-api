@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamize - Torrent Detail</title>
+  <link rel="stylesheet" href="../css/streamize.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="../index.html"><div class="brand-mark">S</div><div class="brand-copy"><strong>Streamize</strong><span>media server</span></div></a>
+      <nav class="nav-section primary"><div class="nav-label">Control</div><a class="nav-item" href="library.html"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4zM8 10h8M8 14h5" stroke-width="2"/></svg>Library</a><a class="nav-item active" href="torrents.html"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 19h14" stroke-width="2"/></svg>Torrents</a><a class="nav-item" href="jobs.html"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12a7 7 0 1 0 7-7M12 5v7l4 2" stroke-width="2"/></svg>Jobs</a><a class="nav-item" href="shares.html"><svg viewBox="0 0 24 24" fill="none"><path d="M8 12h8M9 8H7a4 4 0 0 0 0 8h2m6-8h2a4 4 0 0 1 0 8h-2" stroke-width="2"/></svg>Shares</a><a class="nav-item" href="admin-users.html"><svg viewBox="0 0 24 24" fill="none"><path d="M16 11a4 4 0 1 0-8 0m11 9a7 7 0 0 0-14 0M18 5v4m2-2h-4" stroke-width="2"/></svg>Admin</a></nav>
+      <nav class="nav-section secondary"><div class="nav-label">System</div><a class="nav-item" href="settings.html"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v3m0 12v3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1M3 12h3m12 0h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke-width="2"/></svg>Settings</a><a class="nav-item" href="style-guide.html"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16M4 12h16M4 19h10" stroke-width="2"/></svg>Style guide</a></nav>
+      <div class="sidebar-footer"><div class="status-line"><span>Job worker</span><span><i class="status-dot"></i></span></div></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div class="page-title"><strong>Neon Harbor S02</strong><span>Torrent detail</span></div><label class="search"><svg viewBox="0 0 24 24" fill="none"><path d="m21 21-4.5-4.5M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="2"/></svg><input placeholder="Search files, jobs, subtitles"></label><div class="topbar-actions"><span class="badge processing">Processing</span><button class="btn" data-open-modal="share-modal">Share</button></div></header>
+      <section class="content" data-tabs-root>
+        <div class="detail-hero">
+          <div class="detail-poster"><span class="badge processing">HLS 62%</span><strong>Neon Harbor</strong></div>
+          <div class="panel">
+            <div class="screen-header" style="margin-bottom:14px">
+              <div><span class="eyebrow">Torrent / media detail</span><h1>Processing from source to watchable HLS.</h1><p>Every tab answers a support question: what was downloaded, what was selected, what failed, and what is shareable.</p></div>
+              <div class="header-actions"><button class="btn">Retry failed jobs</button><button class="btn btn-danger">Delete</button></div>
+            </div>
+            <div class="stats-row" style="margin-bottom:0">
+              <div class="stat-card"><span>Download</span><strong>100%</strong><small>18.4 GB</small></div>
+              <div class="stat-card"><span>Processing</span><strong>62%</strong><small>HLS segment 418</small></div>
+              <div class="stat-card"><span>Selected files</span><strong>8</strong><small>6 video, 2 subs</small></div>
+              <div class="stat-card"><span>Shares</span><strong>2</strong><small>1 expires today</small></div>
+            </div>
+          </div>
+        </div>
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab-target="overview">Overview</button>
+          <button class="tab" data-tab-target="files">Files</button>
+          <button class="tab" data-tab-target="jobs">Processing Jobs</button>
+          <button class="tab" data-tab-target="subtitles">Subtitles</button>
+          <button class="tab" data-tab-target="shares">Shares</button>
+        </div>
+        <div class="tab-panel panel" data-tab-panel="overview">
+          <div class="panel-header"><div><div class="panel-title">Overview</div><p class="muted">Source, output, and current operation.</p></div></div>
+          <div class="setting-row"><div><strong>Source path</strong><div class="muted mono">/mnt/media/incoming/neon-harbor-s02</div></div><span class="badge ready">Verified</span></div>
+          <div class="setting-row"><div><strong>Output path</strong><div class="muted mono">/mnt/media/library/series/neon-harbor/s02</div></div><span class="badge processing">Writing</span></div>
+          <div class="setting-row"><div><strong>Continue watching</strong><div class="muted">Episode 4 at 00:38:12</div></div><a class="btn" href="player.html">Resume</a></div>
+        </div>
+        <div class="tab-panel panel" data-tab-panel="files" hidden>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>File</th><th>Selected</th><th>Size</th><th>Codec</th><th>Action</th></tr></thead><tbody><tr><td>Neon.Harbor.S02E04.mkv</td><td><span class="badge ready">Yes</span></td><td class="mono">6.2 GB</td><td>HEVC / AAC</td><td><button class="btn btn-ghost">Preview</button></td></tr><tr><td>Neon.Harbor.S02E04.en.srt</td><td><span class="badge ready">Yes</span></td><td class="mono">84 KB</td><td>Subtitle</td><td><button class="btn btn-ghost">Edit</button></td></tr><tr><td>sample.mkv</td><td><span class="badge paused">No</span></td><td class="mono">58 MB</td><td>HEVC</td><td><button class="btn btn-ghost">Select</button></td></tr></tbody></table></div>
+        </div>
+        <div class="tab-panel panel" data-tab-panel="jobs" hidden>
+          <div class="timeline"><div class="timeline-item"><i class="timeline-dot"></i><div><strong>ffprobe metadata</strong><div class="muted">Duration, streams, chapters, audio tracks captured.</div></div><span class="badge complete">Complete</span></div><div class="timeline-item"><i class="timeline-dot"></i><div><strong>HLS generation</strong><div class="muted">Segmenting 1080p output, rendition 3 of 4.</div></div><span class="badge processing">62%</span></div><div class="timeline-item"><i class="timeline-dot"></i><div><strong>Thumbnail sprites</strong><div class="muted">Queued after HLS manifest is complete.</div></div><span class="badge paused">Queued</span></div></div>
+        </div>
+        <div class="tab-panel panel" data-tab-panel="subtitles" hidden>
+          <div class="setting-row"><div><strong>English</strong><div class="muted">Imported from torrent</div></div><span class="badge ready">Default</span></div>
+          <div class="setting-row"><div><strong>Spanish</strong><div class="muted">Auto-match confidence 82%</div></div><button class="btn">Approve</button></div>
+        </div>
+        <div class="tab-panel panel" data-tab-panel="shares" hidden>
+          <div class="setting-row"><div><strong>Episode 4 public link</strong><div class="muted mono">/s/nh-s02e04-24h</div></div><button class="btn btn-danger">Revoke</button></div>
+          <div class="setting-row"><div><strong>Season review link</strong><div class="muted">Expires in 6 days</div></div><span class="badge expiring">Expiring</span></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="modal-backdrop" id="share-modal" role="dialog" aria-modal="true" aria-label="Create share"><form class="modal" data-share-form><div class="modal-header"><strong>Create expiring share</strong><button class="icon-btn" type="button" data-close-modal aria-label="Close">x</button></div><div class="modal-body form-grid"><div class="field"><label>Expiration</label><select class="select"><option>24 hours</option><option>7 days</option><option>30 days</option></select></div><div class="field"><label>Scope</label><select class="select"><option>Single video</option><option>Full torrent</option></select></div><div class="alert alert-success" data-share-result>Share created.</div><div class="share-link"><input class="input" id="detail-link" value="https://streamize.local/s/nh-s02e04"><button class="btn" type="button" data-copy="#detail-link">Copy</button></div></div><div class="modal-footer"><button class="btn btn-primary" type="submit">Generate link</button></div></form></div>
+  <script src="../js/streamize.js"></script>
+</body>
+</html>

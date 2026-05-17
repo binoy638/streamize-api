@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamize - Jobs</title>
+  <link rel="stylesheet" href="../css/streamize.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="../index.html"><div class="brand-mark">S</div><div class="brand-copy"><strong>Streamize</strong><span>media server</span></div></a>
+      <nav class="nav-section primary"><div class="nav-label">Control</div><a class="nav-item" href="library.html"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4zM8 10h8M8 14h5" stroke-width="2"/></svg>Library</a><a class="nav-item" href="torrents.html"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 19h14" stroke-width="2"/></svg>Torrents</a><a class="nav-item active" href="jobs.html"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12a7 7 0 1 0 7-7M12 5v7l4 2" stroke-width="2"/></svg>Jobs</a><a class="nav-item" href="shares.html"><svg viewBox="0 0 24 24" fill="none"><path d="M8 12h8M9 8H7a4 4 0 0 0 0 8h2m6-8h2a4 4 0 0 1 0 8h-2" stroke-width="2"/></svg>Shares</a><a class="nav-item" href="admin-users.html"><svg viewBox="0 0 24 24" fill="none"><path d="M16 11a4 4 0 1 0-8 0m11 9a7 7 0 0 0-14 0M18 5v4m2-2h-4" stroke-width="2"/></svg>Admin</a></nav>
+      <nav class="nav-section secondary"><div class="nav-label">System</div><a class="nav-item" href="settings.html"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v3m0 12v3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1M3 12h3m12 0h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke-width="2"/></svg>Settings</a><a class="nav-item" href="style-guide.html"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16M4 12h16M4 19h10" stroke-width="2"/></svg>Style guide</a></nav>
+      <div class="sidebar-footer"><div class="status-line"><span>Workers</span><span class="mono">3/4 busy</span></div></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div class="page-title"><strong>Jobs</strong><span>Processing monitor</span></div><label class="search"><svg viewBox="0 0 24 24" fill="none"><path d="m21 21-4.5-4.5M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="2"/></svg><input data-search-input="#jobs-table" placeholder="Search jobs"></label><div class="topbar-actions"><span class="badge processing">3 running</span></div></header>
+      <section class="content" data-filter-group>
+        <div class="screen-header"><div><span class="eyebrow">Processing</span><h1>Know exactly where media is stuck.</h1><p>ffprobe, HLS, subtitles, thumbnails, and cleanup jobs share one compact operational queue.</p></div></div>
+        <div class="stats-row"><div class="stat-card"><span>Running</span><strong>3</strong><small>2 HLS, 1 thumbnail</small></div><div class="stat-card"><span>Queued</span><strong>12</strong><small>oldest 9m</small></div><div class="stat-card"><span>Failed today</span><strong>2</strong><small>codec mismatch</small></div><div class="stat-card"><span>CPU load</span><strong>71%</strong><small>worker limit OK</small></div></div>
+        <div class="filters"><button class="filter-chip active" data-filter="all">All</button><button class="filter-chip" data-filter="processing">Running</button><button class="filter-chip" data-filter="paused">Queued</button><button class="filter-chip" data-filter="failed">Failed</button><button class="filter-chip" data-filter="complete">Complete</button></div>
+        <div class="layout-grid">
+          <div class="panel"><div class="table-wrap"><table class="data-table" id="jobs-table"><thead><tr><th>Job</th><th>Media</th><th>Status</th><th>Progress</th><th>Worker</th><th>Action</th></tr></thead><tbody><tr data-status="processing" data-searchable><td>HLS generation</td><td>Signal Ridge</td><td><span class="badge processing">Running</span></td><td><div class="progress-row"><div class="progress"><span style="--value:62%"></span></div><span>62%</span></div></td><td class="mono">worker-02</td><td><button class="btn btn-ghost">Cancel</button></td></tr><tr data-status="processing" data-searchable><td>Thumbnail sprites</td><td>Glass City</td><td><span class="badge processing">Running</span></td><td><div class="progress-row"><div class="progress"><span style="--value:81%"></span></div><span>81%</span></div></td><td class="mono">worker-03</td><td><button class="btn btn-ghost">Cancel</button></td></tr><tr data-status="paused" data-searchable><td>Subtitles match</td><td>Archive 7</td><td><span class="badge paused">Queued</span></td><td><div class="progress-row"><div class="progress"><span style="--value:0%"></span></div><span>--</span></div></td><td class="mono">pending</td><td><button class="btn btn-ghost">Prioritize</button></td></tr><tr data-status="failed" data-searchable><td>ffprobe</td><td>North Cache</td><td><span class="badge failed">Failed</span></td><td><div class="progress-row"><div class="progress"><span style="--value:38%"></span></div><span>38%</span></div></td><td class="mono">worker-01</td><td><button class="btn btn-ghost" data-row-action="retry">Retry</button></td></tr></tbody></table></div></div>
+          <aside class="panel"><div class="panel-header"><div><div class="panel-title">Worker timeline</div><p class="muted">Current pipeline chain for the selected item.</p></div></div><div class="timeline"><div class="timeline-item"><i class="timeline-dot"></i><div><strong>Probe source streams</strong><div class="muted">Complete in 12s.</div></div><span class="badge complete">Done</span></div><div class="timeline-item"><i class="timeline-dot"></i><div><strong>Create HLS ladder</strong><div class="muted">1080p output currently segmenting.</div></div><span class="badge processing">Running</span></div><div class="timeline-item"><i class="timeline-dot"></i><div><strong>Generate thumbnails</strong><div class="muted">Starts after manifest write.</div></div><span class="badge paused">Queued</span></div></div></aside>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="../js/streamize.js"></script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamize - Torrents</title>
+  <link rel="stylesheet" href="../css/streamize.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="../index.html"><div class="brand-mark">S</div><div class="brand-copy"><strong>Streamize</strong><span>media server</span></div></a>
+      <nav class="nav-section primary">
+        <div class="nav-label">Control</div>
+        <a class="nav-item" href="library.html"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4zM8 10h8M8 14h5" stroke-width="2"/></svg>Library</a>
+        <a class="nav-item active" href="torrents.html"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 19h14" stroke-width="2"/></svg>Torrents</a>
+        <a class="nav-item" href="jobs.html"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12a7 7 0 1 0 7-7M12 5v7l4 2" stroke-width="2"/></svg>Jobs</a>
+        <a class="nav-item" href="shares.html"><svg viewBox="0 0 24 24" fill="none"><path d="M8 12h8M9 8H7a4 4 0 0 0 0 8h2m6-8h2a4 4 0 0 1 0 8h-2" stroke-width="2"/></svg>Shares</a>
+        <a class="nav-item" href="admin-users.html"><svg viewBox="0 0 24 24" fill="none"><path d="M16 11a4 4 0 1 0-8 0m11 9a7 7 0 0 0-14 0M18 5v4m2-2h-4" stroke-width="2"/></svg>Admin</a>
+      </nav>
+      <nav class="nav-section secondary"><div class="nav-label">System</div><a class="nav-item" href="settings.html"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v3m0 12v3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1M3 12h3m12 0h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke-width="2"/></svg>Settings</a><a class="nav-item" href="style-guide.html"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16M4 12h16M4 19h10" stroke-width="2"/></svg>Style guide</a></nav>
+      <div class="sidebar-footer"><div class="status-line"><span>Download</span><span class="mono">32 MB/s</span></div><div class="status-line" style="margin-top:9px"><span>Upload</span><span class="mono">4 MB/s</span></div></div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div class="page-title"><strong>Torrents</strong><span>14 active queue items</span></div>
+        <label class="search"><svg viewBox="0 0 24 24" fill="none"><path d="m21 21-4.5-4.5M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="2"/></svg><input data-search-input="#torrent-table" placeholder="Search torrents"></label>
+        <div class="topbar-actions"><span class="badge online">qBit connected</span><button class="btn btn-primary" data-open-modal="add-magnet">Add Magnet</button></div>
+      </header>
+      <section class="content" data-filter-group>
+        <div class="screen-header">
+          <div><span class="eyebrow">Queue</span><h1>Live torrent state for operators.</h1><p>Progress, ETA, speed, and queue actions stay dense without hiding failure states.</p></div>
+        </div>
+        <div class="stats-row">
+          <div class="stat-card"><span>Downloading</span><strong>6</strong><small>32 MB/s aggregate</small></div>
+          <div class="stat-card"><span>Complete</span><strong>3</strong><small>awaiting HLS</small></div>
+          <div class="stat-card"><span>Paused</span><strong>2</strong><small>quota window</small></div>
+          <div class="stat-card"><span>Failed</span><strong>1</strong><small>tracker timeout</small></div>
+        </div>
+        <div class="filters">
+          <button class="filter-chip active" data-filter="all">All</button>
+          <button class="filter-chip" data-filter="downloading">Downloading</button>
+          <button class="filter-chip" data-filter="paused">Paused</button>
+          <button class="filter-chip" data-filter="complete">Complete</button>
+          <button class="filter-chip" data-filter="failed">Failed</button>
+        </div>
+        <div class="layout-grid">
+          <div class="panel">
+            <div class="panel-header"><div><div class="panel-title">Torrent list</div><p class="muted">Rows update in place; actions mutate their status in this prototype.</p></div></div>
+            <div class="table-wrap">
+              <table class="data-table" id="torrent-table">
+                <thead><tr><th>Name</th><th>Status</th><th>Progress</th><th>Size</th><th>Speed</th><th>ETA</th><th>Actions</th></tr></thead>
+                <tbody>
+                  <tr data-status="downloading" data-searchable><td><div class="table-title"><strong>Neon Harbor S02</strong><span>movies/series</span></div></td><td><span class="badge downloading">Downloading</span></td><td><div class="progress-row"><div class="progress"><span style="--value:74%"></span></div><span>74%</span></div></td><td class="mono">18.4 GB</td><td class="mono">12 MB/s</td><td class="mono">18m</td><td><div class="row-actions"><button class="icon-btn" data-row-action="pause">||</button><button class="icon-btn" data-row-action="delete">x</button></div></td></tr>
+                  <tr data-status="processing complete" data-searchable><td><div class="table-title"><strong>Field Notes 2026</strong><span>documentary</span></div></td><td><span class="badge processing">Processing</span></td><td><div class="progress-row"><div class="progress"><span style="--value:100%"></span></div><span>100%</span></div></td><td class="mono">13.8 GB</td><td class="mono">--</td><td class="mono">HLS</td><td><div class="row-actions"><button class="icon-btn" data-row-action="retry">R</button><a class="icon-btn" href="torrent-detail.html">i</a></div></td></tr>
+                  <tr data-status="paused" data-searchable><td><div class="table-title"><strong>Archive 7 Pack</strong><span>television</span></div></td><td><span class="badge paused">Paused</span></td><td><div class="progress-row"><div class="progress"><span style="--value:51%"></span></div><span>51%</span></div></td><td class="mono">24.1 GB</td><td class="mono">--</td><td class="mono">--</td><td><div class="row-actions"><button class="icon-btn" data-row-action="resume">></button><button class="icon-btn" data-row-action="delete">x</button></div></td></tr>
+                  <tr data-status="failed" data-searchable><td><div class="table-title"><strong>North Cache</strong><span>movies</span></div></td><td><span class="badge failed">Failed</span></td><td><div class="progress-row"><div class="progress"><span style="--value:38%"></span></div><span>38%</span></div></td><td class="mono">4.3 GB</td><td class="mono">--</td><td class="mono">--</td><td><div class="row-actions"><button class="icon-btn" data-row-action="retry">R</button><button class="icon-btn" data-row-action="delete">x</button></div></td></tr>
+                  <tr data-status="downloading" data-searchable><td><div class="table-title"><strong>Glass City</strong><span>movies</span></div></td><td><span class="badge downloading">Downloading</span></td><td><div class="progress-row"><div class="progress"><span style="--value:82%"></span></div><span>82%</span></div></td><td class="mono">9.4 GB</td><td class="mono">8 MB/s</td><td class="mono">9m</td><td><div class="row-actions"><button class="icon-btn" data-row-action="pause">||</button><button class="icon-btn" data-row-action="delete">x</button></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <aside class="panel">
+            <div class="panel-header"><div><div class="panel-title">Queue health</div><p class="muted">Real-time style status summary.</p></div></div>
+            <div class="setting-row"><div><strong>Tracker availability</strong><div class="muted">31 of 34 responding</div></div><span class="badge online">Good</span></div>
+            <div class="setting-row"><div><strong>Disk reservation</strong><div class="muted">142 GB preallocated</div></div><span class="badge warn">Watch</span></div>
+            <div class="setting-row"><div><strong>Automation</strong><div class="muted">Process when complete</div></div><button class="toggle on" data-toggle aria-pressed="true"></button></div>
+            <div class="alert alert-success is-visible" style="margin-top:14px">Last magnet accepted and queued for metadata fetch.</div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="modal-backdrop" id="add-magnet" role="dialog" aria-modal="true" aria-label="Add magnet">
+    <form class="modal" data-magnet-form>
+      <div class="modal-header"><strong>Add Magnet</strong><button class="icon-btn" type="button" data-close-modal aria-label="Close">x</button></div>
+      <div class="modal-body form-grid"><div class="alert" data-magnet-alert role="status"></div><div class="field"><label for="magnet">Magnet URL</label><textarea class="textarea" id="magnet" name="magnet" placeholder="magnet:?xt=urn:btih:..."></textarea></div><div class="field"><label for="destination">Destination</label><input class="input" id="destination" placeholder="/mnt/media/incoming"></div></div>
+      <div class="modal-footer"><button class="btn btn-ghost" type="button" data-close-modal>Cancel</button><button class="btn btn-primary" type="submit">Add to queue</button></div>
+    </form>
+  </div>
+  <script src="../js/streamize.js"></script>
+</body>
+</html>

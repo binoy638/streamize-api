@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamize UI Prototype</title>
+  <link rel="stylesheet" href="css/streamize.css">
+  <link rel="stylesheet" href="css/launcher.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body class="launcher-body">
+  <main class="launcher-shell">
+    <section class="launcher-hero">
+      <div>
+        <span class="eyebrow">Streamize</span>
+        <h1>Self-hosted streaming operations UI.</h1>
+        <p>Dark cinematic admin interface for adding magnets, monitoring downloads and jobs, managing the media library, playing HLS video, sharing temporary links, and administering users.</p>
+      </div>
+      <aside class="system-card">
+        <span class="kicker">Visual system</span>
+        <p class="section-copy">Charcoal-navy surfaces, electric cyan primary actions, cyan-teal status accents, compact tables, media-first cards, and responsive bottom navigation on mobile.</p>
+        <div class="system-grid">
+          <div class="token-chip"><i style="--swatch:var(--bg)"></i><span>oklch dark bg</span></div>
+          <div class="token-chip"><i style="--swatch:var(--surface)"></i><span>raised panels</span></div>
+          <div class="token-chip"><i style="--swatch:var(--accent)"></i><span>cyan action</span></div>
+          <div class="token-chip"><i style="--swatch:var(--success)"></i><span>health states</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <section>
+      <span class="kicker">Screens</span>
+      <div class="screen-grid">
+        <a class="screen-link" href="screens/sign-in.html"><small>Auth</small><strong>Sign in</strong><span>Centered login, error, loading, and success states.</span></a>
+        <a class="screen-link" href="screens/library.html"><small>Main</small><strong>Library</strong><span>Media cards, filters, search, empty, loading, failed, and add magnet modal.</span></a>
+        <a class="screen-link" href="screens/torrents.html"><small>Queue</small><strong>Torrent list</strong><span>Progress, speed, ETA, status chips, pause, resume, retry, delete.</span></a>
+        <a class="screen-link" href="screens/torrent-detail.html"><small>Detail</small><strong>Torrent detail</strong><span>Header, poster, progress, files, jobs, subtitles, shares tabs.</span></a>
+        <a class="screen-link" href="screens/player.html"><small>Playback</small><strong>Video player</strong><span>Focused HLS player, transport controls, quality, subtitles, metadata.</span></a>
+        <a class="screen-link" href="screens/jobs.html"><small>Processing</small><strong>Jobs</strong><span>ffprobe, HLS, subtitle, thumbnail, queue, and failure monitoring.</span></a>
+        <a class="screen-link" href="screens/shares.html"><small>Public links</small><strong>Shares</strong><span>Create expiring links, copy generated URLs, revoke active shares.</span></a>
+        <a class="screen-link" href="screens/admin-users.html"><small>Admin</small><strong>Users</strong><span>User table, roles, quotas, status, reset, disable, create user modal.</span></a>
+        <a class="screen-link" href="screens/settings.html"><small>System</small><strong>Settings</strong><span>Storage path, qBittorrent health, retention, processing, app health.</span></a>
+        <a class="screen-link" href="screens/style-guide.html"><small>Components</small><strong>Style guide</strong><span>Buttons, inputs, tabs, tables, cards, badges, progress, dialogs, nav.</span></a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamize - Player</title>
+  <link rel="stylesheet" href="../css/streamize.css">
+  <link rel="stylesheet" href="../css/player.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="../index.html"><div class="brand-mark">S</div><div class="brand-copy"><strong>Streamize</strong><span>media server</span></div></a>
+      <nav class="nav-section primary"><div class="nav-label">Control</div><a class="nav-item active" href="library.html"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4zM8 10h8M8 14h5" stroke-width="2"/></svg>Library</a><a class="nav-item" href="torrents.html"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 19h14" stroke-width="2"/></svg>Torrents</a><a class="nav-item" href="jobs.html"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12a7 7 0 1 0 7-7M12 5v7l4 2" stroke-width="2"/></svg>Jobs</a><a class="nav-item" href="shares.html"><svg viewBox="0 0 24 24" fill="none"><path d="M8 12h8M9 8H7a4 4 0 0 0 0 8h2m6-8h2a4 4 0 0 1 0 8h-2" stroke-width="2"/></svg>Shares</a><a class="nav-item" href="admin-users.html"><svg viewBox="0 0 24 24" fill="none"><path d="M16 11a4 4 0 1 0-8 0m11 9a7 7 0 0 0-14 0M18 5v4m2-2h-4" stroke-width="2"/></svg>Admin</a></nav>
+      <nav class="nav-section secondary"><div class="nav-label">System</div><a class="nav-item" href="settings.html"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v3m0 12v3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1M3 12h3m12 0h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke-width="2"/></svg>Settings</a><a class="nav-item" href="style-guide.html"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16M4 12h16M4 19h10" stroke-width="2"/></svg>Style guide</a></nav>
+      <div class="sidebar-footer"><div class="status-line"><span>Playback</span><span class="mono">HLS</span></div></div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div class="page-title"><strong>Video stream</strong><span>Neon Harbor S02E04.mkv</span></div>
+        <label class="search"><svg viewBox="0 0 24 24" fill="none"><path d="m21 21-4.5-4.5M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="2"/></svg><input placeholder="Search library while watching"></label>
+        <div class="topbar-actions"><span class="badge online">HLS ready</span><button class="btn" data-open-modal="share-modal">Share</button></div>
+      </header>
+      <section class="content">
+        <div class="screen-header">
+          <div><span class="eyebrow">Torrent video player</span><h1>Watch the selected video file while Streamize keeps the torrent pipeline visible.</h1><p>Only supported video files enter the player. Non-video files stay in the torrent detail view; this screen focuses on stream readiness, buffering, HLS output, subtitles, and temporary sharing.</p></div>
+          <div class="header-actions">
+            <span class="badge downloading">Pieces 84%</span>
+            <span class="badge processing">HLS live</span>
+          </div>
+        </div>
+        <div class="player-layout">
+          <div class="player-screen">
+            <div class="video-stage" data-player-stage>
+              <div class="video-chrome top">
+                <div class="control-cluster">
+                  <span class="badge online">Streamable</span>
+                  <span class="badge">mkv -> hls</span>
+                  <span class="badge downloading">42 peers</span>
+                </div>
+                <span class="mono muted">/library/neon-harbor/s02/e04/master.m3u8</span>
+              </div>
+              <button class="play-core" data-player-toggle aria-pressed="false" aria-label="Play video">
+                <svg viewBox="0 0 28 28" aria-hidden="true"><path d="M9 6.5 22 14 9 21.5V6.5Z" fill="currentColor"/></svg>
+                <span data-play-label>Play</span>
+              </button>
+              <div class="video-title-card">
+                <span class="badge ready" id="player-file-badge">Ready</span>
+                <strong id="player-file-title">Neon.Harbor.S02E04.mkv</strong>
+                <span id="player-file-meta">HEVC 1080p / AAC 5.1 / 6.2 GB / HLS manifest healthy</span>
+              </div>
+              <div class="buffer-map" aria-label="Torrent piece availability">
+                <span style="--piece: 10%" class="done"></span>
+                <span style="--piece: 14%" class="done"></span>
+                <span style="--piece: 8%" class="done"></span>
+                <span style="--piece: 9%" class="hot"></span>
+                <span style="--piece: 6%" class="gap"></span>
+                <span style="--piece: 12%" class="hot"></span>
+                <span style="--piece: 16%" class="done"></span>
+                <span style="--piece: 25%" class="future"></span>
+              </div>
+            </div>
+            <div class="player-controls">
+              <div class="control-row">
+                <div class="control-cluster">
+                  <button class="btn btn-primary" data-player-toggle aria-pressed="false"><span data-play-label>Play</span></button>
+                  <button class="icon-btn" aria-label="Back 10 seconds">-10</button>
+                  <button class="icon-btn" aria-label="Forward 10 seconds">+10</button>
+                  <span class="mono muted">00:38:12 / 02:18:44</span>
+                </div>
+                <div class="control-cluster">
+                  <select class="select compact" aria-label="Audio track"><option>English 5.1</option><option>Commentary</option></select>
+                  <select class="select compact" aria-label="Quality"><option>Auto 1080p</option><option>1080p</option><option>720p</option><option>480p</option></select>
+                  <select class="select compact" aria-label="Subtitles"><option>English CC</option><option>Spanish</option><option>Off</option></select>
+                </div>
+              </div>
+              <input class="range" type="range" min="0" max="100" value="28" data-time-range="#watch-progress" aria-label="Seek">
+              <div class="stream-meter-row">
+                <span>Watch progress <strong class="mono" id="watch-progress">28%</strong></span>
+                <span>Buffered ahead <strong class="mono">14 min</strong></span>
+                <span>Torrent pieces <strong class="mono">84%</strong></span>
+              </div>
+            </div>
+            <div class="source-strip">
+              <div>
+                <span class="kicker">Current source</span>
+                <strong id="player-codec">HEVC video / AAC audio / HLS adaptive output</strong>
+              </div>
+              <div class="progress-row">
+                <div class="progress"><span style="--value:84%"></span></div>
+                <span class="mono">84%</span>
+              </div>
+            </div>
+          </div>
+          <aside class="panel">
+            <div class="panel-header"><div><div class="panel-title">Video files in this torrent</div><p class="muted">Only playable video files are offered here.</p></div></div>
+            <div class="video-file-list">
+              <button class="video-file active" type="button" data-video-file data-title="Neon.Harbor.S02E04.mkv" data-meta="HEVC 1080p / AAC 5.1 / 6.2 GB / HLS manifest healthy" data-codec="HEVC video / AAC audio / HLS adaptive output" data-badge="Ready">
+                <span><strong>Neon.Harbor.S02E04.mkv</strong><small>Ready / 6.2 GB / 1080p</small></span><span class="badge ready">Ready</span>
+              </button>
+              <button class="video-file" type="button" data-video-file data-title="Neon.Harbor.S02E04.alt-cut.mp4" data-meta="H.264 720p / AAC stereo / 2.1 GB / direct stream" data-codec="H.264 video / AAC audio / direct stream path" data-badge="Direct">
+                <span><strong>Neon.Harbor.S02E04.alt-cut.mp4</strong><small>Direct stream / 2.1 GB</small></span><span class="badge online">Direct</span>
+              </button>
+              <button class="video-file" type="button" data-video-file data-title="Neon.Harbor.S02E04.sample.mkv" data-meta="HEVC 1080p / 58 MB / waiting for enough pieces" data-codec="HEVC sample / not enough local pieces for smooth playback" data-badge="Buffering">
+                <span><strong>sample.mkv</strong><small>Buffering risk / 58 MB</small></span><span class="badge warn">Pieces low</span>
+              </button>
+            </div>
+            <div class="unsupported-note">
+              <span class="badge paused">Hidden</span>
+              <p>4 non-video files in this torrent are excluded from the player: NFO, cover art, checksums, and extras text.</p>
+            </div>
+          </aside>
+          <aside class="panel stream-ops">
+            <div class="panel-header"><div><div class="panel-title">Stream operations</div><p class="muted">What has to be true before playback feels instant.</p></div></div>
+            <div class="pipeline-list">
+              <div class="pipeline-step complete"><i></i><div><strong>Torrent metadata</strong><span>File tree scanned and video candidates detected.</span></div><span class="badge complete">Done</span></div>
+              <div class="pipeline-step complete"><i></i><div><strong>ffprobe</strong><span>Duration, streams, codecs, and chapters parsed.</span></div><span class="badge complete">Done</span></div>
+              <div class="pipeline-step active"><i></i><div><strong>HLS segmenter</strong><span>Generating adaptive segments while pieces arrive.</span></div><span class="badge processing">Live</span></div>
+              <div class="pipeline-step"><i></i><div><strong>Thumbnail sprites</strong><span>Queued after the next 20 segments land.</span></div><span class="badge paused">Queued</span></div>
+            </div>
+            <div class="setting-row"><div><strong>Manifest</strong><div class="muted mono">master.m3u8</div></div><span class="badge online">Healthy</span></div>
+            <div class="setting-row"><div><strong>Playback mode</strong><div class="muted">Adaptive HLS, save progress per user</div></div><span class="badge ready">Auto</span></div>
+            <div class="setting-row"><div><strong>Share scope</strong><div class="muted">Current video, optional timestamp</div></div><button class="btn" data-open-modal="share-modal">Create</button></div>
+            <div class="alert alert-success is-visible">Playback position saved at 00:38:12 for admin.</div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="modal-backdrop" id="share-modal" role="dialog" aria-modal="true" aria-label="Create share"><form class="modal" data-share-form><div class="modal-header"><strong>Create video share</strong><button class="icon-btn" type="button" data-close-modal aria-label="Close">x</button></div><div class="modal-body form-grid"><div class="field"><label>Scope</label><select class="select"><option>Current video only</option><option>Current video from timestamp</option></select></div><div class="field"><label>Expiration</label><select class="select"><option>24 hours</option><option>7 days</option><option>30 days</option></select></div><div class="field"><label>Start time</label><input class="input" value="00:38:12"></div><div class="field"><label>Public permission</label><select class="select"><option>Stream only, downloads disabled</option><option>Allow download</option></select></div><div class="alert alert-success" data-share-result>Share created for the current video file.</div><div class="share-link"><input class="input" id="player-share" value="https://streamize.local/s/neon-harbor?t=2292"><button class="btn" type="button" data-copy="#player-share">Copy</button></div></div><div class="modal-footer"><button class="btn btn-primary" type="submit">Generate link</button></div></form></div>
+  <script src="../js/streamize.js"></script>
+</body>
+</html>

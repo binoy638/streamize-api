@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamize - Settings</title>
+  <link rel="stylesheet" href="../css/streamize.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="../index.html"><div class="brand-mark">S</div><div class="brand-copy"><strong>Streamize</strong><span>media server</span></div></a>
+      <nav class="nav-section primary"><div class="nav-label">Control</div><a class="nav-item" href="library.html"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4zM8 10h8M8 14h5" stroke-width="2"/></svg>Library</a><a class="nav-item" href="torrents.html"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 19h14" stroke-width="2"/></svg>Torrents</a><a class="nav-item" href="jobs.html"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12a7 7 0 1 0 7-7M12 5v7l4 2" stroke-width="2"/></svg>Jobs</a><a class="nav-item" href="shares.html"><svg viewBox="0 0 24 24" fill="none"><path d="M8 12h8M9 8H7a4 4 0 0 0 0 8h2m6-8h2a4 4 0 0 1 0 8h-2" stroke-width="2"/></svg>Shares</a><a class="nav-item" href="admin-users.html"><svg viewBox="0 0 24 24" fill="none"><path d="M16 11a4 4 0 1 0-8 0m11 9a7 7 0 0 0-14 0M18 5v4m2-2h-4" stroke-width="2"/></svg>Admin</a></nav>
+      <nav class="nav-section secondary"><div class="nav-label">System</div><a class="nav-item active" href="settings.html"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v3m0 12v3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1M3 12h3m12 0h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke-width="2"/></svg>Settings</a><a class="nav-item" href="style-guide.html"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16M4 12h16M4 19h10" stroke-width="2"/></svg>Style guide</a></nav>
+      <div class="sidebar-footer"><div class="status-line"><span>Health</span><span><i class="status-dot"></i></span></div></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div class="page-title"><strong>Settings</strong><span>Storage, qBit, processing</span></div><label class="search"><svg viewBox="0 0 24 24" fill="none"><path d="m21 21-4.5-4.5M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="2"/></svg><input placeholder="Search settings"></label><div class="topbar-actions"><button class="btn btn-primary">Save changes</button></div></header>
+      <section class="content">
+        <div class="screen-header"><div><span class="eyebrow">System settings</span><h1>Configuration with health visible.</h1><p>Operators can audit storage paths, qBittorrent connectivity, retention, and processing behavior from one screen.</p></div></div>
+        <div class="health-grid">
+          <div class="stat-card"><span>Media storage</span><strong>68%</strong><small class="mono">/mnt/media</small></div>
+          <div class="stat-card"><span>qBittorrent</span><strong>Online</strong><small>localhost:8080</small></div>
+          <div class="stat-card"><span>Transcode workers</span><strong>3/4</strong><small>one idle</small></div>
+          <div class="stat-card"><span>API latency</span><strong>24ms</strong><small>p95 local</small></div>
+        </div>
+        <div class="settings-grid" style="margin-top:18px">
+          <section class="panel"><div class="panel-header"><div><div class="panel-title">Storage</div><p class="muted">Local paths and retention behavior.</p></div></div><div class="field"><label>Media storage path</label><input class="input mono" value="/mnt/media/library"></div><div class="setting-row"><div><strong>Keep original torrent files</strong><div class="muted">Required for reseeding.</div></div><button class="toggle on" data-toggle aria-pressed="true"></button></div><div class="setting-row"><div><strong>Delete failed temp files after</strong><div class="muted">Keeps cache under control.</div></div><select class="select" style="max-width:150px"><option>7 days</option><option>30 days</option></select></div></section>
+          <section class="panel"><div class="panel-header"><div><div class="panel-title">qBittorrent</div><p class="muted">Connection and download rules.</p></div></div><div class="setting-row"><div><strong>Connection</strong><div class="muted mono">http://127.0.0.1:8080</div></div><span class="badge online">Connected</span></div><div class="setting-row"><div><strong>Auto-start downloads</strong><div class="muted">Start after magnet validation.</div></div><button class="toggle on" data-toggle aria-pressed="true"></button></div><div class="setting-row"><div><strong>Rate limit window</strong><div class="muted">Quiet hours from 02:00 to 06:00.</div></div><span class="badge">Enabled</span></div></section>
+          <section class="panel"><div class="panel-header"><div><div class="panel-title">Processing</div><p class="muted">HLS and media extraction defaults.</p></div></div><div class="setting-row"><div><strong>HLS renditions</strong><div class="muted">1080p, 720p, 480p</div></div><button class="btn btn-ghost">Edit</button></div><div class="setting-row"><div><strong>Generate thumbnail sprites</strong><div class="muted">For player scrubbing.</div></div><button class="toggle on" data-toggle aria-pressed="true"></button></div><div class="setting-row"><div><strong>Subtitle auto-match</strong><div class="muted">Ask admin when confidence below 80%.</div></div><button class="toggle" data-toggle aria-pressed="false"></button></div></section>
+          <section class="panel"><div class="panel-header"><div><div class="panel-title">App health</div><p class="muted">Service dependencies and failures.</p></div></div><div class="setting-row"><div><strong>Database</strong><div class="muted">SQLite WAL mode</div></div><span class="badge online">Healthy</span></div><div class="setting-row"><div><strong>Static serving</strong><div class="muted">HLS cache mounted</div></div><span class="badge online">Healthy</span></div><div class="setting-row"><div><strong>Last job error</strong><div class="muted">North Cache: invalid MKV seek table</div></div><span class="badge failed">Open</span></div></section>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="../js/streamize.js"></script>
+</body>
+</html>

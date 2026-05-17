@@ -1,0 +1,20 @@
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 0%, oklch(31% 0.1 235 / 0.45), transparent 34rem),
+    var(--bg);
+}
+
+.auth-card {
+  width: min(430px, 100%);
+  padding: 26px;
+  box-shadow: var(--shadow);
+}
+
+.auth-card h1 {
+  margin: 18px 0 8px;
+  font-size: 34px;
+}

@@ -35,6 +35,18 @@ POST /api/admin/users
 
 In development, the bootstrap admin defaults to `admin` / `adminadmin`. Override it with `STREAMIZE_ADMIN_USERNAME` and `STREAMIZE_ADMIN_PASSWORD`.
 
+## Web Development
+
+The React + Vite UI lives in `apps/web` and implements the design-spec prototype as production React screens.
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+The web dev server defaults to `http://localhost:5173` and proxies `/api` to the Go API at `http://localhost:8080`. If the API is not running, use the sign-in screen's prototype entry to browse the mock media flows.
+
 ## Docker Compose
 
 Copy the example environment file and adjust values if needed:

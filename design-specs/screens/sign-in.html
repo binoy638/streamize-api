@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamize - Sign in</title>
+  <link rel="stylesheet" href="../css/streamize.css">
+  <link rel="stylesheet" href="../css/auth.css">
+</head>
+<body>
+  <main class="auth-page">
+    <section class="auth-card" aria-labelledby="signin-title">
+      <div class="brand" style="padding:0;border:0">
+        <div class="brand-mark">S</div>
+        <div class="brand-copy">
+          <strong>Streamize</strong>
+          <span>Self-hosted media control</span>
+        </div>
+      </div>
+      <h1 id="signin-title">Sign in to your server</h1>
+      <p class="muted">Use a local admin or viewer account to manage torrents, transcodes, shares, and playback.</p>
+      <form class="form-grid" data-login-form>
+        <div class="alert alert-error" data-login-alert role="status"></div>
+        <div class="field">
+          <label for="username">Username</label>
+          <input class="input" id="username" name="username" autocomplete="username" placeholder="admin">
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input class="input" id="password" name="password" type="password" autocomplete="current-password" placeholder="streamize">
+        </div>
+        <button class="btn btn-primary" type="submit">Sign in</button>
+        <a class="btn btn-ghost" href="library.html">Open library prototype</a>
+      </form>
+    </section>
+  </main>
+  <script src="../js/streamize.js"></script>
+</body>
+</html>
