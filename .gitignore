@@ -1,7 +1,33 @@
-node_modules
-dist
-coverage
+# Dependencies
+node_modules/
+
+# Environment files
 .env
-tmp
-downloads
-subtitles
+.env.*
+!.env.example
+!**/.env.example
+
+# Build and test output
+dist/
+coverage/
+bin/
+*.test
+coverage.out
+
+# Logs
+*.log
+
+# Legacy runtime folders
+tmp/
+downloads/
+subtitles/
+
+# Streamize runtime data
+data/
+media/
+apps/api/data/
+apps/api/media/
+legacy/node_modules
+*.db
+*.db-shm
+*.db-wal

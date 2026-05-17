@@ -1,0 +1,49 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      STREAMIZE_ENV: ${STREAMIZE_ENV:-development}
+      STREAMIZE_HTTP_ADDR: ${STREAMIZE_HTTP_ADDR:-:8080}
+      STREAMIZE_DATABASE_PATH: ${STREAMIZE_DATABASE_PATH:-/data/streamize.db}
+      STREAMIZE_MEDIA_ROOT: ${STREAMIZE_MEDIA_ROOT:-/media}
+      STREAMIZE_QBITTORRENT_URL: ${STREAMIZE_QBITTORRENT_URL:-http://qbittorrent:8080}
+      STREAMIZE_QBITTORRENT_USERNAME: ${STREAMIZE_QBITTORRENT_USERNAME:-admin}
+      STREAMIZE_QBITTORRENT_PASSWORD: ${STREAMIZE_QBITTORRENT_PASSWORD:-adminadmin}
+      STREAMIZE_SESSION_COOKIE_NAME: ${STREAMIZE_SESSION_COOKIE_NAME:-streamize_session}
+      STREAMIZE_SESSION_TTL: ${STREAMIZE_SESSION_TTL:-168h}
+      STREAMIZE_ADMIN_USERNAME: ${STREAMIZE_ADMIN_USERNAME:-admin}
+      STREAMIZE_ADMIN_PASSWORD: ${STREAMIZE_ADMIN_PASSWORD:-adminadmin}
+      STREAMIZE_ADMIN_STORAGE_QUOTA_BYTES: ${STREAMIZE_ADMIN_STORAGE_QUOTA_BYTES:-0}
+      STREAMIZE_SECURE_COOKIES: ${STREAMIZE_SECURE_COOKIES:-false}
+      STREAMIZE_TRUSTED_PROXY_HEADERS: ${STREAMIZE_TRUSTED_PROXY_HEADERS:-false}
+      STREAMIZE_LOG_LEVEL: ${STREAMIZE_LOG_LEVEL:-info}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - qbittorrent
+    volumes:
+      - streamize-data:/data
+      - streamize-media:/media
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Asia/Kolkata}
+      - WEBUI_PORT=8080
+    ports:
+      - "8081:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    volumes:
+      - qbittorrent-config:/config
+      - streamize-media:/media
+    restart: unless-stopped
+
+volumes:
+  streamize-data:
+  streamize-media:
+  qbittorrent-config:
