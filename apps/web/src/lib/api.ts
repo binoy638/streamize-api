@@ -16,11 +16,34 @@ export type Health = {
   version?: string;
 };
 
+export type TorrentStatus = "added" | "downloading" | "paused" | "queued" | "processing" | "done" | "error";
+
+export type Torrent = {
+  id: string;
+  ownerUserId: string;
+  slug: string;
+  magnetUri: string;
+  infoHash?: string;
+  qbittorrentHash?: string;
+  name?: string;
+  sizeBytes: number;
+  status: TorrentStatus;
+  retentionPolicy: "keep" | "delete_after_hls";
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CreateUserInput = {
   username: string;
   password: string;
   role: UserRole;
   storageQuotaBytes: number;
+};
+
+export type CreateTorrentInput = {
+  magnetUri: string;
+  name?: string;
 };
 
 type ApiErrorBody = {
@@ -94,6 +117,19 @@ export async function createUser(input: CreateUserInput): Promise<User> {
     body: JSON.stringify(input),
   });
   return body.user;
+}
+
+export async function listTorrents(): Promise<Torrent[]> {
+  const body = await apiFetch<{ torrents: Torrent[] }>("/api/torrents");
+  return body.torrents;
+}
+
+export async function createTorrent(input: CreateTorrentInput): Promise<Torrent> {
+  const body = await apiFetch<{ torrent: Torrent }>("/api/torrents", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return body.torrent;
 }
 
 export async function getHealth(): Promise<Health> {

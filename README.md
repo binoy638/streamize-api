@@ -29,6 +29,8 @@ GET /api/health
 POST /api/auth/sign-in
 POST /api/auth/sign-out
 GET /api/auth/me
+GET /api/torrents
+POST /api/torrents
 GET /api/admin/users
 POST /api/admin/users
 ```

@@ -10,9 +10,30 @@ import (
 
 	"github.com/binoy638/streamize-api/apps/api/internal/auth"
 	"github.com/binoy638/streamize-api/apps/api/internal/config"
+	"github.com/binoy638/streamize-api/apps/api/internal/qbittorrent"
+	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
 )
 
-func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger) http.Handler {
+type RouterOption func(*routerOptions)
+
+type routerOptions struct {
+	torrentAdder TorrentAdder
+}
+
+func WithTorrentAdder(adder TorrentAdder) RouterOption {
+	return func(options *routerOptions) {
+		options.torrentAdder = adder
+	}
+}
+
+func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...RouterOption) http.Handler {
+	options := routerOptions{
+		torrentAdder: qbittorrent.NewClient(cfg.QBittorrentURL, cfg.QBittorrentUsername, cfg.QBittorrentPassword),
+	}
+	for _, optionFn := range optionFns {
+		optionFn(&options)
+	}
+
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
@@ -20,6 +41,7 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger) http.Handler 
 	router.Use(requestLogger(logger))
 
 	authStore := auth.NewStore(db)
+	torrentStore := torrents.NewStore(db)
 	authHandler := AuthHandler{
 		Config: cfg,
 		Store:  authStore,
@@ -31,6 +53,11 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger) http.Handler 
 		Config: cfg,
 		DB:     db,
 	}
+	torrentHandler := TorrentHandler{
+		Store:    torrentStore,
+		Adder:    options.torrentAdder,
+		SavePath: cfg.OriginalsDir,
+	}
 
 	router.Route("/api", func(api chi.Router) {
 		api.Get("/health", healthHandler.ServeHTTP)
@@ -40,6 +67,8 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger) http.Handler 
 		api.Group(func(protected chi.Router) {
 			protected.Use(RequireUser(cfg, authStore))
 			protected.Get("/auth/me", authHandler.Me)
+			protected.Get("/torrents", torrentHandler.ListTorrents)
+			protected.Post("/torrents", torrentHandler.CreateTorrent)
 
 			protected.Route("/admin", func(admin chi.Router) {
 				admin.Use(RequireAdmin)
