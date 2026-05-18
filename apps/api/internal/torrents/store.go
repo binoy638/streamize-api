@@ -12,8 +12,13 @@ import (
 )
 
 const (
-	StatusAdded = "added"
-	StatusError = "error"
+	StatusAdded       = "added"
+	StatusDownloading = "downloading"
+	StatusPaused      = "paused"
+	StatusQueued      = "queued"
+	StatusProcessing  = "processing"
+	StatusDone        = "done"
+	StatusError       = "error"
 
 	RetentionKeep = "keep"
 )
@@ -28,25 +33,46 @@ type Store struct {
 }
 
 type Torrent struct {
-	ID              string `json:"id"`
-	OwnerUserID     string `json:"ownerUserId"`
-	Slug            string `json:"slug"`
-	MagnetURI       string `json:"magnetUri"`
-	InfoHash        string `json:"infoHash,omitempty"`
-	QBittorrentHash string `json:"qbittorrentHash,omitempty"`
-	Name            string `json:"name,omitempty"`
-	SizeBytes       int64  `json:"sizeBytes"`
-	Status          string `json:"status"`
-	RetentionPolicy string `json:"retentionPolicy"`
-	ErrorMessage    string `json:"errorMessage,omitempty"`
-	CreatedAt       string `json:"createdAt"`
-	UpdatedAt       string `json:"updatedAt"`
+	ID                 string  `json:"id"`
+	OwnerUserID        string  `json:"ownerUserId"`
+	Slug               string  `json:"slug"`
+	MagnetURI          string  `json:"magnetUri"`
+	InfoHash           string  `json:"infoHash,omitempty"`
+	QBittorrentHash    string  `json:"qbittorrentHash,omitempty"`
+	Name               string  `json:"name,omitempty"`
+	SizeBytes          int64   `json:"sizeBytes"`
+	Status             string  `json:"status"`
+	ProgressPercent    float64 `json:"progressPercent"`
+	DownloadSpeedBytes int64   `json:"downloadSpeedBytes"`
+	UploadSpeedBytes   int64   `json:"uploadSpeedBytes"`
+	ETASeconds         int64   `json:"etaSeconds"`
+	Peers              int     `json:"peers"`
+	Ratio              float64 `json:"ratio"`
+	RetentionPolicy    string  `json:"retentionPolicy"`
+	ErrorMessage       string  `json:"errorMessage,omitempty"`
+	CreatedAt          string  `json:"createdAt"`
+	UpdatedAt          string  `json:"updatedAt"`
 }
 
 type CreateTorrentParams struct {
 	OwnerUserID string
 	MagnetURI   string
 	Name        string
+}
+
+type UpdateTorrentTransferStateParams struct {
+	ID                 string
+	QBittorrentHash    string
+	Name               string
+	SizeBytes          int64
+	Status             string
+	ProgressPercent    float64
+	DownloadSpeedBytes int64
+	UploadSpeedBytes   int64
+	ETASeconds         int64
+	Peers              int
+	Ratio              float64
+	ErrorMessage       string
 }
 
 func NewStore(db *sql.DB) *Store {
@@ -87,7 +113,7 @@ func (s *Store) CreateTorrent(ctx context.Context, params CreateTorrentParams) (
 
 func (s *Store) FindTorrentByID(ctx context.Context, id string) (Torrent, error) {
 	return scanTorrent(s.db.QueryRowContext(ctx, `
-		SELECT id, owner_user_id, slug, magnet_uri, info_hash, qbt_hash, name, size_bytes, status, retention_policy, error_message, created_at, updated_at
+		SELECT id, owner_user_id, slug, magnet_uri, info_hash, qbt_hash, name, size_bytes, status, progress_percent, download_speed_bytes, upload_speed_bytes, eta_seconds, peers, ratio, retention_policy, error_message, created_at, updated_at
 		FROM torrents
 		WHERE id = ?
 	`, id))
@@ -100,7 +126,7 @@ func (s *Store) ListTorrents(ctx context.Context, ownerUserID string) ([]Torrent
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, owner_user_id, slug, magnet_uri, info_hash, qbt_hash, name, size_bytes, status, retention_policy, error_message, created_at, updated_at
+		SELECT id, owner_user_id, slug, magnet_uri, info_hash, qbt_hash, name, size_bytes, status, progress_percent, download_speed_bytes, upload_speed_bytes, eta_seconds, peers, ratio, retention_policy, error_message, created_at, updated_at
 		FROM torrents
 		WHERE owner_user_id = ?
 		ORDER BY created_at DESC, id DESC
@@ -123,6 +149,87 @@ func (s *Store) ListTorrents(ctx context.Context, ownerUserID string) ([]Torrent
 	}
 
 	return torrents, nil
+}
+
+func (s *Store) UpdateTorrentTransferState(ctx context.Context, params UpdateTorrentTransferStateParams) error {
+	id := strings.TrimSpace(params.ID)
+	if id == "" {
+		return ErrNotFound
+	}
+
+	status := strings.TrimSpace(params.Status)
+	if status == "" {
+		status = StatusAdded
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE torrents
+		SET qbt_hash = COALESCE(?, qbt_hash),
+			name = COALESCE(?, name),
+			size_bytes = ?,
+			status = ?,
+			progress_percent = ?,
+			download_speed_bytes = ?,
+			upload_speed_bytes = ?,
+			eta_seconds = ?,
+			peers = ?,
+			ratio = ?,
+			error_message = ?,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`,
+		nullableString(strings.TrimSpace(params.QBittorrentHash)),
+		nullableString(strings.TrimSpace(params.Name)),
+		maxInt64(params.SizeBytes, 0),
+		status,
+		clampFloat(params.ProgressPercent, 0, 100),
+		maxInt64(params.DownloadSpeedBytes, 0),
+		maxInt64(params.UploadSpeedBytes, 0),
+		maxInt64(params.ETASeconds, -1),
+		maxInt(params.Peers, 0),
+		maxFloat(params.Ratio, 0),
+		nullableString(strings.TrimSpace(params.ErrorMessage)),
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("update torrent transfer state: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read update torrent transfer state rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (s *Store) DeleteTorrent(ctx context.Context, id string, ownerUserID string) error {
+	id = strings.TrimSpace(id)
+	ownerUserID = strings.TrimSpace(ownerUserID)
+	if id == "" || ownerUserID == "" {
+		return ErrNotFound
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		DELETE FROM torrents
+		WHERE id = ? AND owner_user_id = ?
+	`, id, ownerUserID)
+	if err != nil {
+		return fmt.Errorf("delete torrent: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read delete torrent rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
 }
 
 func (s *Store) MarkTorrentError(ctx context.Context, id string, message string) error {
@@ -211,6 +318,12 @@ func scanTorrentValues(row rowScanner) (Torrent, error) {
 		&name,
 		&torrent.SizeBytes,
 		&torrent.Status,
+		&torrent.ProgressPercent,
+		&torrent.DownloadSpeedBytes,
+		&torrent.UploadSpeedBytes,
+		&torrent.ETASeconds,
+		&torrent.Peers,
+		&torrent.Ratio,
 		&torrent.RetentionPolicy,
 		&errorMessage,
 		&torrent.CreatedAt,
@@ -225,6 +338,37 @@ func scanTorrentValues(row rowScanner) (Torrent, error) {
 	torrent.ErrorMessage = errorMessage.String
 
 	return torrent, nil
+}
+
+func clampFloat(value float64, minValue float64, maxValue float64) float64 {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
+func maxFloat(value float64, minValue float64) float64 {
+	if value < minValue {
+		return minValue
+	}
+	return value
+}
+
+func maxInt(value int, minValue int) int {
+	if value < minValue {
+		return minValue
+	}
+	return value
+}
+
+func maxInt64(value int64, minValue int64) int64 {
+	if value < minValue {
+		return minValue
+	}
+	return value
 }
 
 func nullableString(value string) any {

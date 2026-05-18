@@ -31,6 +31,7 @@ POST /api/auth/sign-out
 GET /api/auth/me
 GET /api/torrents
 POST /api/torrents
+DELETE /api/torrents/{id}
 GET /api/admin/users
 POST /api/admin/users
 ```
@@ -55,7 +56,9 @@ Copy the example environment file and adjust values if needed:
 
 ```bash
 cp deploy/.env.example deploy/.env
+mkdir -p data/qbittorrent-config media/originals media/hls media/subtitles media/thumbnails media/tmp
+chmod -R u+rwX,g+rwX data media
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build
 ```
 
-The initial Compose stack runs the Go API and qBittorrent. SQLite and media files are mounted as Docker volumes.
+The Compose stack runs the Go API and qBittorrent. SQLite, qBittorrent config, and media files are bind-mounted into local `data/` and `media/` folders so downloads are visible on the host.

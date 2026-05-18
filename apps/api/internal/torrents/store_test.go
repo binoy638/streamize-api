@@ -88,6 +88,90 @@ func TestMarkTorrentError(t *testing.T) {
 	}
 }
 
+func TestUpdateTorrentTransferState(t *testing.T) {
+	ctx := context.Background()
+	store, ownerID := newTestStore(t)
+
+	created, err := store.CreateTorrent(ctx, CreateTorrentParams{
+		OwnerUserID: ownerID,
+		MagnetURI:   testMagnet,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrent returned error: %v", err)
+	}
+
+	err = store.UpdateTorrentTransferState(ctx, UpdateTorrentTransferStateParams{
+		ID:                 created.ID,
+		QBittorrentHash:    "0123456789ABCDEF0123456789ABCDEF01234567",
+		Name:               "Synced Video",
+		SizeBytes:          1024,
+		Status:             StatusDownloading,
+		ProgressPercent:    42.5,
+		DownloadSpeedBytes: 2048,
+		UploadSpeedBytes:   128,
+		ETASeconds:         30,
+		Peers:              7,
+		Ratio:              1.25,
+	})
+	if err != nil {
+		t.Fatalf("UpdateTorrentTransferState returned error: %v", err)
+	}
+
+	updated, err := store.FindTorrentByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("FindTorrentByID returned error: %v", err)
+	}
+	if updated.Status != StatusDownloading {
+		t.Fatalf("expected status %q, got %q", StatusDownloading, updated.Status)
+	}
+	if updated.QBittorrentHash != "0123456789ABCDEF0123456789ABCDEF01234567" {
+		t.Fatalf("expected qBittorrent hash to be stored, got %q", updated.QBittorrentHash)
+	}
+	if updated.Name != "Synced Video" {
+		t.Fatalf("expected synced name, got %q", updated.Name)
+	}
+	if updated.SizeBytes != 1024 || updated.ProgressPercent != 42.5 || updated.DownloadSpeedBytes != 2048 || updated.UploadSpeedBytes != 128 || updated.ETASeconds != 30 || updated.Peers != 7 || updated.Ratio != 1.25 {
+		t.Fatalf("unexpected transfer state: %+v", updated)
+	}
+}
+
+func TestDeleteTorrentIsOwnerScoped(t *testing.T) {
+	ctx := context.Background()
+	store, ownerID := newTestStore(t)
+
+	created, err := store.CreateTorrent(ctx, CreateTorrentParams{
+		OwnerUserID: ownerID,
+		MagnetURI:   testMagnet,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrent returned error: %v", err)
+	}
+
+	if err := store.DeleteTorrent(ctx, created.ID, "usr_someone_else"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for wrong owner, got %v", err)
+	}
+
+	listed, err := store.ListTorrents(ctx, ownerID)
+	if err != nil {
+		t.Fatalf("ListTorrents returned error: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("expected wrong-owner delete to keep torrent, got %d rows", len(listed))
+	}
+
+	if err := store.DeleteTorrent(ctx, created.ID, ownerID); err != nil {
+		t.Fatalf("DeleteTorrent returned error: %v", err)
+	}
+
+	listed, err = store.ListTorrents(ctx, ownerID)
+	if err != nil {
+		t.Fatalf("ListTorrents returned error: %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("expected torrent to be deleted, got %d rows", len(listed))
+	}
+}
+
 func newTestStore(t *testing.T) (*Store, string) {
 	t.Helper()
 

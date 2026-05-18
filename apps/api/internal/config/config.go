@@ -42,8 +42,10 @@ func Load() (Config, error) {
 	environment := envString("STREAMIZE_ENV", EnvironmentDevelopment)
 	mediaRoot := envString("STREAMIZE_MEDIA_ROOT", "./media")
 	adminPasswordDefault := "adminadmin"
+	logLevelDefault := slog.LevelDebug
 	if environment == EnvironmentProduction {
 		adminPasswordDefault = ""
+		logLevelDefault = slog.LevelInfo
 	}
 
 	cfg := Config{
@@ -66,7 +68,7 @@ func Load() (Config, error) {
 		AdminStorageQuota:   envInt64("STREAMIZE_ADMIN_STORAGE_QUOTA_BYTES", 0),
 		SecureCookies:       envBool("STREAMIZE_SECURE_COOKIES", false),
 		TrustedProxyHeaders: envBool("STREAMIZE_TRUSTED_PROXY_HEADERS", false),
-		LogLevel:            envLogLevel("STREAMIZE_LOG_LEVEL", slog.LevelInfo),
+		LogLevel:            envLogLevel("STREAMIZE_LOG_LEVEL", logLevelDefault),
 	}
 
 	if cfg.Environment == "" {
@@ -181,9 +183,11 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 
 func envLogLevel(key string, fallback slog.Level) slog.Level {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "":
+		return fallback
 	case "debug":
 		return slog.LevelDebug
-	case "info", "":
+	case "info":
 		return slog.LevelInfo
 	case "warn", "warning":
 		return slog.LevelWarn

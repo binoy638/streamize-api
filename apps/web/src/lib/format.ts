@@ -3,6 +3,18 @@ export function formatBytes(bytes: number): string {
     return bytes === 0 ? "Unlimited" : "0 B";
   }
 
+  return formatByteValue(bytes);
+}
+
+export function formatTransferRate(bytesPerSecond: number): string {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) {
+    return "0 B/s";
+  }
+
+  return `${formatByteValue(bytesPerSecond)}/s`;
+}
+
+function formatByteValue(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let value = bytes;
   let unit = 0;

@@ -28,6 +28,12 @@ export type Torrent = {
   name?: string;
   sizeBytes: number;
   status: TorrentStatus;
+  progressPercent: number;
+  downloadSpeedBytes: number;
+  uploadSpeedBytes: number;
+  etaSeconds: number;
+  peers: number;
+  ratio: number;
   retentionPolicy: "keep" | "delete_after_hls";
   errorMessage?: string;
   createdAt: string;
@@ -130,6 +136,12 @@ export async function createTorrent(input: CreateTorrentInput): Promise<Torrent>
     body: JSON.stringify(input),
   });
   return body.torrent;
+}
+
+export async function deleteTorrent(id: string): Promise<void> {
+  await apiFetch<void>(`/api/torrents/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
 export async function getHealth(): Promise<Health> {

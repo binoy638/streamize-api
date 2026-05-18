@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"log/slog"
+	"testing"
+)
 
 func TestLoadDefaults(t *testing.T) {
 	t.Setenv("STREAMIZE_ENV", "")
@@ -11,6 +14,7 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("STREAMIZE_ADMIN_USERNAME", "")
 	t.Setenv("STREAMIZE_ADMIN_PASSWORD", "")
 	t.Setenv("STREAMIZE_SESSION_TTL", "")
+	t.Setenv("STREAMIZE_LOG_LEVEL", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -37,6 +41,9 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.SessionTTL <= 0 {
 		t.Fatal("expected default session ttl")
+	}
+	if cfg.LogLevel != slog.LevelDebug {
+		t.Fatalf("expected default development log level debug, got %v", cfg.LogLevel)
 	}
 }
 
