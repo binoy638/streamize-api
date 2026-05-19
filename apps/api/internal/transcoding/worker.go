@@ -106,7 +106,10 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 
 	targetDir := filepath.Join(w.HLSDir, file.ID)
 	playlistPath := filepath.Join(targetDir, "index.m3u8")
-	segmentPattern := filepath.Join(targetDir, "segment_%05d.ts")
+	segmentPattern := filepath.Join(targetDir, "segment_%05d.m4s")
+	if err := os.RemoveAll(targetDir); err != nil {
+		return w.failJob(ctx, job, file, fmt.Errorf("clear hls output directory: %w", err))
+	}
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return w.failJob(ctx, job, file, fmt.Errorf("create hls output directory: %w", err))
 	}
@@ -126,7 +129,8 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 	if transcoder == nil {
 		transcoder = FFmpegTranscoder{}
 	}
-	if err := transcoder.TranscodeHLS(ctx, file.OriginalPath, playlistPath, segmentPattern); err != nil {
+	progressReporter := w.progressReporter(ctx, file.ID)
+	if err := transcoder.TranscodeHLS(ctx, file.OriginalPath, playlistPath, segmentPattern, progressReporter); err != nil {
 		return w.failJob(ctx, job, file, err)
 	}
 
@@ -144,6 +148,32 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 	)
 
 	return nil
+}
+
+func (w Worker) progressReporter(ctx context.Context, torrentFileID string) ProgressReporter {
+	var lastPercent float64
+	var lastReportedAt time.Time
+
+	return func(percent float64) error {
+		if percent >= 100 {
+			percent = 99.5
+		}
+		if percent < 0 {
+			percent = 0
+		}
+		if percent <= lastPercent {
+			return nil
+		}
+
+		now := time.Now()
+		if percent-lastPercent < 1 && !lastReportedAt.IsZero() && now.Sub(lastReportedAt) < 5*time.Second {
+			return nil
+		}
+
+		lastPercent = percent
+		lastReportedAt = now
+		return w.Torrents.UpdateTorrentFileTranscodingProgress(ctx, torrentFileID, percent)
+	}
 }
 
 func (w Worker) failJob(ctx context.Context, job jobs.Job, file torrents.TorrentFile, err error) error {

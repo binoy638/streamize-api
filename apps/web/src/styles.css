@@ -638,6 +638,10 @@
       linear-gradient(135deg, oklch(8% 0.03 252), oklch(13% 0.04 252));
   }
 
+  .video-player {
+    @apply block aspect-video min-h-[min(62vh,640px)] w-full bg-black object-contain;
+  }
+
   .player-gradient {
     @apply grid max-w-[620px] gap-2.5;
   }

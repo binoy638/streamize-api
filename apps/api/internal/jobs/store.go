@@ -19,9 +19,13 @@ const (
 	StatusRunning   = "running"
 	StatusSucceeded = "succeeded"
 	StatusFailed    = "failed"
+	StatusCanceled  = "canceled"
 )
 
-var ErrNotFound = errors.New("jobs: not found")
+var (
+	ErrInvalidTransition = errors.New("jobs: invalid transition")
+	ErrNotFound          = errors.New("jobs: not found")
+)
 
 type Store struct {
 	db *sql.DB
@@ -41,6 +45,14 @@ type Job struct {
 	AvailableAt string `json:"availableAt"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
+}
+
+type JobRecord struct {
+	Job
+	TorrentID       string  `json:"torrentId,omitempty"`
+	TorrentFileID   string  `json:"torrentFileId,omitempty"`
+	Target          string  `json:"target,omitempty"`
+	ProgressPercent float64 `json:"progressPercent"`
 }
 
 type HLSTranscodePayload struct {
@@ -108,6 +120,62 @@ func (s *Store) FindJobByDedupeKey(ctx context.Context, dedupeKey string) (Job, 
 		FROM jobs
 		WHERE dedupe_key = ?
 	`, strings.TrimSpace(dedupeKey)))
+}
+
+func (s *Store) ListJobsForOwner(ctx context.Context, ownerUserID string) ([]JobRecord, error) {
+	ownerUserID = strings.TrimSpace(ownerUserID)
+	if ownerUserID == "" {
+		return nil, fmt.Errorf("owner user id cannot be empty")
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT j.id, j.type, j.status, j.payload_json, j.dedupe_key, j.attempts, j.max_attempts, j.lease_until, j.locked_by, j.last_error, j.available_at, j.created_at, j.updated_at,
+			tf.torrent_id, tf.id, tf.name, tf.transcoding_percent
+		FROM jobs j
+		INNER JOIN torrent_files tf ON j.dedupe_key = ? || tf.id
+		INNER JOIN torrents t ON t.id = tf.torrent_id
+		WHERE t.owner_user_id = ?
+		ORDER BY
+			CASE j.status
+				WHEN 'running' THEN 0
+				WHEN 'queued' THEN 1
+				WHEN 'failed' THEN 2
+				WHEN 'canceled' THEN 3
+				ELSE 4
+			END,
+			j.updated_at DESC,
+			j.created_at DESC,
+			j.id DESC
+	`, TypeHLSTranscode+":", ownerUserID)
+	if err != nil {
+		return nil, fmt.Errorf("list jobs for owner: %w", err)
+	}
+	defer rows.Close()
+
+	records := make([]JobRecord, 0)
+	for rows.Next() {
+		record, err := scanJobRecordRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate jobs for owner: %w", err)
+	}
+
+	return records, nil
+}
+
+func (s *Store) FindJobByIDForOwner(ctx context.Context, id string, ownerUserID string) (JobRecord, error) {
+	return scanJobRecord(s.db.QueryRowContext(ctx, `
+		SELECT j.id, j.type, j.status, j.payload_json, j.dedupe_key, j.attempts, j.max_attempts, j.lease_until, j.locked_by, j.last_error, j.available_at, j.created_at, j.updated_at,
+			tf.torrent_id, tf.id, tf.name, tf.transcoding_percent
+		FROM jobs j
+		INNER JOIN torrent_files tf ON j.dedupe_key = ? || tf.id
+		INNER JOIN torrents t ON t.id = tf.torrent_id
+		WHERE j.id = ? AND t.owner_user_id = ?
+	`, TypeHLSTranscode+":", strings.TrimSpace(id), strings.TrimSpace(ownerUserID)))
 }
 
 func (s *Store) ClaimNext(ctx context.Context, workerID string, leaseDuration time.Duration) (Job, bool, error) {
@@ -220,6 +288,59 @@ func (s *Store) Fail(ctx context.Context, id string, message string, retryDelay 
 	return checkRowsAffected(result)
 }
 
+func (s *Store) Retry(ctx context.Context, id string) (Job, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return Job{}, ErrNotFound
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE jobs
+		SET status = ?,
+			attempts = 0,
+			lease_until = NULL,
+			locked_by = NULL,
+			last_error = NULL,
+			available_at = CURRENT_TIMESTAMP,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+			AND status IN (?, ?, ?)
+	`, StatusQueued, id, StatusFailed, StatusCanceled, StatusSucceeded)
+	if err != nil {
+		return Job{}, fmt.Errorf("retry job: %w", err)
+	}
+	if err := s.checkTransitionRowsAffected(ctx, result, id); err != nil {
+		return Job{}, err
+	}
+
+	return s.FindJobByID(ctx, id)
+}
+
+func (s *Store) Cancel(ctx context.Context, id string) (Job, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return Job{}, ErrNotFound
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE jobs
+		SET status = ?,
+			lease_until = NULL,
+			locked_by = NULL,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+			AND status IN (?, ?)
+	`, StatusCanceled, id, StatusQueued, StatusFailed)
+	if err != nil {
+		return Job{}, fmt.Errorf("cancel job: %w", err)
+	}
+	if err := s.checkTransitionRowsAffected(ctx, result, id); err != nil {
+		return Job{}, err
+	}
+
+	return s.FindJobByID(ctx, id)
+}
+
 func checkRowsAffected(result sql.Result) error {
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
@@ -230,6 +351,21 @@ func checkRowsAffected(result sql.Result) error {
 	}
 
 	return nil
+}
+
+func (s *Store) checkTransitionRowsAffected(ctx context.Context, result sql.Result, id string) error {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read rows affected: %w", err)
+	}
+	if rowsAffected > 0 {
+		return nil
+	}
+	if _, err := s.FindJobByID(ctx, id); err != nil {
+		return err
+	}
+
+	return ErrInvalidTransition
 }
 
 type rowScanner interface {
@@ -270,4 +406,62 @@ func scanJob(row rowScanner) (Job, error) {
 	job.LastError = lastError.String
 
 	return job, nil
+}
+
+func scanJobRecord(row rowScanner) (JobRecord, error) {
+	record, err := scanJobRecordValues(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return JobRecord{}, ErrNotFound
+		}
+		return JobRecord{}, fmt.Errorf("scan job record: %w", err)
+	}
+
+	return record, nil
+}
+
+func scanJobRecordRow(row rowScanner) (JobRecord, error) {
+	record, err := scanJobRecordValues(row)
+	if err != nil {
+		return JobRecord{}, fmt.Errorf("scan job record: %w", err)
+	}
+
+	return record, nil
+}
+
+func scanJobRecordValues(row rowScanner) (JobRecord, error) {
+	var record JobRecord
+	var dedupeKey sql.NullString
+	var leaseUntil sql.NullString
+	var lockedBy sql.NullString
+	var lastError sql.NullString
+
+	if err := row.Scan(
+		&record.ID,
+		&record.Type,
+		&record.Status,
+		&record.PayloadJSON,
+		&dedupeKey,
+		&record.Attempts,
+		&record.MaxAttempts,
+		&leaseUntil,
+		&lockedBy,
+		&lastError,
+		&record.AvailableAt,
+		&record.CreatedAt,
+		&record.UpdatedAt,
+		&record.TorrentID,
+		&record.TorrentFileID,
+		&record.Target,
+		&record.ProgressPercent,
+	); err != nil {
+		return JobRecord{}, err
+	}
+
+	record.DedupeKey = dedupeKey.String
+	record.LeaseUntil = leaseUntil.String
+	record.LockedBy = lockedBy.String
+	record.LastError = lastError.String
+
+	return record, nil
 }

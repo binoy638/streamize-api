@@ -62,6 +62,14 @@ func TestWorkerProcessesHLSTranscodeJob(t *testing.T) {
 	}
 
 	transcoder := &fakeTranscoder{}
+	var observedProgress float64
+	transcoder.afterProgress = func() {
+		processingFile, err := torrentStore.FindTorrentFileByID(ctx, file.ID)
+		if err != nil {
+			t.Fatalf("FindTorrentFileByID during progress returned error: %v", err)
+		}
+		observedProgress = processingFile.TranscodingPercent
+	}
 	worker := Worker{
 		Jobs:       jobStore,
 		Torrents:   torrentStore,
@@ -103,10 +111,14 @@ func TestWorkerProcessesHLSTranscodeJob(t *testing.T) {
 	if transcoder.calls[0].outputPlaylistPath != updatedFile.HLSPath {
 		t.Fatalf("expected output playlist path %q, got %q", updatedFile.HLSPath, transcoder.calls[0].outputPlaylistPath)
 	}
+	if observedProgress != 42.5 {
+		t.Fatalf("expected intermediate progress to be recorded, got %v", observedProgress)
+	}
 }
 
 type fakeTranscoder struct {
-	calls []fakeTranscodeCall
+	calls         []fakeTranscodeCall
+	afterProgress func()
 }
 
 type fakeTranscodeCall struct {
@@ -115,11 +127,19 @@ type fakeTranscodeCall struct {
 	segmentPattern     string
 }
 
-func (f *fakeTranscoder) TranscodeHLS(_ context.Context, inputPath string, outputPlaylistPath string, segmentPattern string) error {
+func (f *fakeTranscoder) TranscodeHLS(_ context.Context, inputPath string, outputPlaylistPath string, segmentPattern string, onProgress ProgressReporter) error {
 	f.calls = append(f.calls, fakeTranscodeCall{
 		inputPath:          inputPath,
 		outputPlaylistPath: outputPlaylistPath,
 		segmentPattern:     segmentPattern,
 	})
+	if onProgress != nil {
+		if err := onProgress(42.5); err != nil {
+			return err
+		}
+	}
+	if f.afterProgress != nil {
+		f.afterProgress()
+	}
 	return nil
 }

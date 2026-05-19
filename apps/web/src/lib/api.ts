@@ -18,6 +18,7 @@ export type Health = {
 
 export type TorrentStatus = "added" | "downloading" | "paused" | "queued" | "processing" | "done" | "error";
 export type TorrentFileStatus = "downloading" | "queued" | "processing" | "done" | "error";
+export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
 export type Torrent = {
   id: string;
@@ -56,6 +57,26 @@ export type TorrentFile = {
   errorMessage?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type Job = {
+  id: string;
+  type: string;
+  status: JobStatus;
+  payloadJson: string;
+  dedupeKey?: string;
+  attempts: number;
+  maxAttempts: number;
+  leaseUntil?: string;
+  lockedBy?: string;
+  lastError?: string;
+  availableAt: string;
+  createdAt: string;
+  updatedAt: string;
+  torrentId?: string;
+  torrentFileId?: string;
+  target?: string;
+  progressPercent: number;
 };
 
 export type CreateUserInput = {
@@ -165,6 +186,25 @@ export async function deleteTorrent(id: string): Promise<void> {
 export async function listTorrentFiles(torrentId: string): Promise<TorrentFile[]> {
   const body = await apiFetch<{ files: TorrentFile[] }>(`/api/torrents/${encodeURIComponent(torrentId)}/files`);
   return body.files;
+}
+
+export async function listJobs(): Promise<Job[]> {
+  const body = await apiFetch<{ jobs: Job[] }>("/api/jobs");
+  return body.jobs;
+}
+
+export async function retryJob(id: string): Promise<Job> {
+  const body = await apiFetch<{ job: Job }>(`/api/jobs/${encodeURIComponent(id)}/retry`, {
+    method: "POST",
+  });
+  return body.job;
+}
+
+export async function cancelJob(id: string): Promise<Job> {
+  const body = await apiFetch<{ job: Job }>(`/api/jobs/${encodeURIComponent(id)}/cancel`, {
+    method: "POST",
+  });
+  return body.job;
 }
 
 export async function getHealth(): Promise<Health> {

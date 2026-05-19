@@ -31,7 +31,13 @@ POST /api/auth/sign-out
 GET /api/auth/me
 GET /api/torrents
 POST /api/torrents
+GET /api/torrents/{id}/files
 DELETE /api/torrents/{id}
+GET /api/jobs
+POST /api/jobs/{id}/retry
+POST /api/jobs/{id}/cancel
+GET /api/files/{id}/hls/index.m3u8
+GET /api/files/{id}/hls/{segment}
 GET /api/admin/users
 POST /api/admin/users
 ```

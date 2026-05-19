@@ -306,6 +306,15 @@ func (s *Store) FindTorrentFileByID(ctx context.Context, id string) (TorrentFile
 	`, strings.TrimSpace(id)))
 }
 
+func (s *Store) FindTorrentFileByIDForOwner(ctx context.Context, id string, ownerUserID string) (TorrentFile, error) {
+	return scanTorrentFile(s.db.QueryRowContext(ctx, `
+		SELECT tf.id, tf.torrent_id, tf.slug, tf.name, tf.ext, tf.original_path, tf.hls_path, tf.size_bytes, tf.status, tf.progress_preview, tf.transcoding_percent, tf.error_message, tf.created_at, tf.updated_at
+		FROM torrent_files tf
+		INNER JOIN torrents t ON t.id = tf.torrent_id
+		WHERE tf.id = ? AND t.owner_user_id = ?
+	`, strings.TrimSpace(id), strings.TrimSpace(ownerUserID)))
+}
+
 func (s *Store) ListTorrentFiles(ctx context.Context, torrentID string) ([]TorrentFile, error) {
 	torrentID = strings.TrimSpace(torrentID)
 	if torrentID == "" {
@@ -354,6 +363,50 @@ func (s *Store) MarkTorrentFileProcessing(ctx context.Context, id string) error 
 	`, FileStatusProcessing, id)
 	if err != nil {
 		return fmt.Errorf("mark torrent file processing: %w", err)
+	}
+
+	return checkRowsAffected(result)
+}
+
+func (s *Store) UpdateTorrentFileTranscodingProgress(ctx context.Context, id string, percent float64) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ErrNotFound
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE torrent_files
+		SET status = ?,
+			transcoding_percent = ?,
+			error_message = NULL,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, FileStatusProcessing, clampFloat(percent, 0, 100), id)
+	if err != nil {
+		return fmt.Errorf("update torrent file transcoding progress: %w", err)
+	}
+
+	return checkRowsAffected(result)
+}
+
+func (s *Store) ResetTorrentFileForTranscode(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ErrNotFound
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE torrent_files
+		SET status = ?,
+			hls_path = NULL,
+			progress_preview = 0,
+			transcoding_percent = 0,
+			error_message = NULL,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, FileStatusQueued, id)
+	if err != nil {
+		return fmt.Errorf("reset torrent file for transcode: %w", err)
 	}
 
 	return checkRowsAffected(result)

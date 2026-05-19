@@ -111,6 +111,14 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 		Logger:        logger,
 		FreeDiskBytes: options.freeDiskBytes,
 	}
+	jobHandler := JobHandler{
+		Store:        jobStore,
+		TorrentStore: torrentStore,
+	}
+	playbackHandler := PlaybackHandler{
+		Store:  torrentStore,
+		HLSDir: cfg.HLSDir,
+	}
 
 	router.Route("/api", func(api chi.Router) {
 		api.NotFound(notFoundHandler)
@@ -127,6 +135,11 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 			protected.Post("/torrents", torrentHandler.CreateTorrent)
 			protected.Get("/torrents/{id}/files", torrentHandler.ListTorrentFiles)
 			protected.Delete("/torrents/{id}", torrentHandler.DeleteTorrent)
+			protected.Get("/jobs", jobHandler.ListJobs)
+			protected.Post("/jobs/{id}/retry", jobHandler.RetryJob)
+			protected.Post("/jobs/{id}/cancel", jobHandler.CancelJob)
+			protected.Get("/files/{id}/hls/index.m3u8", playbackHandler.ServeHLSPlaylist)
+			protected.Get("/files/{id}/hls/{segment}", playbackHandler.ServeHLSSegment)
 
 			protected.Route("/admin", func(admin chi.Router) {
 				admin.Use(RequireAdmin)

@@ -2,12 +2,16 @@ package jobs
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/binoy638/streamize-api/apps/api/internal/auth"
 	"github.com/binoy638/streamize-api/apps/api/internal/database"
+	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
 )
 
 func TestCreateHLSTranscodeJobIfMissingIsIdempotent(t *testing.T) {
@@ -101,7 +105,147 @@ func TestClaimNextCompleteAndFail(t *testing.T) {
 	}
 }
 
+func TestListJobsForOwnerOnlyReturnsOwnedTorrentFileJobs(t *testing.T) {
+	ctx := context.Background()
+	store, db := newTestStoreAndDB(t)
+	authStore := auth.NewStore(db)
+	torrentStore := torrents.NewStore(db)
+
+	owner, err := authStore.CreateUser(ctx, auth.CreateUserParams{
+		Username: "owner",
+		Password: "owner-password",
+		Role:     auth.RoleUser,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser owner returned error: %v", err)
+	}
+	other, err := authStore.CreateUser(ctx, auth.CreateUserParams{
+		Username: "other",
+		Password: "other-password",
+		Role:     auth.RoleUser,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser other returned error: %v", err)
+	}
+
+	ownerTorrent := createTorrentRecordForJobsTest(t, ctx, torrentStore, owner.ID, "Owner Movie")
+	ownerFile, _, err := torrentStore.CreateTorrentFileIfMissing(ctx, torrents.CreateTorrentFileParams{
+		TorrentID:    ownerTorrent.ID,
+		Name:         "Owner Movie/movie.mkv",
+		Ext:          ".mkv",
+		OriginalPath: "/media/originals/Owner Movie/movie.mkv",
+		SizeBytes:    1024,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing owner returned error: %v", err)
+	}
+	ownerJob, _, err := store.CreateHLSTranscodeJobIfMissing(ctx, ownerFile.ID)
+	if err != nil {
+		t.Fatalf("CreateHLSTranscodeJobIfMissing owner returned error: %v", err)
+	}
+
+	otherTorrent := createTorrentRecordForJobsTest(t, ctx, torrentStore, other.ID, "Other Movie")
+	otherFile, _, err := torrentStore.CreateTorrentFileIfMissing(ctx, torrents.CreateTorrentFileParams{
+		TorrentID:    otherTorrent.ID,
+		Name:         "Other Movie/movie.mkv",
+		Ext:          ".mkv",
+		OriginalPath: "/media/originals/Other Movie/movie.mkv",
+		SizeBytes:    2048,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing other returned error: %v", err)
+	}
+	if _, _, err := store.CreateHLSTranscodeJobIfMissing(ctx, otherFile.ID); err != nil {
+		t.Fatalf("CreateHLSTranscodeJobIfMissing other returned error: %v", err)
+	}
+
+	records, err := store.ListJobsForOwner(ctx, owner.ID)
+	if err != nil {
+		t.Fatalf("ListJobsForOwner returned error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected one owned job, got %+v", records)
+	}
+	if records[0].ID != ownerJob.ID || records[0].TorrentID != ownerTorrent.ID || records[0].TorrentFileID != ownerFile.ID || records[0].Target != "Owner Movie/movie.mkv" {
+		t.Fatalf("unexpected owned job record: %+v", records[0])
+	}
+}
+
+func TestRetryResetsFailedJobAttempts(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	created, _, err := store.CreateHLSTranscodeJobIfMissing(ctx, "tfi_123")
+	if err != nil {
+		t.Fatalf("CreateHLSTranscodeJobIfMissing returned error: %v", err)
+	}
+
+	for attempt := 0; attempt < 3; attempt++ {
+		claimed, ok, err := store.ClaimNext(ctx, "worker-1", time.Minute)
+		if err != nil {
+			t.Fatalf("ClaimNext attempt %d returned error: %v", attempt+1, err)
+		}
+		if !ok {
+			t.Fatalf("expected job to be claimable on attempt %d", attempt+1)
+		}
+		if err := store.Fail(ctx, claimed.ID, "ffmpeg failed", 0); err != nil {
+			t.Fatalf("Fail attempt %d returned error: %v", attempt+1, err)
+		}
+	}
+
+	failed, err := store.FindJobByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("FindJobByID returned error: %v", err)
+	}
+	if failed.Status != StatusFailed || failed.Attempts != 3 {
+		t.Fatalf("expected failed job after max attempts, got %+v", failed)
+	}
+
+	retried, err := store.Retry(ctx, failed.ID)
+	if err != nil {
+		t.Fatalf("Retry returned error: %v", err)
+	}
+	if retried.Status != StatusQueued || retried.Attempts != 0 || retried.LastError != "" || retried.LockedBy != "" || retried.LeaseUntil != "" {
+		t.Fatalf("unexpected retried job: %+v", retried)
+	}
+}
+
+func TestCancelKeepsJobUnclaimable(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	created, _, err := store.CreateHLSTranscodeJobIfMissing(ctx, "tfi_123")
+	if err != nil {
+		t.Fatalf("CreateHLSTranscodeJobIfMissing returned error: %v", err)
+	}
+	canceled, err := store.Cancel(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("Cancel returned error: %v", err)
+	}
+	if canceled.Status != StatusCanceled {
+		t.Fatalf("expected canceled status, got %+v", canceled)
+	}
+	if _, err := store.Cancel(ctx, created.ID); !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("expected invalid transition on repeated cancel, got %v", err)
+	}
+
+	_, ok, err := store.ClaimNext(ctx, "worker-1", time.Minute)
+	if err != nil {
+		t.Fatalf("ClaimNext returned error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected canceled job not to be claimable")
+	}
+}
+
 func newTestStore(t *testing.T) *Store {
+	t.Helper()
+
+	store, _ := newTestStoreAndDB(t)
+	return store
+}
+
+func newTestStoreAndDB(t *testing.T) (*Store, *sql.DB) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -115,5 +259,20 @@ func newTestStore(t *testing.T) *Store {
 		t.Fatalf("Migrate returned error: %v", err)
 	}
 
-	return NewStore(db)
+	return NewStore(db), db
+}
+
+func createTorrentRecordForJobsTest(t *testing.T, ctx context.Context, store *torrents.Store, ownerUserID string, name string) torrents.Torrent {
+	t.Helper()
+
+	record, err := store.CreateTorrent(ctx, torrents.CreateTorrentParams{
+		OwnerUserID: ownerUserID,
+		MagnetURI:   "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=test",
+		Name:        name,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrent returned error: %v", err)
+	}
+
+	return record
 }

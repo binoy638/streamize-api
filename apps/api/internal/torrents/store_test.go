@@ -227,6 +227,17 @@ func TestTorrentFileStatusUpdates(t *testing.T) {
 		t.Fatalf("unexpected processing file: %+v", processing)
 	}
 
+	if err := store.UpdateTorrentFileTranscodingProgress(ctx, file.ID, 42.5); err != nil {
+		t.Fatalf("UpdateTorrentFileTranscodingProgress returned error: %v", err)
+	}
+	progressed, err := store.FindTorrentFileByID(ctx, file.ID)
+	if err != nil {
+		t.Fatalf("FindTorrentFileByID returned error: %v", err)
+	}
+	if progressed.Status != FileStatusProcessing || progressed.TranscodingPercent != 42.5 {
+		t.Fatalf("unexpected progressed file: %+v", progressed)
+	}
+
 	if err := store.MarkTorrentFileDone(ctx, file.ID, "/media/hls/tfi_123/index.m3u8"); err != nil {
 		t.Fatalf("MarkTorrentFileDone returned error: %v", err)
 	}
@@ -236,6 +247,17 @@ func TestTorrentFileStatusUpdates(t *testing.T) {
 	}
 	if done.Status != FileStatusDone || done.HLSPath != "/media/hls/tfi_123/index.m3u8" || !done.ProgressPreview || done.TranscodingPercent != 100 {
 		t.Fatalf("unexpected done file: %+v", done)
+	}
+
+	if err := store.ResetTorrentFileForTranscode(ctx, file.ID); err != nil {
+		t.Fatalf("ResetTorrentFileForTranscode returned error: %v", err)
+	}
+	reset, err := store.FindTorrentFileByID(ctx, file.ID)
+	if err != nil {
+		t.Fatalf("FindTorrentFileByID returned error: %v", err)
+	}
+	if reset.Status != FileStatusQueued || reset.HLSPath != "" || reset.ProgressPreview || reset.TranscodingPercent != 0 || reset.ErrorMessage != "" {
+		t.Fatalf("unexpected reset file: %+v", reset)
 	}
 
 	if err := store.MarkTorrentFileError(ctx, file.ID, "ffmpeg failed"); err != nil {

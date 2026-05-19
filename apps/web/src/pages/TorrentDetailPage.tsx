@@ -7,8 +7,9 @@ import { formatBytes, formatDate } from "../lib/format";
 import {
   filesForTorrent,
   findTorrent,
-  jobs,
+  jobs as mockJobs,
   shares,
+  type Job as MockJob,
   type Torrent as MockTorrent,
   type TorrentFile as MockTorrentFile,
 } from "../lib/mock-data";
@@ -16,6 +17,7 @@ import {
 const tabs = ["overview", "files", "jobs", "subtitles", "shares"];
 const pollableStatuses = new Set(["added", "queued", "downloading", "processing"]);
 const pollableFileStatuses = new Set(["queued", "processing"]);
+const pollableJobStatuses = new Set(["queued", "running"]);
 
 type TorrentDetail = {
   id: string;
@@ -43,12 +45,24 @@ type FileRow = {
   canOpen: boolean;
 };
 
+type JobRow = {
+  id: string;
+  type: string;
+  target: string;
+  status: api.JobStatus | MockJob["status"];
+  progress: number;
+  worker: string;
+  updatedAt: string;
+};
+
 export function TorrentDetailPage() {
   const { id } = useParams();
   const mockTorrent = useMemo(() => findTorrent(id), [id]);
   const mockFiles = useMemo(() => filesForTorrent(mockTorrent.id).map(mockFileToRow), [mockTorrent.id]);
+  const mockDetailJobs = useMemo(() => mockJobs.slice(0, 4).map(mockJobToDetailRow), []);
   const [torrent, setTorrent] = useState<TorrentDetail>(() => mockTorrentToDetail(mockTorrent));
   const [files, setFiles] = useState<FileRow[]>(() => mockFiles);
+  const [detailJobs, setDetailJobs] = useState<JobRow[]>(() => mockDetailJobs);
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [usingMock, setUsingMock] = useState(true);
@@ -68,14 +82,17 @@ export function TorrentDetailPage() {
         }
 
         const apiFiles = await api.listTorrentFiles(apiTorrent.id);
+        const apiJobs = await api.listJobs();
         setTorrent(apiTorrentToDetail(apiTorrent));
         setFiles(apiFiles.map(apiFileToRow));
+        setDetailJobs(apiJobs.filter((job) => job.torrentId === apiTorrent.id).map(apiJobToDetailRow));
         setUsingMock(false);
         setError("");
       } catch (err) {
         if (fallbackToMock) {
           setTorrent(mockTorrentToDetail(mockTorrent));
           setFiles(mockFiles);
+          setDetailJobs(mockDetailJobs);
           setUsingMock(true);
           setError(err instanceof Error ? err.message : "Unable to load torrent detail.");
         }
@@ -85,7 +102,7 @@ export function TorrentDetailPage() {
         }
       }
     },
-    [id, mockFiles, mockTorrent],
+    [id, mockDetailJobs, mockFiles, mockTorrent],
   );
 
   useEffect(() => {
@@ -94,7 +111,8 @@ export function TorrentDetailPage() {
 
   useEffect(() => {
     const hasActiveFiles = files.some((file) => pollableFileStatuses.has(file.status));
-    if (usingMock || (!pollableStatuses.has(torrent.status) && !hasActiveFiles)) {
+    const hasActiveJobs = detailJobs.some((job) => pollableJobStatuses.has(job.status));
+    if (usingMock || (!pollableStatuses.has(torrent.status) && !hasActiveFiles && !hasActiveJobs)) {
       return;
     }
 
@@ -103,7 +121,16 @@ export function TorrentDetailPage() {
     }, 5000);
 
     return () => window.clearInterval(intervalID);
-  }, [files, loadDetail, torrent.status, usingMock]);
+  }, [detailJobs, files, loadDetail, torrent.status, usingMock]);
+
+  const jobStats = useMemo(() => {
+    const failed = detailJobs.filter((job) => job.status === "failed").length;
+    const running = detailJobs.filter((job) => job.status === "running").length;
+    if (detailJobs.length === 0) {
+      return "none queued";
+    }
+    return `${failed} failed, ${running} running`;
+  }, [detailJobs]);
 
   return (
     <section className="content">
@@ -136,7 +163,7 @@ export function TorrentDetailPage() {
 
       <div className="stats-row">
         <StatCard label="Files" value={String(files.length)} detail={loading ? "loading candidates" : "video candidates"} />
-        <StatCard label="Jobs" value="4" detail="1 failed, 2 running" />
+        <StatCard label="Jobs" value={String(detailJobs.length)} detail={jobStats} />
         <StatCard label="Subtitles" value="6" detail="detected or extracted" />
         <StatCard label="Retention" value={torrent.retention} detail="originals retained" />
       </div>
@@ -215,7 +242,7 @@ export function TorrentDetailPage() {
 
         {activeTab === "jobs" ? (
           <div className="timeline-list">
-            {jobs.slice(0, 4).map((job) => (
+            {detailJobs.map((job) => (
               <div className="timeline-item" key={job.id}>
                 <Badge tone={job.status}>{job.status}</Badge>
                 <div>
@@ -227,6 +254,7 @@ export function TorrentDetailPage() {
                 <Progress value={job.progress} />
               </div>
             ))}
+            {detailJobs.length === 0 ? <EmptyState title="No jobs">No processing jobs are attached to this torrent yet.</EmptyState> : null}
           </div>
         ) : null}
 
@@ -322,6 +350,30 @@ function mockFileToRow(file: MockTorrentFile): FileRow {
   };
 }
 
+function apiJobToDetailRow(job: api.Job): JobRow {
+  return {
+    id: job.id,
+    type: job.type,
+    target: job.target || job.torrentFileId || "Unattached job",
+    status: job.status,
+    progress: progressForJob(job),
+    worker: job.lockedBy || (job.status === "running" ? "claimed" : "unclaimed"),
+    updatedAt: formatDate(job.updatedAt),
+  };
+}
+
+function mockJobToDetailRow(job: MockJob): JobRow {
+  return {
+    id: job.id,
+    type: job.type,
+    target: job.target,
+    status: job.status,
+    progress: job.progress,
+    worker: job.worker,
+    updatedAt: job.updatedAt,
+  };
+}
+
 function progressForTorrent(torrent: api.Torrent): number {
   if (Number.isFinite(torrent.progressPercent)) {
     return Math.round(Math.max(0, Math.min(torrent.progressPercent, 100)));
@@ -339,6 +391,20 @@ function progressForFile(file: api.TorrentFile): number {
   }
   if (Number.isFinite(file.transcodingPercent)) {
     return Math.round(Math.max(0, Math.min(file.transcodingPercent, 100)));
+  }
+
+  return 0;
+}
+
+function progressForJob(job: api.Job): number {
+  if (job.status === "succeeded") {
+    return 100;
+  }
+  if (job.status === "queued" || job.status === "canceled") {
+    return 0;
+  }
+  if (Number.isFinite(job.progressPercent)) {
+    return Math.round(Math.max(0, Math.min(job.progressPercent, 100)));
   }
 
   return 0;
