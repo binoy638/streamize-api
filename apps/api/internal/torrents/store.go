@@ -21,10 +21,11 @@ const (
 	StatusDone        = "done"
 	StatusError       = "error"
 
-	FileStatusQueued     = "queued"
-	FileStatusProcessing = "processing"
-	FileStatusDone       = "done"
-	FileStatusError      = "error"
+	FileStatusDownloading = "downloading"
+	FileStatusQueued      = "queued"
+	FileStatusProcessing  = "processing"
+	FileStatusDone        = "done"
+	FileStatusError       = "error"
 
 	RetentionKeep = "keep"
 )
@@ -63,6 +64,7 @@ type Torrent struct {
 type TorrentFile struct {
 	ID                 string  `json:"id"`
 	TorrentID          string  `json:"torrentId"`
+	OwnerUserID        string  `json:"ownerUserId"`
 	Slug               string  `json:"slug"`
 	Name               string  `json:"name"`
 	Ext                string  `json:"ext"`
@@ -72,6 +74,7 @@ type TorrentFile struct {
 	Status             string  `json:"status"`
 	ProgressPreview    bool    `json:"progressPreview"`
 	TranscodingPercent float64 `json:"transcodingPercent"`
+	DownloadPercent    float64 `json:"downloadPercent"`
 	Container          string  `json:"container,omitempty"`
 	VideoCodec         string  `json:"videoCodec,omitempty"`
 	AudioCodec         string  `json:"audioCodec,omitempty"`
@@ -119,10 +122,12 @@ type UpdateTorrentTransferStateParams struct {
 
 type CreateTorrentFileParams struct {
 	TorrentID    string
+	OwnerUserID  string
 	Name         string
 	Ext          string
 	OriginalPath string
 	SizeBytes    int64
+	Status       string
 }
 
 type UpdateTorrentFileMediaMetadataParams struct {
@@ -307,6 +312,15 @@ func (s *Store) CreateTorrentFileIfMissing(ctx context.Context, params CreateTor
 		return TorrentFile{}, false, fmt.Errorf("torrent id, name, and original path are required")
 	}
 
+	ownerUserID := strings.TrimSpace(params.OwnerUserID)
+	if ownerUserID == "" {
+		torrent, err := s.FindTorrentByID(ctx, torrentID)
+		if err != nil {
+			return TorrentFile{}, false, fmt.Errorf("resolve torrent owner: %w", err)
+		}
+		ownerUserID = torrent.OwnerUserID
+	}
+
 	existing, err := s.findTorrentFileByOriginalPath(ctx, torrentID, originalPath)
 	if err == nil {
 		return existing, false, nil
@@ -320,10 +334,15 @@ func (s *Store) CreateTorrentFileIfMissing(ctx context.Context, params CreateTor
 		return TorrentFile{}, false, err
 	}
 
+	initialStatus := strings.TrimSpace(params.Status)
+	if initialStatus == "" {
+		initialStatus = FileStatusQueued
+	}
+
 	if _, err := s.db.ExecContext(ctx, `
-		INSERT INTO torrent_files (id, torrent_id, slug, name, ext, original_path, size_bytes, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, torrentID, id, name, strings.ToLower(strings.TrimSpace(params.Ext)), originalPath, maxInt64(params.SizeBytes, 0), FileStatusQueued); err != nil {
+		INSERT INTO torrent_files (id, torrent_id, owner_user_id, slug, name, ext, original_path, size_bytes, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, torrentID, ownerUserID, id, name, strings.ToLower(strings.TrimSpace(params.Ext)), originalPath, maxInt64(params.SizeBytes, 0), initialStatus); err != nil {
 		return TorrentFile{}, false, fmt.Errorf("create torrent file: %w", err)
 	}
 
@@ -337,7 +356,7 @@ func (s *Store) CreateTorrentFileIfMissing(ctx context.Context, params CreateTor
 
 func (s *Store) FindTorrentFileByID(ctx context.Context, id string) (TorrentFile, error) {
 	return scanTorrentFile(s.db.QueryRowContext(ctx, `
-		SELECT id, torrent_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, container, video_codec, audio_codec, duration_seconds, processing_mode, thumbnail_sheet_path, thumbnail_vtt_path, error_message, created_at, updated_at
+		SELECT id, torrent_id, owner_user_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, download_percent, container, video_codec, audio_codec, duration_seconds, processing_mode, thumbnail_sheet_path, thumbnail_vtt_path, error_message, created_at, updated_at
 		FROM torrent_files
 		WHERE id = ?
 	`, strings.TrimSpace(id)))
@@ -345,10 +364,9 @@ func (s *Store) FindTorrentFileByID(ctx context.Context, id string) (TorrentFile
 
 func (s *Store) FindTorrentFileByIDForOwner(ctx context.Context, id string, ownerUserID string) (TorrentFile, error) {
 	return scanTorrentFile(s.db.QueryRowContext(ctx, `
-		SELECT tf.id, tf.torrent_id, tf.slug, tf.name, tf.ext, tf.original_path, tf.hls_path, tf.size_bytes, tf.status, tf.progress_preview, tf.transcoding_percent, tf.container, tf.video_codec, tf.audio_codec, tf.duration_seconds, tf.processing_mode, tf.thumbnail_sheet_path, tf.thumbnail_vtt_path, tf.error_message, tf.created_at, tf.updated_at
-		FROM torrent_files tf
-		INNER JOIN torrents t ON t.id = tf.torrent_id
-		WHERE tf.id = ? AND t.owner_user_id = ?
+		SELECT id, torrent_id, owner_user_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, download_percent, container, video_codec, audio_codec, duration_seconds, processing_mode, thumbnail_sheet_path, thumbnail_vtt_path, error_message, created_at, updated_at
+		FROM torrent_files
+		WHERE id = ? AND owner_user_id = ?
 	`, strings.TrimSpace(id), strings.TrimSpace(ownerUserID)))
 }
 
@@ -359,7 +377,7 @@ func (s *Store) ListTorrentFiles(ctx context.Context, torrentID string) ([]Torre
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, torrent_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, container, video_codec, audio_codec, duration_seconds, processing_mode, thumbnail_sheet_path, thumbnail_vtt_path, error_message, created_at, updated_at
+		SELECT id, torrent_id, owner_user_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, download_percent, container, video_codec, audio_codec, duration_seconds, processing_mode, thumbnail_sheet_path, thumbnail_vtt_path, error_message, created_at, updated_at
 		FROM torrent_files
 		WHERE torrent_id = ?
 		ORDER BY name ASC, id ASC
@@ -384,6 +402,52 @@ func (s *Store) ListTorrentFiles(ctx context.Context, torrentID string) ([]Torre
 	return files, nil
 }
 
+func (s *Store) ListTorrentFilesByOwner(ctx context.Context, ownerUserID string) ([]TorrentFile, error) {
+	ownerUserID = strings.TrimSpace(ownerUserID)
+	if ownerUserID == "" {
+		return nil, fmt.Errorf("owner user id cannot be empty")
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, torrent_id, owner_user_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, download_percent, container, video_codec, audio_codec, duration_seconds, processing_mode, thumbnail_sheet_path, thumbnail_vtt_path, error_message, created_at, updated_at
+		FROM torrent_files
+		WHERE owner_user_id = ?
+		ORDER BY created_at DESC, id DESC
+	`, ownerUserID)
+	if err != nil {
+		return nil, fmt.Errorf("list torrent files by owner: %w", err)
+	}
+	defer rows.Close()
+
+	files := make([]TorrentFile, 0)
+	for rows.Next() {
+		file, err := scanTorrentFileRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, file)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate torrent files by owner: %w", err)
+	}
+
+	return files, nil
+}
+
+func (s *Store) DeleteTorrentFilesForTorrent(ctx context.Context, torrentID string) error {
+	torrentID = strings.TrimSpace(torrentID)
+	if torrentID == "" {
+		return ErrNotFound
+	}
+
+	_, err := s.db.ExecContext(ctx, `DELETE FROM torrent_files WHERE torrent_id = ?`, torrentID)
+	if err != nil {
+		return fmt.Errorf("delete torrent files: %w", err)
+	}
+
+	return nil
+}
+
 func (s *Store) MarkTorrentFileProcessing(ctx context.Context, id string) error {
 	id = strings.TrimSpace(id)
 	if id == "" {
@@ -403,6 +467,70 @@ func (s *Store) MarkTorrentFileProcessing(ctx context.Context, id string) error 
 	}
 
 	return checkRowsAffected(result)
+}
+
+func (s *Store) MarkTorrentFileProcessingWithHLS(ctx context.Context, id string, hlsPath string) error {
+	id = strings.TrimSpace(id)
+	hlsPath = strings.TrimSpace(hlsPath)
+	if id == "" {
+		return ErrNotFound
+	}
+	if hlsPath == "" {
+		return fmt.Errorf("hls path cannot be empty")
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE torrent_files
+		SET status = ?,
+			hls_path = ?,
+			transcoding_percent = 0,
+			error_message = NULL,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, FileStatusProcessing, hlsPath, id)
+	if err != nil {
+		return fmt.Errorf("mark torrent file processing with hls: %w", err)
+	}
+
+	return checkRowsAffected(result)
+}
+
+func (s *Store) MarkTorrentFileQueued(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ErrNotFound
+	}
+
+	// Transition from downloading → queued when torrent completes download.
+	// Silently succeeds if the file is already in a later state.
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE torrent_files
+		SET status = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND status = ?
+	`, FileStatusQueued, id, FileStatusDownloading)
+	if err != nil {
+		return fmt.Errorf("mark torrent file queued: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) UpdateTorrentFileDownloadProgress(ctx context.Context, id string, percent float64) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ErrNotFound
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE torrent_files
+		SET download_percent = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, clampFloat(percent, 0, 100), id)
+	if err != nil {
+		return fmt.Errorf("update torrent file download progress: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Store) UpdateTorrentFileTranscodingProgress(ctx context.Context, id string, percent float64) error {
@@ -559,7 +687,7 @@ func (s *Store) MarkTorrentFileError(ctx context.Context, id string, message str
 
 func (s *Store) findTorrentFileByOriginalPath(ctx context.Context, torrentID string, originalPath string) (TorrentFile, error) {
 	return scanTorrentFile(s.db.QueryRowContext(ctx, `
-		SELECT id, torrent_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, container, video_codec, audio_codec, duration_seconds, processing_mode, thumbnail_sheet_path, thumbnail_vtt_path, error_message, created_at, updated_at
+		SELECT id, torrent_id, owner_user_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, download_percent, container, video_codec, audio_codec, duration_seconds, processing_mode, thumbnail_sheet_path, thumbnail_vtt_path, error_message, created_at, updated_at
 		FROM torrent_files
 		WHERE torrent_id = ? AND original_path = ?
 	`, torrentID, originalPath))
@@ -613,8 +741,7 @@ func (s *Store) ListSubtitlesForFileOwner(ctx context.Context, torrentFileID str
 		SELECT s.id, s.torrent_file_id, s.file_name, s.title, s.language, s.path, s.created_at
 		FROM subtitles s
 		INNER JOIN torrent_files tf ON tf.id = s.torrent_file_id
-		INNER JOIN torrents t ON t.id = tf.torrent_id
-		WHERE s.torrent_file_id = ? AND t.owner_user_id = ?
+		WHERE s.torrent_file_id = ? AND tf.owner_user_id = ?
 		ORDER BY s.language ASC, s.title ASC, s.id ASC
 	`, strings.TrimSpace(torrentFileID), strings.TrimSpace(ownerUserID))
 	if err != nil {
@@ -650,8 +777,7 @@ func (s *Store) FindSubtitleByIDForOwner(ctx context.Context, id string, ownerUs
 		SELECT s.id, s.torrent_file_id, s.file_name, s.title, s.language, s.path, s.created_at
 		FROM subtitles s
 		INNER JOIN torrent_files tf ON tf.id = s.torrent_file_id
-		INNER JOIN torrents t ON t.id = tf.torrent_id
-		WHERE s.id = ? AND t.owner_user_id = ?
+		WHERE s.id = ? AND tf.owner_user_id = ?
 	`, strings.TrimSpace(id), strings.TrimSpace(ownerUserID)))
 }
 
@@ -767,6 +893,7 @@ func scanTorrentFileRow(row rowScanner) (TorrentFile, error) {
 
 func scanTorrentFileValues(row rowScanner) (TorrentFile, error) {
 	var file TorrentFile
+	var torrentID sql.NullString
 	var originalPath sql.NullString
 	var hlsPath sql.NullString
 	var container sql.NullString
@@ -780,7 +907,8 @@ func scanTorrentFileValues(row rowScanner) (TorrentFile, error) {
 
 	if err := row.Scan(
 		&file.ID,
-		&file.TorrentID,
+		&torrentID,
+		&file.OwnerUserID,
 		&file.Slug,
 		&file.Name,
 		&file.Ext,
@@ -790,6 +918,7 @@ func scanTorrentFileValues(row rowScanner) (TorrentFile, error) {
 		&file.Status,
 		&progressPreview,
 		&file.TranscodingPercent,
+		&file.DownloadPercent,
 		&container,
 		&videoCodec,
 		&audioCodec,
@@ -804,6 +933,7 @@ func scanTorrentFileValues(row rowScanner) (TorrentFile, error) {
 		return TorrentFile{}, err
 	}
 
+	file.TorrentID = torrentID.String
 	file.OriginalPath = originalPath.String
 	file.HLSPath = hlsPath.String
 	file.ProgressPreview = progressPreview == 1

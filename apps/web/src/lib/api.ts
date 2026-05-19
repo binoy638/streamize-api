@@ -45,6 +45,7 @@ export type Torrent = {
 export type TorrentFile = {
   id: string;
   torrentId: string;
+  ownerUserId: string;
   slug: string;
   name: string;
   ext: string;
@@ -54,6 +55,7 @@ export type TorrentFile = {
   status: TorrentFileStatus;
   progressPreview: boolean;
   transcodingPercent: number;
+  downloadPercent: number;
   container?: string;
   videoCodec?: string;
   audioCodec?: string;
@@ -216,6 +218,11 @@ export async function deleteTorrent(id: string, options: DeleteTorrentOptions = 
 
 export async function listTorrentFiles(torrentId: string): Promise<TorrentFile[]> {
   const body = await apiFetch<{ files: TorrentFile[] }>(`/api/torrents/${encodeURIComponent(torrentId)}/files`);
+  return body.files;
+}
+
+export async function listAllFiles(): Promise<TorrentFile[]> {
+  const body = await apiFetch<{ files: TorrentFile[] }>("/api/files");
   return body.files;
 }
 

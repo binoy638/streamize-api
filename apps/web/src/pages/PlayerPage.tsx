@@ -354,14 +354,14 @@ export function PlayerPage() {
       <div className="stats-row">
         <StatCard label="Pieces" value="98%" detail="availability" />
         <StatCard label="Peers" value="18" detail="healthy swarm" />
-        <StatCard label="Duration" value={formatDuration(durationSeconds)} detail={hlsSource ? "local HLS" : directSource ? "original file" : "pending"} />
+        <StatCard label="Duration" value={formatDuration(durationSeconds)} detail={hlsSource ? (selectedFile?.status === "processing" ? "live HLS" : "local HLS") : directSource ? "direct preview" : "pending"} />
         <StatCard label="Subtitles" value={String(subtitles.length || selectedFile?.subtitles || 0)} detail="tracks detected" />
       </div>
 
       <div className="panel">
         <div className="timeline-list">
           <div className="timeline-item">
-            <Badge tone={directSource ? "online" : hlsSource ? "ready" : "paused"}>{directSource ? "Direct" : hlsSource ? "HLS" : "Pending"}</Badge>
+            <Badge tone={directSource ? "online" : hlsSource ? "ready" : "paused"}>{directSource ? "Direct preview" : hlsSource ? (selectedFile?.status === "processing" ? "Live HLS" : "HLS") : "Pending"}</Badge>
             <div>
               <strong>{selectedFile?.codec || "H.264 / AAC"}</strong>
               <p className="muted">{previewCues.length > 0 ? "Preview sprites ready." : "Preview sprites pending."}</p>
@@ -392,7 +392,7 @@ function apiFileToPlayerFile(file: api.TorrentFile, torrentId: string): PlayerFi
     status: file.status,
     codec: codecLabel(file),
     subtitles: 0,
-    playable: file.status === "done" && Boolean(file.hlsPath),
+    playable: (file.status === "done" || file.status === "processing") && Boolean(file.hlsPath),
     directPlayable: file.directPlayable,
     previewReady: file.progressPreview,
   };

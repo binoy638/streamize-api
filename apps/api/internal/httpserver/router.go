@@ -141,6 +141,7 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 			protected.Post("/torrents", torrentHandler.CreateTorrent)
 			protected.Get("/torrents/{id}/files", torrentHandler.ListTorrentFiles)
 			protected.Delete("/torrents/{id}", torrentHandler.DeleteTorrent)
+			protected.Get("/files", torrentHandler.ListFiles)
 			protected.Get("/jobs", jobHandler.ListJobs)
 			protected.Post("/jobs/{id}/retry", jobHandler.RetryJob)
 			protected.Post("/jobs/{id}/cancel", jobHandler.CancelJob)

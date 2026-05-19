@@ -1,6 +1,7 @@
 package transcoding
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -118,7 +119,9 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 		return w.failJob(ctx, job, file, fmt.Errorf("create hls output directory: %w", err))
 	}
 
-	if err := w.Torrents.MarkTorrentFileProcessing(ctx, file.ID); err != nil {
+	// Set hls_path and mark processing before transcoding begins so the live
+	// event playlist can be served as soon as ffmpeg writes the first segment.
+	if err := w.Torrents.MarkTorrentFileProcessingWithHLS(ctx, file.ID, playlistPath); err != nil {
 		return w.failJob(ctx, job, file, err)
 	}
 
@@ -153,6 +156,16 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 	progressReporter := w.progressReporter(ctx, file.ID)
 	if err := transcoder.TranscodeHLS(ctx, file.OriginalPath, playlistPath, segmentPattern, plan, progressReporter); err != nil {
 		return w.failJob(ctx, job, file, err)
+	}
+
+	// Rewrite the ffmpeg EVENT playlist to VOD now that all segments are present.
+	if err := finalizeHLSPlaylist(playlistPath); err != nil {
+		w.warn(ctx, "finalize hls playlist failed",
+			slog.String("torrent_file_id", file.ID),
+			slog.String("playlist_path", playlistPath),
+			slog.Any("error", err),
+		)
+		// Non-fatal: the file is fully transcoded; the EVENT header is still playable.
 	}
 
 	if err := w.Torrents.MarkTorrentFileDone(ctx, file.ID, playlistPath); err != nil {
@@ -323,4 +336,25 @@ func (w Worker) warn(ctx context.Context, message string, attrs ...slog.Attr) {
 		return
 	}
 	w.Logger.LogAttrs(ctx, slog.LevelWarn, message, attrs...)
+}
+
+// finalizeHLSPlaylist rewrites #EXT-X-PLAYLIST-TYPE:EVENT to VOD in the
+// m3u8 produced by ffmpeg's event mode, signalling to clients that the
+// playlist is complete and all segments are available for random-access.
+func finalizeHLSPlaylist(playlistPath string) error {
+	content, err := os.ReadFile(playlistPath)
+	if err != nil {
+		return err
+	}
+
+	updated := bytes.ReplaceAll(content,
+		[]byte("#EXT-X-PLAYLIST-TYPE:EVENT"),
+		[]byte("#EXT-X-PLAYLIST-TYPE:VOD"),
+	)
+
+	if bytes.Equal(content, updated) {
+		return nil
+	}
+
+	return os.WriteFile(playlistPath, updated, 0o644)
 }

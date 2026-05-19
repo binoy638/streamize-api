@@ -16,7 +16,7 @@ import {
 
 const tabs = ["overview", "files", "jobs", "subtitles", "shares"];
 const pollableStatuses = new Set(["added", "queued", "downloading", "processing"]);
-const pollableFileStatuses = new Set(["queued", "processing"]);
+const pollableFileStatuses = new Set(["downloading", "queued", "processing"]);
 const pollableJobStatuses = new Set(["queued", "running"]);
 
 type TorrentDetail = {
@@ -333,7 +333,7 @@ function apiFileToRow(file: api.TorrentFile): FileRow {
     progress: progressForFile(file),
     codec: codecLabel(file),
     subtitles: file.progressPreview ? "Preview ready" : "Pending",
-    canOpen: (file.status === "done" && Boolean(file.hlsPath)) || file.directPlayable,
+    canOpen: ((file.status === "done" || file.status === "processing") && Boolean(file.hlsPath)) || file.directPlayable,
   };
 }
 
@@ -388,6 +388,9 @@ function progressForTorrent(torrent: api.Torrent): number {
 function progressForFile(file: api.TorrentFile): number {
   if (file.status === "done") {
     return 100;
+  }
+  if (file.status === "downloading" && Number.isFinite(file.downloadPercent)) {
+    return Math.round(Math.max(0, Math.min(file.downloadPercent, 100)));
   }
   if (Number.isFinite(file.transcodingPercent)) {
     return Math.round(Math.max(0, Math.min(file.transcodingPercent, 100)));

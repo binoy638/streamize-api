@@ -59,16 +59,11 @@ export function LibraryPage() {
     }
 
     try {
-      const records = await api.listTorrents();
-      const fileGroups = await Promise.all(
-        records.map(async (torrent) => ({
-          torrent,
-          files: await api.listTorrentFiles(torrent.id),
-        })),
-      );
+      const [records, allFiles] = await Promise.all([api.listTorrents(), api.listAllFiles()]);
+      const torrentMap = new Map(records.map((t) => [t.id, t]));
 
       setTorrents(records);
-      setItems(fileGroups.flatMap(({ torrent, files }) => files.map((file) => apiFileToLibraryItem(file, torrent))));
+      setItems(allFiles.map((file) => apiFileToLibraryItem(file, torrentMap.get(file.torrentId) ?? null)));
       setUsingMock(false);
       setError("");
     } catch (err) {
@@ -163,11 +158,16 @@ export function LibraryPage() {
       return;
     }
 
+    if (!item.torrentId) {
+      setNotice({ tone: "warn", text: "This file has no associated torrent." });
+      setPendingDelete(null);
+      return;
+    }
+
     setDeletingTorrentId(item.torrentId);
     try {
       await api.deleteTorrent(item.torrentId, options);
-      setItems((current) => current.filter((record) => record.torrentId !== item.torrentId));
-      setTorrents((current) => current.filter((torrent) => torrent.id !== item.torrentId));
+      await loadLibrary({ showLoading: false, fallbackToMock: false });
       setNotice({ tone: "success", text: "Torrent deleted with selected cleanup options." });
       setPendingDelete(null);
     } catch (err) {
@@ -260,10 +260,10 @@ export function LibraryPage() {
                   <Button onClick={() => setShareOpen(true)}>Share</Button>
                   <Button
                     variant="danger"
-                    disabled={deletingTorrentId === item.torrentId}
+                    disabled={!item.torrentId || (!!item.torrentId && deletingTorrentId === item.torrentId)}
                     onClick={() => setPendingDelete(item)}
                   >
-                    {deletingTorrentId === item.torrentId ? "Deleting..." : "Delete torrent"}
+                    {!item.torrentId ? "No torrent" : deletingTorrentId === item.torrentId ? "Deleting..." : "Delete torrent"}
                   </Button>
                 </div>
               </div>
@@ -321,21 +321,23 @@ export function LibraryPage() {
   );
 }
 
-function apiFileToLibraryItem(file: api.TorrentFile, torrent: api.Torrent): LibraryItem {
-  const playable = (file.status === "done" && Boolean(file.hlsPath)) || file.directPlayable;
+function apiFileToLibraryItem(file: api.TorrentFile, torrent: api.Torrent | null): LibraryItem {
+  const playable = ((file.status === "done" || file.status === "processing") && Boolean(file.hlsPath)) || file.directPlayable;
   const failed = file.status === "error";
   const status: LibraryStatus = failed ? "failed" : playable ? "ready" : "processing";
-  const progress = playable ? 100 : Math.round(file.transcodingPercent || torrent.progressPercent || 0);
+  const torrentProgress = torrent?.progressPercent ?? 0;
+  const downloadProgress = file.status === "downloading" ? (file.downloadPercent || torrentProgress) : 0;
+  const progress = playable ? 100 : Math.round(file.transcodingPercent || downloadProgress || torrentProgress || 0);
   const meta = [
     file.sizeBytes > 0 ? formatBytes(file.sizeBytes) : "Pending",
     codecLabel(file),
-    file.processingMode ? file.processingMode.replace(/_/g, " ") : torrent.status,
+    file.processingMode ? file.processingMode.replace(/_/g, " ") : (torrent?.status ?? file.status),
   ];
 
   return {
     id: file.id,
     source: "api",
-    torrentId: torrent.id,
+    torrentId: torrent?.id ?? "",
     title: file.name,
     duration: formatDuration(file.durationSeconds || 0),
     meta,
@@ -344,7 +346,7 @@ function apiFileToLibraryItem(file: api.TorrentFile, torrent: api.Torrent): Libr
     progress,
     posterHue: hueFromID(file.id),
     playable,
-    searchText: [file.name, torrent.name, file.status, torrent.status, ...meta].join(" ").toLowerCase(),
+    searchText: [file.name, torrent?.name ?? "", file.status, torrent?.status ?? "", ...meta].join(" ").toLowerCase(),
   };
 }
 

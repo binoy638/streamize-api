@@ -88,7 +88,7 @@ func (h TorrentHandler) ListTorrents(w http.ResponseWriter, r *http.Request) {
 
 	records = h.syncTorrentStates(r.Context(), records)
 	records = h.preflightPendingTorrents(r.Context(), user, records)
-	h.ingestCompletedTorrentFiles(r.Context(), records)
+	h.ingestActiveTorrentFiles(r.Context(), records)
 
 	writeJSON(w, http.StatusOK, torrentsResponse{Torrents: records})
 }
@@ -194,9 +194,10 @@ func (h TorrentHandler) ListTorrentFiles(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if record.Status == torrents.StatusDone {
+	switch record.Status {
+	case torrents.StatusDownloading, torrents.StatusQueued, torrents.StatusDone:
 		if err := h.ingestTorrentFiles(r.Context(), record); err != nil {
-			h.warn(r.Context(), "failed to refresh completed torrent files", slog.String("torrent_id", record.ID), slog.Any("error", err))
+			h.warn(r.Context(), "failed to refresh torrent files", slog.String("torrent_id", record.ID), slog.Any("error", err))
 		}
 	}
 
@@ -278,6 +279,15 @@ func (h TorrentHandler) DeleteTorrent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to delete generated media files")
 			return
 		}
+		// Explicitly remove file records so they don't survive as orphans after torrent deletion.
+		if err := h.Store.DeleteTorrentFilesForTorrent(r.Context(), id); err != nil {
+			h.warn(r.Context(), "torrent file record deletion failed",
+				slog.String("torrent_id", record.ID),
+				slog.Any("error", err),
+			)
+			writeError(w, http.StatusInternalServerError, "failed to delete torrent file records")
+			return
+		}
 	}
 
 	if err := h.Store.DeleteTorrent(r.Context(), id, user.ID); err != nil {
@@ -314,6 +324,22 @@ func boolQuery(r *http.Request, key string, fallback bool) bool {
 		return fallback
 	}
 	return parsed
+}
+
+func (h TorrentHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
+	user, ok := CurrentUser(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	files, err := h.Store.ListTorrentFilesByOwner(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list files")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, torrentFilesResponse{Files: files})
 }
 
 func (h TorrentHandler) syncTorrentStates(ctx context.Context, records []torrents.Torrent) []torrents.Torrent {

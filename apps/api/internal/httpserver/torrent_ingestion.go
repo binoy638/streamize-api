@@ -10,17 +10,19 @@ import (
 	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
 )
 
-func (h TorrentHandler) ingestCompletedTorrentFiles(ctx context.Context, records []torrents.Torrent) {
+func (h TorrentHandler) ingestActiveTorrentFiles(ctx context.Context, records []torrents.Torrent) {
 	if h.FileLister == nil || len(records) == 0 {
 		return
 	}
 
 	for _, record := range records {
-		if record.Status != torrents.StatusDone {
+		switch record.Status {
+		case torrents.StatusDownloading, torrents.StatusQueued, torrents.StatusDone:
+		default:
 			continue
 		}
 		if err := h.ingestTorrentFiles(ctx, record); err != nil {
-			h.warn(ctx, "failed to ingest completed torrent files", slog.String("torrent_id", record.ID), slog.Any("error", err))
+			h.warn(ctx, "failed to ingest torrent files", slog.String("torrent_id", record.ID), slog.Any("error", err))
 		}
 	}
 }
@@ -40,6 +42,8 @@ func (h TorrentHandler) ingestTorrentFiles(ctx context.Context, record torrents.
 		return err
 	}
 
+	isDone := record.Status == torrents.StatusDone
+
 	var created int
 	for _, qbtFile := range qbtFiles {
 		if !isSupportedVideoFileName(qbtFile.Name) {
@@ -52,12 +56,19 @@ func (h TorrentHandler) ingestTorrentFiles(ctx context.Context, record torrents.
 			continue
 		}
 
+		initialStatus := torrents.FileStatusDownloading
+		if isDone {
+			initialStatus = torrents.FileStatusQueued
+		}
+
 		file, inserted, err := h.Store.CreateTorrentFileIfMissing(ctx, torrents.CreateTorrentFileParams{
 			TorrentID:    record.ID,
+			OwnerUserID:  record.OwnerUserID,
 			Name:         relativePath,
 			Ext:          strings.ToLower(filepath.Ext(relativePath)),
 			OriginalPath: filepath.Join(h.SavePath, relativePath),
 			SizeBytes:    qbtFile.Size,
+			Status:       initialStatus,
 		})
 		if err != nil {
 			return err
@@ -65,21 +76,41 @@ func (h TorrentHandler) ingestTorrentFiles(ctx context.Context, record torrents.
 		if inserted {
 			created++
 		}
-		if file.Status == torrents.FileStatusQueued {
-			if err := h.ensureHLSTranscodeJob(ctx, file); err != nil {
-				return err
+
+		// Track per-file download progress.
+		downloadPercent := qbtFile.Progress * 100
+		if isDone {
+			downloadPercent = 100
+		}
+		_ = h.Store.UpdateTorrentFileDownloadProgress(ctx, file.ID, downloadPercent)
+
+		if isDone {
+			// Transition files that were ingested while downloading to queued so
+			// they can receive an HLS transcode job.
+			if !inserted && file.Status == torrents.FileStatusDownloading {
+				if err := h.Store.MarkTorrentFileQueued(ctx, file.ID); err != nil {
+					return err
+				}
+				file.Status = torrents.FileStatusQueued
+			}
+			if file.Status == torrents.FileStatusQueued {
+				if err := h.ensureHLSTranscodeJob(ctx, file); err != nil {
+					return err
+				}
 			}
 		}
 	}
 
 	if created > 0 {
-		h.info(ctx, "completed torrent files ingested",
+		h.info(ctx, "torrent files ingested",
 			slog.String("torrent_id", record.ID),
+			slog.String("torrent_status", record.Status),
 			slog.Int("created_count", created),
 		)
 	} else {
-		h.debug(ctx, "completed torrent ingestion found no new files",
+		h.debug(ctx, "torrent ingestion found no new files",
 			slog.String("torrent_id", record.ID),
+			slog.String("torrent_status", record.Status),
 			slog.Int("qbittorrent_file_count", len(qbtFiles)),
 		)
 	}

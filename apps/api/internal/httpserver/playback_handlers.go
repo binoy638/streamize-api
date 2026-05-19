@@ -244,7 +244,10 @@ func (h PlaybackHandler) loadPlayableFile(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return torrents.TorrentFile{}, false
 	}
-	if file.Status != torrents.FileStatusDone || strings.TrimSpace(file.HLSPath) == "" {
+
+	hlsReady := strings.TrimSpace(file.HLSPath) != "" &&
+		(file.Status == torrents.FileStatusDone || file.Status == torrents.FileStatusProcessing)
+	if !hlsReady {
 		writeError(w, http.StatusConflict, "HLS output is not ready")
 		return torrents.TorrentFile{}, false
 	}

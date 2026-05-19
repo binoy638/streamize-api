@@ -405,8 +405,9 @@ func TestListTorrentsPreflightResumesValidVideoTorrent(t *testing.T) {
 	if listResponse.Code != http.StatusOK {
 		t.Fatalf("expected list torrent status %d, got %d: %s", http.StatusOK, listResponse.Code, listResponse.Body.String())
 	}
-	if fileLister.calls != 1 {
-		t.Fatalf("expected 1 qBittorrent files call, got %d", fileLister.calls)
+	// preflight (1) + ingestion for the now-downloading torrent (1)
+	if fileLister.calls != 2 {
+		t.Fatalf("expected 2 qBittorrent files calls (preflight + ingestion), got %d", fileLister.calls)
 	}
 	if len(resumer.calls) != 1 || resumer.calls[0] != "0123456789abcdef0123456789abcdef01234567" {
 		t.Fatalf("expected torrent resume call, got %#v", resumer.calls)

@@ -186,8 +186,10 @@ func (p FFmpegAssetProcessor) processSprite(ctx context.Context, binary string, 
 	sheetPath := filepath.Join(targetDir, "sprite_00000.jpg")
 	vttPath := filepath.Join(targetDir, "thumbnails.vtt")
 	filter := fmt.Sprintf(
-		"fps=1/%s,scale=160:90:force_original_aspect_ratio=decrease,pad=160:90:(ow-iw)/2:(oh-ih)/2,tile=5x5",
+		"fps=1/%s,scale=160:90:force_original_aspect_ratio=decrease,pad=160:90:(ow-iw)/2:(oh-ih)/2,tile=%dx%d",
 		formatFilterFloat(plan.IntervalSeconds),
+		plan.Columns,
+		plan.Rows,
 	)
 	args := []string{
 		"-y",
@@ -202,7 +204,7 @@ func (p FFmpegAssetProcessor) processSprite(ctx context.Context, binary string, 
 		return "", "", nil
 	}
 
-	if err := os.WriteFile(vttPath, []byte(spriteVTT("sprite_00000.jpg", request.Info.DurationSeconds, plan.IntervalSeconds)), 0o644); err != nil {
+	if err := os.WriteFile(vttPath, []byte(spriteVTT("sprite_00000.jpg", request.Info.DurationSeconds, plan)), 0o644); err != nil {
 		return "", "", fmt.Errorf("write thumbnail vtt: %w", err)
 	}
 
@@ -274,32 +276,38 @@ func sanitizeAssetName(name string) string {
 type spritePlan struct {
 	IntervalSeconds float64
 	CueCount        int
+	Columns         int
+	Rows            int
 }
 
 func planSprite(durationSeconds float64) spritePlan {
-	const defaultInterval = 10.0
-	const maxCues = 25
+	const minCues = 10
+	const maxCues = 200
 
 	if durationSeconds <= 0 {
-		return spritePlan{IntervalSeconds: defaultInterval, CueCount: 1}
+		return spritePlan{IntervalSeconds: 10, CueCount: 1, Columns: 1, Rows: 1}
 	}
 
-	interval := defaultInterval
-	if spreadInterval := durationSeconds / maxCues; spreadInterval > interval {
-		interval = spreadInterval
-	}
-
-	cueCount := int(math.Ceil(durationSeconds / interval))
-	if cueCount < 1 {
-		cueCount = 1
+	// Target 1 thumbnail per minute of video.
+	cueCount := int(durationSeconds / 60)
+	if cueCount < minCues {
+		cueCount = minCues
 	}
 	if cueCount > maxCues {
 		cueCount = maxCues
 	}
 
+	intervalSeconds := durationSeconds / float64(cueCount)
+
+	// Roughly-square grid that fits all cues.
+	columns := int(math.Ceil(math.Sqrt(float64(cueCount))))
+	rows := int(math.Ceil(float64(cueCount) / float64(columns)))
+
 	return spritePlan{
-		IntervalSeconds: interval,
+		IntervalSeconds: intervalSeconds,
 		CueCount:        cueCount,
+		Columns:         columns,
+		Rows:            rows,
 	}
 }
 
@@ -307,36 +315,24 @@ func formatFilterFloat(value float64) string {
 	return strings.TrimRight(strings.TrimRight(strconv.FormatFloat(value, 'f', 3, 64), "0"), ".")
 }
 
-func spriteVTT(spriteName string, durationSeconds float64, intervalSeconds float64) string {
-	if intervalSeconds <= 0 {
-		intervalSeconds = 10
-	}
-	cueCount := int(math.Ceil(durationSeconds / intervalSeconds))
-	if cueCount < 1 {
-		cueCount = 1
-	}
-	if cueCount > 25 {
-		cueCount = 25
-	}
-
-	const columns = 5
+func spriteVTT(spriteName string, durationSeconds float64, plan spritePlan) string {
 	const width = 160
 	const height = 90
 
 	var builder strings.Builder
 	builder.WriteString("WEBVTT\n\n")
-	for index := 0; index < cueCount; index++ {
-		start := float64(index) * intervalSeconds
-		end := start + intervalSeconds
+	for index := 0; index < plan.CueCount; index++ {
+		start := float64(index) * plan.IntervalSeconds
+		end := start + plan.IntervalSeconds
 		if end > durationSeconds {
 			end = durationSeconds
 		}
 		if end <= start {
-			end = start + intervalSeconds
+			end = start + plan.IntervalSeconds
 		}
 
-		x := (index % columns) * width
-		y := (index / columns) * height
+		x := (index % plan.Columns) * width
+		y := (index / plan.Columns) * height
 		builder.WriteString(formatVTTTimestamp(start))
 		builder.WriteString(" --> ")
 		builder.WriteString(formatVTTTimestamp(end))
