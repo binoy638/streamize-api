@@ -20,6 +20,11 @@ const (
 	StatusDone        = "done"
 	StatusError       = "error"
 
+	FileStatusQueued     = "queued"
+	FileStatusProcessing = "processing"
+	FileStatusDone       = "done"
+	FileStatusError      = "error"
+
 	RetentionKeep = "keep"
 )
 
@@ -54,6 +59,23 @@ type Torrent struct {
 	UpdatedAt          string  `json:"updatedAt"`
 }
 
+type TorrentFile struct {
+	ID                 string  `json:"id"`
+	TorrentID          string  `json:"torrentId"`
+	Slug               string  `json:"slug"`
+	Name               string  `json:"name"`
+	Ext                string  `json:"ext"`
+	OriginalPath       string  `json:"originalPath,omitempty"`
+	HLSPath            string  `json:"hlsPath,omitempty"`
+	SizeBytes          int64   `json:"sizeBytes"`
+	Status             string  `json:"status"`
+	ProgressPreview    bool    `json:"progressPreview"`
+	TranscodingPercent float64 `json:"transcodingPercent"`
+	ErrorMessage       string  `json:"errorMessage,omitempty"`
+	CreatedAt          string  `json:"createdAt"`
+	UpdatedAt          string  `json:"updatedAt"`
+}
+
 type CreateTorrentParams struct {
 	OwnerUserID string
 	MagnetURI   string
@@ -73,6 +95,14 @@ type UpdateTorrentTransferStateParams struct {
 	Peers              int
 	Ratio              float64
 	ErrorMessage       string
+}
+
+type CreateTorrentFileParams struct {
+	TorrentID    string
+	Name         string
+	Ext          string
+	OriginalPath string
+	SizeBytes    int64
 }
 
 func NewStore(db *sql.DB) *Store {
@@ -232,6 +262,162 @@ func (s *Store) DeleteTorrent(ctx context.Context, id string, ownerUserID string
 	return nil
 }
 
+func (s *Store) CreateTorrentFileIfMissing(ctx context.Context, params CreateTorrentFileParams) (TorrentFile, bool, error) {
+	torrentID := strings.TrimSpace(params.TorrentID)
+	name := strings.TrimSpace(params.Name)
+	originalPath := strings.TrimSpace(params.OriginalPath)
+	if torrentID == "" || name == "" || originalPath == "" {
+		return TorrentFile{}, false, fmt.Errorf("torrent id, name, and original path are required")
+	}
+
+	existing, err := s.findTorrentFileByOriginalPath(ctx, torrentID, originalPath)
+	if err == nil {
+		return existing, false, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return TorrentFile{}, false, err
+	}
+
+	id, err := auth.NewID("tfi")
+	if err != nil {
+		return TorrentFile{}, false, err
+	}
+
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO torrent_files (id, torrent_id, slug, name, ext, original_path, size_bytes, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, torrentID, id, name, strings.ToLower(strings.TrimSpace(params.Ext)), originalPath, maxInt64(params.SizeBytes, 0), FileStatusQueued); err != nil {
+		return TorrentFile{}, false, fmt.Errorf("create torrent file: %w", err)
+	}
+
+	created, err := s.FindTorrentFileByID(ctx, id)
+	if err != nil {
+		return TorrentFile{}, false, err
+	}
+
+	return created, true, nil
+}
+
+func (s *Store) FindTorrentFileByID(ctx context.Context, id string) (TorrentFile, error) {
+	return scanTorrentFile(s.db.QueryRowContext(ctx, `
+		SELECT id, torrent_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, error_message, created_at, updated_at
+		FROM torrent_files
+		WHERE id = ?
+	`, strings.TrimSpace(id)))
+}
+
+func (s *Store) ListTorrentFiles(ctx context.Context, torrentID string) ([]TorrentFile, error) {
+	torrentID = strings.TrimSpace(torrentID)
+	if torrentID == "" {
+		return nil, ErrNotFound
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, torrent_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, error_message, created_at, updated_at
+		FROM torrent_files
+		WHERE torrent_id = ?
+		ORDER BY name ASC, id ASC
+	`, torrentID)
+	if err != nil {
+		return nil, fmt.Errorf("list torrent files: %w", err)
+	}
+	defer rows.Close()
+
+	files := make([]TorrentFile, 0)
+	for rows.Next() {
+		file, err := scanTorrentFileRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, file)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate torrent files: %w", err)
+	}
+
+	return files, nil
+}
+
+func (s *Store) MarkTorrentFileProcessing(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ErrNotFound
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE torrent_files
+		SET status = ?,
+			transcoding_percent = 0,
+			error_message = NULL,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, FileStatusProcessing, id)
+	if err != nil {
+		return fmt.Errorf("mark torrent file processing: %w", err)
+	}
+
+	return checkRowsAffected(result)
+}
+
+func (s *Store) MarkTorrentFileDone(ctx context.Context, id string, hlsPath string) error {
+	id = strings.TrimSpace(id)
+	hlsPath = strings.TrimSpace(hlsPath)
+	if id == "" {
+		return ErrNotFound
+	}
+	if hlsPath == "" {
+		return fmt.Errorf("hls path cannot be empty")
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE torrent_files
+		SET status = ?,
+			hls_path = ?,
+			progress_preview = 1,
+			transcoding_percent = 100,
+			error_message = NULL,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, FileStatusDone, hlsPath, id)
+	if err != nil {
+		return fmt.Errorf("mark torrent file done: %w", err)
+	}
+
+	return checkRowsAffected(result)
+}
+
+func (s *Store) MarkTorrentFileError(ctx context.Context, id string, message string) error {
+	id = strings.TrimSpace(id)
+	message = strings.TrimSpace(message)
+	if id == "" {
+		return ErrNotFound
+	}
+	if message == "" {
+		message = "file processing failed"
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE torrent_files
+		SET status = ?,
+			error_message = ?,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, FileStatusError, message, id)
+	if err != nil {
+		return fmt.Errorf("mark torrent file error: %w", err)
+	}
+
+	return checkRowsAffected(result)
+}
+
+func (s *Store) findTorrentFileByOriginalPath(ctx context.Context, torrentID string, originalPath string) (TorrentFile, error) {
+	return scanTorrentFile(s.db.QueryRowContext(ctx, `
+		SELECT id, torrent_id, slug, name, ext, original_path, hls_path, size_bytes, status, progress_preview, transcoding_percent, error_message, created_at, updated_at
+		FROM torrent_files
+		WHERE torrent_id = ? AND original_path = ?
+	`, torrentID, originalPath))
+}
+
 func (s *Store) MarkTorrentError(ctx context.Context, id string, message string) error {
 	message = strings.TrimSpace(message)
 	if message == "" {
@@ -244,6 +430,18 @@ func (s *Store) MarkTorrentError(ctx context.Context, id string, message string)
 		WHERE id = ?
 	`, StatusError, message, id); err != nil {
 		return fmt.Errorf("mark torrent error: %w", err)
+	}
+
+	return nil
+}
+
+func checkRowsAffected(result sql.Result) error {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
 	}
 
 	return nil
@@ -299,6 +497,61 @@ func scanTorrentRow(row rowScanner) (Torrent, error) {
 	}
 
 	return torrent, nil
+}
+
+func scanTorrentFile(row rowScanner) (TorrentFile, error) {
+	file, err := scanTorrentFileValues(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return TorrentFile{}, ErrNotFound
+		}
+		return TorrentFile{}, fmt.Errorf("scan torrent file: %w", err)
+	}
+
+	return file, nil
+}
+
+func scanTorrentFileRow(row rowScanner) (TorrentFile, error) {
+	file, err := scanTorrentFileValues(row)
+	if err != nil {
+		return TorrentFile{}, fmt.Errorf("scan torrent file: %w", err)
+	}
+
+	return file, nil
+}
+
+func scanTorrentFileValues(row rowScanner) (TorrentFile, error) {
+	var file TorrentFile
+	var originalPath sql.NullString
+	var hlsPath sql.NullString
+	var progressPreview int
+	var errorMessage sql.NullString
+
+	if err := row.Scan(
+		&file.ID,
+		&file.TorrentID,
+		&file.Slug,
+		&file.Name,
+		&file.Ext,
+		&originalPath,
+		&hlsPath,
+		&file.SizeBytes,
+		&file.Status,
+		&progressPreview,
+		&file.TranscodingPercent,
+		&errorMessage,
+		&file.CreatedAt,
+		&file.UpdatedAt,
+	); err != nil {
+		return TorrentFile{}, err
+	}
+
+	file.OriginalPath = originalPath.String
+	file.HLSPath = hlsPath.String
+	file.ProgressPreview = progressPreview == 1
+	file.ErrorMessage = errorMessage.String
+
+	return file, nil
 }
 
 func scanTorrentValues(row rowScanner) (Torrent, error) {

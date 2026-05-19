@@ -6,9 +6,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"testing"
 
 	"github.com/binoy638/streamize-api/apps/api/internal/auth"
+	"github.com/binoy638/streamize-api/apps/api/internal/jobs"
 	"github.com/binoy638/streamize-api/apps/api/internal/qbittorrent"
 )
 
@@ -209,6 +211,97 @@ func TestListTorrentsSyncsQBittorrentState(t *testing.T) {
 	}
 	if torrent.Name != "Synced Test Video" || torrent.SizeBytes != 4096 || torrent.ProgressPercent != 100 || torrent.UploadSpeedBytes != 256 || torrent.Peers != 5 || torrent.Ratio != 2.5 || torrent.ETASeconds != -1 {
 		t.Fatalf("unexpected synced torrent: %+v", torrent)
+	}
+}
+
+func TestListTorrentFilesIngestsCompletedVideoFiles(t *testing.T) {
+	ctx := context.Background()
+	cfg := testConfig()
+	cfg.OriginalsDir = "/media/originals"
+	db := testDB(t)
+	store := auth.NewStore(db)
+	if err := store.BootstrapAdmin(ctx, cfg); err != nil {
+		t.Fatalf("BootstrapAdmin returned error: %v", err)
+	}
+
+	lister := &fakeTorrentLister{
+		torrents: []qbittorrent.TorrentInfo{
+			{
+				Hash:     "0123456789ABCDEF0123456789ABCDEF01234567",
+				Name:     "Completed Test Video",
+				Size:     4096,
+				Progress: 1,
+				State:    "uploading",
+			},
+		},
+	}
+	fileLister := &fakeTorrentFileLister{
+		files: []qbittorrent.TorrentFile{
+			{Name: "Completed Test Video/movie.mkv", Size: 4096, Priority: 1},
+			{Name: "Completed Test Video/readme.txt", Size: 128, Priority: 1},
+			{Name: "../outside.mp4", Size: 1024, Priority: 1},
+		},
+	}
+	router := NewRouter(
+		cfg,
+		db,
+		slog.Default(),
+		WithTorrentAdder(&fakeTorrentAdder{}),
+		WithTorrentLister(lister),
+		WithTorrentFileLister(fileLister),
+	)
+
+	cookie := signInForTorrentTest(t, router)
+	created := createTorrentForTest(t, router, cookie)
+
+	listResponse := performJSONRequest(router, http.MethodGet, "/api/torrents", "", cookie)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("expected list torrent status %d, got %d: %s", http.StatusOK, listResponse.Code, listResponse.Body.String())
+	}
+
+	filesResponse := performJSONRequest(router, http.MethodGet, "/api/torrents/"+created.Torrent.ID+"/files", "", cookie)
+	if filesResponse.Code != http.StatusOK {
+		t.Fatalf("expected list torrent files status %d, got %d: %s", http.StatusOK, filesResponse.Code, filesResponse.Body.String())
+	}
+
+	var body torrentFilesResponse
+	if err := json.Unmarshal(filesResponse.Body.Bytes(), &body); err != nil {
+		t.Fatalf("list torrent files response is not valid JSON: %v", err)
+	}
+	if len(body.Files) != 1 {
+		t.Fatalf("expected one supported safe video file, got %+v", body.Files)
+	}
+
+	file := body.Files[0]
+	if file.TorrentID != created.Torrent.ID {
+		t.Fatalf("expected torrent id %q, got %q", created.Torrent.ID, file.TorrentID)
+	}
+	if file.Name != "Completed Test Video/movie.mkv" || file.Ext != ".mkv" {
+		t.Fatalf("unexpected ingested file name or extension: %+v", file)
+	}
+	if file.OriginalPath != filepath.Join("/media/originals", "Completed Test Video/movie.mkv") {
+		t.Fatalf("unexpected original path %q", file.OriginalPath)
+	}
+	if file.SizeBytes != 4096 || file.Status != "queued" {
+		t.Fatalf("unexpected ingested file state: %+v", file)
+	}
+	createdJob, err := jobs.NewStore(db).FindJobByDedupeKey(ctx, jobs.HLSTranscodeDedupeKey(file.ID))
+	if err != nil {
+		t.Fatalf("expected hls transcode job to be queued: %v", err)
+	}
+	if createdJob.Status != jobs.StatusQueued || createdJob.Type != jobs.TypeHLSTranscode {
+		t.Fatalf("unexpected hls transcode job: %+v", createdJob)
+	}
+
+	filesResponse = performJSONRequest(router, http.MethodGet, "/api/torrents/"+created.Torrent.ID+"/files", "", cookie)
+	if filesResponse.Code != http.StatusOK {
+		t.Fatalf("expected second list torrent files status %d, got %d: %s", http.StatusOK, filesResponse.Code, filesResponse.Body.String())
+	}
+	if err := json.Unmarshal(filesResponse.Body.Bytes(), &body); err != nil {
+		t.Fatalf("second list torrent files response is not valid JSON: %v", err)
+	}
+	if len(body.Files) != 1 || body.Files[0].ID != file.ID {
+		t.Fatalf("expected idempotent file ingestion, got %+v", body.Files)
 	}
 }
 

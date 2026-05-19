@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/binoy638/streamize-api/apps/api/internal/jobs"
 	"github.com/binoy638/streamize-api/apps/api/internal/qbittorrent"
 	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
 )
@@ -40,6 +41,7 @@ type FreeDiskBytesFunc func(path string) (int64, error)
 
 type TorrentHandler struct {
 	Store         *torrents.Store
+	JobStore      *jobs.Store
 	Adder         TorrentAdder
 	Lister        TorrentLister
 	FileLister    TorrentFileLister
@@ -63,6 +65,10 @@ type torrentsResponse struct {
 	Torrents []torrents.Torrent `json:"torrents"`
 }
 
+type torrentFilesResponse struct {
+	Files []torrents.TorrentFile `json:"files"`
+}
+
 func (h TorrentHandler) ListTorrents(w http.ResponseWriter, r *http.Request) {
 	user, ok := CurrentUser(r)
 	if !ok {
@@ -78,6 +84,7 @@ func (h TorrentHandler) ListTorrents(w http.ResponseWriter, r *http.Request) {
 
 	records = h.syncTorrentStates(r.Context(), records)
 	records = h.preflightPendingTorrents(r.Context(), user, records)
+	h.ingestCompletedTorrentFiles(r.Context(), records)
 
 	writeJSON(w, http.StatusOK, torrentsResponse{Torrents: records})
 }
@@ -159,6 +166,43 @@ func (h TorrentHandler) CreateTorrent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, torrentResponse{Torrent: torrent})
+}
+
+func (h TorrentHandler) ListTorrentFiles(w http.ResponseWriter, r *http.Request) {
+	user, ok := CurrentUser(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	record, err := h.Store.FindTorrentByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, torrents.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "torrent not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load torrent")
+		return
+	}
+	if record.OwnerUserID != user.ID {
+		writeError(w, http.StatusNotFound, "torrent not found")
+		return
+	}
+
+	if record.Status == torrents.StatusDone {
+		if err := h.ingestTorrentFiles(r.Context(), record); err != nil {
+			h.warn(r.Context(), "failed to refresh completed torrent files", slog.String("torrent_id", record.ID), slog.Any("error", err))
+		}
+	}
+
+	files, err := h.Store.ListTorrentFiles(r.Context(), record.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list torrent files")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, torrentFilesResponse{Files: files})
 }
 
 func (h TorrentHandler) DeleteTorrent(w http.ResponseWriter, r *http.Request) {

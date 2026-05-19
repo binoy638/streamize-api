@@ -15,6 +15,10 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("STREAMIZE_ADMIN_PASSWORD", "")
 	t.Setenv("STREAMIZE_SESSION_TTL", "")
 	t.Setenv("STREAMIZE_LOG_LEVEL", "")
+	t.Setenv("STREAMIZE_LOG_FORMAT", "")
+	t.Setenv("STREAMIZE_WORKER_ENABLED", "")
+	t.Setenv("STREAMIZE_WORKER_POLL_INTERVAL", "")
+	t.Setenv("STREAMIZE_FFMPEG_PATH", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -45,6 +49,18 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LogLevel != slog.LevelDebug {
 		t.Fatalf("expected default development log level debug, got %v", cfg.LogLevel)
 	}
+	if cfg.LogFormat != LogFormatText {
+		t.Fatalf("expected default development log format %q, got %q", LogFormatText, cfg.LogFormat)
+	}
+	if !cfg.WorkerEnabled {
+		t.Fatal("expected worker to be enabled by default")
+	}
+	if cfg.WorkerPollInterval <= 0 {
+		t.Fatal("expected default worker poll interval")
+	}
+	if cfg.FFmpegPath != "ffmpeg" {
+		t.Fatalf("expected default ffmpeg path, got %q", cfg.FFmpegPath)
+	}
 }
 
 func TestLoadProductionRequiresAdminPassword(t *testing.T) {
@@ -54,5 +70,37 @@ func TestLoadProductionRequiresAdminPassword(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected production config without admin password to fail")
+	}
+}
+
+func TestLoadProductionDefaultsToJSONLogs(t *testing.T) {
+	t.Setenv("STREAMIZE_ENV", EnvironmentProduction)
+	t.Setenv("STREAMIZE_ADMIN_PASSWORD", "secure-password")
+	t.Setenv("STREAMIZE_LOG_LEVEL", "")
+	t.Setenv("STREAMIZE_LOG_FORMAT", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if cfg.LogLevel != slog.LevelInfo {
+		t.Fatalf("expected default production log level info, got %v", cfg.LogLevel)
+	}
+	if cfg.LogFormat != LogFormatJSON {
+		t.Fatalf("expected default production log format %q, got %q", LogFormatJSON, cfg.LogFormat)
+	}
+}
+
+func TestLoadAcceptsTextLogFormat(t *testing.T) {
+	t.Setenv("STREAMIZE_LOG_FORMAT", "text")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if cfg.LogFormat != LogFormatText {
+		t.Fatalf("expected log format %q, got %q", LogFormatText, cfg.LogFormat)
 	}
 }

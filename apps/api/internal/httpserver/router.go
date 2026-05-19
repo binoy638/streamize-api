@@ -11,6 +11,7 @@ import (
 
 	"github.com/binoy638/streamize-api/apps/api/internal/auth"
 	"github.com/binoy638/streamize-api/apps/api/internal/config"
+	"github.com/binoy638/streamize-api/apps/api/internal/jobs"
 	"github.com/binoy638/streamize-api/apps/api/internal/qbittorrent"
 	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
 )
@@ -86,6 +87,7 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 
 	authStore := auth.NewStore(db)
 	torrentStore := torrents.NewStore(db)
+	jobStore := jobs.NewStore(db)
 	authHandler := AuthHandler{
 		Config: cfg,
 		Store:  authStore,
@@ -99,6 +101,7 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 	}
 	torrentHandler := TorrentHandler{
 		Store:         torrentStore,
+		JobStore:      jobStore,
 		Adder:         options.torrentAdder,
 		Lister:        options.torrentLister,
 		FileLister:    options.torrentFileLister,
@@ -122,6 +125,7 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 			protected.Get("/auth/me", authHandler.Me)
 			protected.Get("/torrents", torrentHandler.ListTorrents)
 			protected.Post("/torrents", torrentHandler.CreateTorrent)
+			protected.Get("/torrents/{id}/files", torrentHandler.ListTorrentFiles)
 			protected.Delete("/torrents/{id}", torrentHandler.DeleteTorrent)
 
 			protected.Route("/admin", func(admin chi.Router) {

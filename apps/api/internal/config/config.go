@@ -13,6 +13,9 @@ import (
 const (
 	EnvironmentDevelopment = "development"
 	EnvironmentProduction  = "production"
+
+	LogFormatJSON = "json"
+	LogFormatText = "text"
 )
 
 type Config struct {
@@ -36,6 +39,10 @@ type Config struct {
 	SecureCookies       bool
 	TrustedProxyHeaders bool
 	LogLevel            slog.Level
+	LogFormat           string
+	WorkerEnabled       bool
+	WorkerPollInterval  time.Duration
+	FFmpegPath          string
 }
 
 func Load() (Config, error) {
@@ -43,9 +50,11 @@ func Load() (Config, error) {
 	mediaRoot := envString("STREAMIZE_MEDIA_ROOT", "./media")
 	adminPasswordDefault := "adminadmin"
 	logLevelDefault := slog.LevelDebug
+	logFormatDefault := LogFormatText
 	if environment == EnvironmentProduction {
 		adminPasswordDefault = ""
 		logLevelDefault = slog.LevelInfo
+		logFormatDefault = LogFormatJSON
 	}
 
 	cfg := Config{
@@ -69,6 +78,10 @@ func Load() (Config, error) {
 		SecureCookies:       envBool("STREAMIZE_SECURE_COOKIES", false),
 		TrustedProxyHeaders: envBool("STREAMIZE_TRUSTED_PROXY_HEADERS", false),
 		LogLevel:            envLogLevel("STREAMIZE_LOG_LEVEL", logLevelDefault),
+		LogFormat:           envLogFormat("STREAMIZE_LOG_FORMAT", logFormatDefault),
+		WorkerEnabled:       envBool("STREAMIZE_WORKER_ENABLED", true),
+		WorkerPollInterval:  envDuration("STREAMIZE_WORKER_POLL_INTERVAL", 5*time.Second),
+		FFmpegPath:          envString("STREAMIZE_FFMPEG_PATH", "ffmpeg"),
 	}
 
 	if cfg.Environment == "" {
@@ -103,6 +116,12 @@ func Load() (Config, error) {
 	}
 	if cfg.AdminStorageQuota < 0 {
 		return Config{}, errors.New("STREAMIZE_ADMIN_STORAGE_QUOTA_BYTES cannot be negative")
+	}
+	if cfg.WorkerPollInterval <= 0 {
+		return Config{}, errors.New("STREAMIZE_WORKER_POLL_INTERVAL must be greater than zero")
+	}
+	if cfg.FFmpegPath == "" {
+		return Config{}, errors.New("STREAMIZE_FFMPEG_PATH cannot be empty")
 	}
 
 	return cfg, nil
@@ -193,6 +212,19 @@ func envLogLevel(key string, fallback slog.Level) slog.Level {
 		return slog.LevelWarn
 	case "error":
 		return slog.LevelError
+	default:
+		return fallback
+	}
+}
+
+func envLogFormat(key string, fallback string) string {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "":
+		return fallback
+	case LogFormatJSON:
+		return LogFormatJSON
+	case LogFormatText:
+		return LogFormatText
 	default:
 		return fallback
 	}

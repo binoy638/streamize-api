@@ -13,6 +13,9 @@ import (
 	"github.com/binoy638/streamize-api/apps/api/internal/config"
 	"github.com/binoy638/streamize-api/apps/api/internal/database"
 	"github.com/binoy638/streamize-api/apps/api/internal/httpserver"
+	"github.com/binoy638/streamize-api/apps/api/internal/jobs"
+	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
+	"github.com/binoy638/streamize-api/apps/api/internal/transcoding"
 )
 
 func main() {
@@ -25,9 +28,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	logOptions := &slog.HandlerOptions{
 		Level: cfg.LogLevel,
-	}))
+	}
+	logHandler := slog.Handler(slog.NewJSONHandler(os.Stdout, logOptions))
+	if cfg.LogFormat == config.LogFormatText {
+		logHandler = slog.NewTextHandler(os.Stdout, logOptions)
+	}
+
+	logger := slog.New(logHandler)
 	slog.SetDefault(logger)
 
 	if err := cfg.EnsureRuntimeDirs(); err != nil {
@@ -53,6 +62,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	if cfg.WorkerEnabled {
+		worker := transcoding.Worker{
+			Jobs:         jobs.NewStore(db),
+			Torrents:     torrents.NewStore(db),
+			Transcoder:   transcoding.FFmpegTranscoder{Binary: cfg.FFmpegPath},
+			HLSDir:       cfg.HLSDir,
+			PollInterval: cfg.WorkerPollInterval,
+			Logger:       logger,
+		}
+		go worker.Run(ctx)
+	} else {
+		logger.Info("media worker disabled")
+	}
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           httpserver.NewRouter(cfg, db, logger),
@@ -60,7 +83,7 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("api listening", "addr", cfg.HTTPAddr, "env", cfg.Environment)
+		logger.Info("api listening", "addr", cfg.HTTPAddr, "env", cfg.Environment, "log_level", cfg.LogLevel.String(), "log_format", cfg.LogFormat)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("server failed", "error", err)
 			stop()

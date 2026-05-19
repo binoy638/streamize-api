@@ -17,6 +17,7 @@ export type Health = {
 };
 
 export type TorrentStatus = "added" | "downloading" | "paused" | "queued" | "processing" | "done" | "error";
+export type TorrentFileStatus = "downloading" | "queued" | "processing" | "done" | "error";
 
 export type Torrent = {
   id: string;
@@ -35,6 +36,23 @@ export type Torrent = {
   peers: number;
   ratio: number;
   retentionPolicy: "keep" | "delete_after_hls";
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TorrentFile = {
+  id: string;
+  torrentId: string;
+  slug: string;
+  name: string;
+  ext: string;
+  originalPath?: string;
+  hlsPath?: string;
+  sizeBytes: number;
+  status: TorrentFileStatus;
+  progressPreview: boolean;
+  transcodingPercent: number;
   errorMessage?: string;
   createdAt: string;
   updatedAt: string;
@@ -142,6 +160,11 @@ export async function deleteTorrent(id: string): Promise<void> {
   await apiFetch<void>(`/api/torrents/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+export async function listTorrentFiles(torrentId: string): Promise<TorrentFile[]> {
+  const body = await apiFetch<{ files: TorrentFile[] }>(`/api/torrents/${encodeURIComponent(torrentId)}/files`);
+  return body.files;
 }
 
 export async function getHealth(): Promise<Health> {

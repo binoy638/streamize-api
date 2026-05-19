@@ -244,21 +244,12 @@ export function TorrentsPage() {
               {visible.map((torrent) => (
                 <tr key={torrent.id}>
                   <td>
-                    {torrent.source === "mock" ? (
-                      <Link className="table-title" to={`/torrents/${torrent.id}`}>
-                        <strong>{torrent.name}</strong>
-                        <span>
-                          {torrent.speed} · ratio {torrent.ratio}
-                        </span>
-                      </Link>
-                    ) : (
-                      <div className="table-title">
-                        <strong>{torrent.name}</strong>
-                        <span>
-                          {torrent.speed} · ratio {torrent.ratio}
-                        </span>
-                      </div>
-                    )}
+                    <Link className="table-title" to={`/torrents/${torrent.id}`}>
+                      <strong>{torrent.name}</strong>
+                      <span>
+                        {torrent.speed} · ratio {torrent.ratio}
+                      </span>
+                    </Link>
                   </td>
                   <td>
                     <Badge tone={torrent.status}>{label(torrent.status)}</Badge>

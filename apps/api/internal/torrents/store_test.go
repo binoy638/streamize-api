@@ -135,6 +135,121 @@ func TestUpdateTorrentTransferState(t *testing.T) {
 	}
 }
 
+func TestCreateTorrentFileIfMissingIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	store, ownerID := newTestStore(t)
+
+	torrent, err := store.CreateTorrent(ctx, CreateTorrentParams{
+		OwnerUserID: ownerID,
+		MagnetURI:   testMagnet,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrent returned error: %v", err)
+	}
+
+	created, inserted, err := store.CreateTorrentFileIfMissing(ctx, CreateTorrentFileParams{
+		TorrentID:    torrent.ID,
+		Name:         "Movie/movie.mkv",
+		Ext:          ".mkv",
+		OriginalPath: "/media/originals/Movie/movie.mkv",
+		SizeBytes:    4096,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing returned error: %v", err)
+	}
+	if !inserted {
+		t.Fatal("expected first torrent file insert to report inserted")
+	}
+	if created.TorrentID != torrent.ID || created.Name != "Movie/movie.mkv" || created.Ext != ".mkv" || created.OriginalPath != "/media/originals/Movie/movie.mkv" {
+		t.Fatalf("unexpected created torrent file: %+v", created)
+	}
+	if created.SizeBytes != 4096 || created.Status != FileStatusQueued {
+		t.Fatalf("unexpected created torrent file state: %+v", created)
+	}
+
+	duplicate, inserted, err := store.CreateTorrentFileIfMissing(ctx, CreateTorrentFileParams{
+		TorrentID:    torrent.ID,
+		Name:         "Movie/movie.mkv",
+		Ext:          ".mkv",
+		OriginalPath: "/media/originals/Movie/movie.mkv",
+		SizeBytes:    4096,
+	})
+	if err != nil {
+		t.Fatalf("duplicate CreateTorrentFileIfMissing returned error: %v", err)
+	}
+	if inserted {
+		t.Fatal("expected duplicate torrent file insert to report existing row")
+	}
+	if duplicate.ID != created.ID {
+		t.Fatalf("expected duplicate to return file %q, got %q", created.ID, duplicate.ID)
+	}
+
+	files, err := store.ListTorrentFiles(ctx, torrent.ID)
+	if err != nil {
+		t.Fatalf("ListTorrentFiles returned error: %v", err)
+	}
+	if len(files) != 1 || files[0].ID != created.ID {
+		t.Fatalf("expected one torrent file, got %+v", files)
+	}
+}
+
+func TestTorrentFileStatusUpdates(t *testing.T) {
+	ctx := context.Background()
+	store, ownerID := newTestStore(t)
+
+	torrent, err := store.CreateTorrent(ctx, CreateTorrentParams{
+		OwnerUserID: ownerID,
+		MagnetURI:   testMagnet,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrent returned error: %v", err)
+	}
+
+	file, _, err := store.CreateTorrentFileIfMissing(ctx, CreateTorrentFileParams{
+		TorrentID:    torrent.ID,
+		Name:         "movie.mp4",
+		Ext:          ".mp4",
+		OriginalPath: "/media/originals/movie.mp4",
+		SizeBytes:    4096,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing returned error: %v", err)
+	}
+
+	if err := store.MarkTorrentFileProcessing(ctx, file.ID); err != nil {
+		t.Fatalf("MarkTorrentFileProcessing returned error: %v", err)
+	}
+	processing, err := store.FindTorrentFileByID(ctx, file.ID)
+	if err != nil {
+		t.Fatalf("FindTorrentFileByID returned error: %v", err)
+	}
+	if processing.Status != FileStatusProcessing || processing.TranscodingPercent != 0 {
+		t.Fatalf("unexpected processing file: %+v", processing)
+	}
+
+	if err := store.MarkTorrentFileDone(ctx, file.ID, "/media/hls/tfi_123/index.m3u8"); err != nil {
+		t.Fatalf("MarkTorrentFileDone returned error: %v", err)
+	}
+	done, err := store.FindTorrentFileByID(ctx, file.ID)
+	if err != nil {
+		t.Fatalf("FindTorrentFileByID returned error: %v", err)
+	}
+	if done.Status != FileStatusDone || done.HLSPath != "/media/hls/tfi_123/index.m3u8" || !done.ProgressPreview || done.TranscodingPercent != 100 {
+		t.Fatalf("unexpected done file: %+v", done)
+	}
+
+	if err := store.MarkTorrentFileError(ctx, file.ID, "ffmpeg failed"); err != nil {
+		t.Fatalf("MarkTorrentFileError returned error: %v", err)
+	}
+	errored, err := store.FindTorrentFileByID(ctx, file.ID)
+	if err != nil {
+		t.Fatalf("FindTorrentFileByID returned error: %v", err)
+	}
+	if errored.Status != FileStatusError || errored.ErrorMessage != "ffmpeg failed" {
+		t.Fatalf("unexpected errored file: %+v", errored)
+	}
+}
+
 func TestDeleteTorrentIsOwnerScoped(t *testing.T) {
 	ctx := context.Background()
 	store, ownerID := newTestStore(t)
