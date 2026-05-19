@@ -16,14 +16,14 @@ import (
 type ProgressReporter func(percent float64) error
 
 type Transcoder interface {
-	TranscodeHLS(ctx context.Context, inputPath string, outputPlaylistPath string, segmentPattern string, onProgress ProgressReporter) error
+	TranscodeHLS(ctx context.Context, inputPath string, outputPlaylistPath string, segmentPattern string, plan HLSPlan, onProgress ProgressReporter) error
 }
 
 type FFmpegTranscoder struct {
 	Binary string
 }
 
-func (t FFmpegTranscoder) TranscodeHLS(ctx context.Context, inputPath string, outputPlaylistPath string, segmentPattern string, onProgress ProgressReporter) error {
+func (t FFmpegTranscoder) TranscodeHLS(ctx context.Context, inputPath string, outputPlaylistPath string, segmentPattern string, plan HLSPlan, onProgress ProgressReporter) error {
 	binary := strings.TrimSpace(t.Binary)
 	if binary == "" {
 		binary = "ffmpeg"
@@ -32,7 +32,7 @@ func (t FFmpegTranscoder) TranscodeHLS(ctx context.Context, inputPath string, ou
 	cmd := exec.CommandContext(
 		ctx,
 		binary,
-		hlsTranscodeArgs(inputPath, outputPlaylistPath, segmentPattern)...,
+		hlsTranscodeArgs(inputPath, outputPlaylistPath, segmentPattern, plan)...,
 	)
 
 	stdout, err := cmd.StdoutPipe()
@@ -75,23 +75,48 @@ func (t FFmpegTranscoder) TranscodeHLS(ctx context.Context, inputPath string, ou
 	return nil
 }
 
-func hlsTranscodeArgs(inputPath string, outputPlaylistPath string, segmentPattern string) []string {
-	return []string{
+func hlsTranscodeArgs(inputPath string, outputPlaylistPath string, segmentPattern string, plan HLSPlan) []string {
+	plan = normalizeHLSPlan(plan)
+
+	args := []string{
 		"-y",
 		"-nostdin",
 		"-progress", "pipe:1",
 		"-i", inputPath,
 		"-map", "0:v:0",
 		"-map", "0:a?",
-		"-c:v", "libx264",
-		"-preset", "veryfast",
-		"-pix_fmt", "yuv420p",
-		"-sc_threshold", "0",
-		"-force_key_frames", "expr:gte(t,n_forced*6)",
-		"-c:a", "aac",
-		"-ac", "2",
-		"-ar", "48000",
-		"-b:a", "160k",
+	}
+
+	switch plan.Mode {
+	case HLSModeRemux:
+		args = append(args,
+			"-c:v", "copy",
+			"-c:a", "copy",
+		)
+	case HLSModeAudioTranscode:
+		args = append(args,
+			"-c:v", "copy",
+			"-c:a", "aac",
+			"-ac", "2",
+			"-ar", "48000",
+			"-b:a", "160k",
+		)
+	default:
+		args = append(args,
+			"-c:v", "libx264",
+			"-crf", "23",
+			"-preset", "veryfast",
+			"-pix_fmt", "yuv420p",
+			"-sc_threshold", "0",
+			"-force_key_frames", "expr:gte(t,n_forced*6)",
+			"-c:a", "aac",
+			"-ac", "2",
+			"-ar", "48000",
+			"-b:a", "160k",
+		)
+	}
+
+	args = append(args,
 		"-f", "hls",
 		"-hls_time", "6",
 		"-hls_playlist_type", "vod",
@@ -100,7 +125,9 @@ func hlsTranscodeArgs(inputPath string, outputPlaylistPath string, segmentPatter
 		"-hls_fmp4_init_filename", "init.mp4",
 		"-hls_segment_filename", segmentPattern,
 		outputPlaylistPath,
-	}
+	)
+
+	return args
 }
 
 type ffmpegProgressState struct {

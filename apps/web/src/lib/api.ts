@@ -54,9 +54,27 @@ export type TorrentFile = {
   status: TorrentFileStatus;
   progressPreview: boolean;
   transcodingPercent: number;
+  container?: string;
+  videoCodec?: string;
+  audioCodec?: string;
+  durationSeconds?: number;
+  processingMode?: string;
+  thumbnailSheetPath?: string;
+  thumbnailVttPath?: string;
+  directPlayable: boolean;
   errorMessage?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type Subtitle = {
+  id: string;
+  torrentFileId: string;
+  fileName: string;
+  title: string;
+  language: string;
+  url: string;
+  createdAt: string;
 };
 
 export type Job = {
@@ -89,6 +107,11 @@ export type CreateUserInput = {
 export type CreateTorrentInput = {
   magnetUri: string;
   name?: string;
+};
+
+export type DeleteTorrentOptions = {
+  deleteFiles?: boolean;
+  deleteGenerated?: boolean;
 };
 
 type ApiErrorBody = {
@@ -177,8 +200,16 @@ export async function createTorrent(input: CreateTorrentInput): Promise<Torrent>
   return body.torrent;
 }
 
-export async function deleteTorrent(id: string): Promise<void> {
-  await apiFetch<void>(`/api/torrents/${encodeURIComponent(id)}`, {
+export async function deleteTorrent(id: string, options: DeleteTorrentOptions = {}): Promise<void> {
+  const params = new URLSearchParams();
+  if (options.deleteFiles !== undefined) {
+    params.set("deleteFiles", String(options.deleteFiles));
+  }
+  if (options.deleteGenerated !== undefined) {
+    params.set("deleteGenerated", String(options.deleteGenerated));
+  }
+  const query = params.toString();
+  await apiFetch<void>(`/api/torrents/${encodeURIComponent(id)}${query ? `?${query}` : ""}`, {
     method: "DELETE",
   });
 }
@@ -186,6 +217,11 @@ export async function deleteTorrent(id: string): Promise<void> {
 export async function listTorrentFiles(torrentId: string): Promise<TorrentFile[]> {
   const body = await apiFetch<{ files: TorrentFile[] }>(`/api/torrents/${encodeURIComponent(torrentId)}/files`);
   return body.files;
+}
+
+export async function listSubtitles(fileId: string): Promise<Subtitle[]> {
+  const body = await apiFetch<{ subtitles: Subtitle[] }>(`/api/files/${encodeURIComponent(fileId)}/subtitles`);
+  return body.subtitles;
 }
 
 export async function listJobs(): Promise<Job[]> {

@@ -6,12 +6,14 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/binoy638/streamize-api/apps/api/internal/auth"
 	"github.com/binoy638/streamize-api/apps/api/internal/jobs"
 	"github.com/binoy638/streamize-api/apps/api/internal/qbittorrent"
+	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
 )
 
 const testTorrentMagnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Test%20Video"
@@ -522,6 +524,9 @@ func TestListTorrentsPreflightRejectsInsufficientDiskStorage(t *testing.T) {
 func TestTorrentRoutesDelete(t *testing.T) {
 	ctx := context.Background()
 	cfg := testConfig()
+	cfg.HLSDir = filepath.Join(t.TempDir(), "hls")
+	cfg.SubtitlesDir = filepath.Join(t.TempDir(), "subtitles")
+	cfg.ThumbnailsDir = filepath.Join(t.TempDir(), "thumbnails")
 	db := testDB(t)
 	store := auth.NewStore(db)
 	if err := store.BootstrapAdmin(ctx, cfg); err != nil {
@@ -553,6 +558,45 @@ func TestTorrentRoutesDelete(t *testing.T) {
 		t.Fatalf("create torrent response is not valid JSON: %v", err)
 	}
 
+	torrentStore := torrents.NewStore(db)
+	file, _, err := torrentStore.CreateTorrentFileIfMissing(ctx, torrents.CreateTorrentFileParams{
+		TorrentID:    created.Torrent.ID,
+		Name:         "movie.mp4",
+		Ext:          ".mp4",
+		OriginalPath: filepath.Join(cfg.OriginalsDir, "movie.mp4"),
+		SizeBytes:    4096,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing returned error: %v", err)
+	}
+	hlsDir := filepath.Join(cfg.HLSDir, file.ID)
+	subtitleDir := filepath.Join(cfg.SubtitlesDir, file.ID)
+	thumbnailDir := filepath.Join(cfg.ThumbnailsDir, file.ID)
+	for _, dir := range []string{hlsDir, subtitleDir, thumbnailDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("MkdirAll %q returned error: %v", dir, err)
+		}
+	}
+	playlistPath := filepath.Join(hlsDir, "index.m3u8")
+	spritePath := filepath.Join(thumbnailDir, "sprite_00000.jpg")
+	vttPath := filepath.Join(thumbnailDir, "thumbnails.vtt")
+	for path, body := range map[string]string{
+		playlistPath:                         "#EXTM3U\n",
+		filepath.Join(subtitleDir, "en.vtt"): "WEBVTT\n",
+		spritePath:                           "jpg",
+		vttPath:                              "WEBVTT\n",
+	} {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatalf("WriteFile %q returned error: %v", path, err)
+		}
+	}
+	if err := torrentStore.MarkTorrentFileDone(ctx, file.ID, playlistPath); err != nil {
+		t.Fatalf("MarkTorrentFileDone returned error: %v", err)
+	}
+	if err := torrentStore.MarkTorrentFilePreviewReady(ctx, file.ID, spritePath, vttPath); err != nil {
+		t.Fatalf("MarkTorrentFilePreviewReady returned error: %v", err)
+	}
+
 	deleteResponse := performJSONRequest(router, http.MethodDelete, "/api/torrents/"+created.Torrent.ID, "", cookie)
 	if deleteResponse.Code != http.StatusNoContent {
 		t.Fatalf("expected delete torrent status %d, got %d: %s", http.StatusNoContent, deleteResponse.Code, deleteResponse.Body.String())
@@ -565,6 +609,11 @@ func TestTorrentRoutesDelete(t *testing.T) {
 	}
 	if deleter.calls[0].deleteFiles {
 		t.Fatal("expected qBittorrent delete to keep files")
+	}
+	for _, dir := range []string{hlsDir, subtitleDir, thumbnailDir} {
+		if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected generated media dir %q to be deleted, stat error: %v", dir, err)
+		}
 	}
 
 	listResponse := performJSONRequest(router, http.MethodGet, "/api/torrents", "", cookie)
@@ -630,6 +679,70 @@ func TestTorrentRoutesDeleteKeepsRecordWhenQBittorrentDeleteFails(t *testing.T) 
 	}
 	if len(listBody.Torrents) != 1 {
 		t.Fatalf("expected torrent row to remain after qBittorrent failure, got %d rows", len(listBody.Torrents))
+	}
+}
+
+func TestTorrentRoutesDeleteHonorsCleanupChoices(t *testing.T) {
+	ctx := context.Background()
+	cfg := testConfig()
+	cfg.OriginalsDir = filepath.Join(t.TempDir(), "originals")
+	cfg.HLSDir = filepath.Join(t.TempDir(), "hls")
+	cfg.SubtitlesDir = filepath.Join(t.TempDir(), "subtitles")
+	cfg.ThumbnailsDir = filepath.Join(t.TempDir(), "thumbnails")
+	db := testDB(t)
+	store := auth.NewStore(db)
+	if err := store.BootstrapAdmin(ctx, cfg); err != nil {
+		t.Fatalf("BootstrapAdmin returned error: %v", err)
+	}
+
+	deleter := &fakeTorrentDeleter{}
+	router := NewRouter(cfg, db, slog.Default(), WithTorrentAdder(&fakeTorrentAdder{}), WithTorrentDeleter(deleter))
+	cookie := signInForTorrentTest(t, router)
+	created := createTorrentForTest(t, router, cookie)
+
+	torrentStore := torrents.NewStore(db)
+	originalPath := filepath.Join(cfg.OriginalsDir, "nested", "movie.mp4")
+	if err := os.MkdirAll(filepath.Dir(originalPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll original dir returned error: %v", err)
+	}
+	if err := os.WriteFile(originalPath, []byte("mp4"), 0o644); err != nil {
+		t.Fatalf("WriteFile original returned error: %v", err)
+	}
+	file, _, err := torrentStore.CreateTorrentFileIfMissing(ctx, torrents.CreateTorrentFileParams{
+		TorrentID:    created.Torrent.ID,
+		Name:         "nested/movie.mp4",
+		Ext:          ".mp4",
+		OriginalPath: originalPath,
+		SizeBytes:    4096,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing returned error: %v", err)
+	}
+
+	hlsDir := filepath.Join(cfg.HLSDir, file.ID)
+	if err := os.MkdirAll(hlsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll hls dir returned error: %v", err)
+	}
+	playlistPath := filepath.Join(hlsDir, "index.m3u8")
+	if err := os.WriteFile(playlistPath, []byte("#EXTM3U\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile playlist returned error: %v", err)
+	}
+	if err := torrentStore.MarkTorrentFileDone(ctx, file.ID, playlistPath); err != nil {
+		t.Fatalf("MarkTorrentFileDone returned error: %v", err)
+	}
+
+	deleteResponse := performJSONRequest(router, http.MethodDelete, "/api/torrents/"+created.Torrent.ID+"?deleteFiles=true&deleteGenerated=false", "", cookie)
+	if deleteResponse.Code != http.StatusNoContent {
+		t.Fatalf("expected delete torrent status %d, got %d: %s", http.StatusNoContent, deleteResponse.Code, deleteResponse.Body.String())
+	}
+	if len(deleter.calls) != 1 || !deleter.calls[0].deleteFiles {
+		t.Fatalf("expected qBittorrent deleteFiles=true, got %#v", deleter.calls)
+	}
+	if _, err := os.Stat(originalPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected original file to be deleted, stat error: %v", err)
+	}
+	if _, err := os.Stat(hlsDir); err != nil {
+		t.Fatalf("expected generated HLS dir to remain, stat error: %v", err)
 	}
 }
 

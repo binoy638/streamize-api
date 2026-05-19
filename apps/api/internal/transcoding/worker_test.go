@@ -62,6 +62,23 @@ func TestWorkerProcessesHLSTranscodeJob(t *testing.T) {
 	}
 
 	transcoder := &fakeTranscoder{}
+	assets := &fakeAssetProcessor{
+		result: MediaAssetResult{
+			Subtitles: []SubtitleAsset{
+				{FileName: "movie.en.vtt", Title: "English", Language: "en", Path: "/media/subtitles/tfi/movie.en.vtt"},
+			},
+			ThumbnailSheetPath: "/media/thumbnails/tfi/sprite_00000.jpg",
+			ThumbnailVTTPath:   "/media/thumbnails/tfi/thumbnails.vtt",
+		},
+	}
+	prober := fakeProber{
+		info: MediaInfo{
+			Container:       "matroska,webm",
+			DurationSeconds: 123.5,
+			Video:           &MediaStream{CodecName: "h264", PixelFormat: "yuv420p"},
+			Audio:           &MediaStream{CodecName: "ac3", Channels: 6, SampleRate: 48000},
+		},
+	}
 	var observedProgress float64
 	transcoder.afterProgress = func() {
 		processingFile, err := torrentStore.FindTorrentFileByID(ctx, file.ID)
@@ -71,11 +88,15 @@ func TestWorkerProcessesHLSTranscodeJob(t *testing.T) {
 		observedProgress = processingFile.TranscodingPercent
 	}
 	worker := Worker{
-		Jobs:       jobStore,
-		Torrents:   torrentStore,
-		Transcoder: transcoder,
-		HLSDir:     filepath.Join(t.TempDir(), "hls"),
-		ID:         "worker-test",
+		Jobs:          jobStore,
+		Torrents:      torrentStore,
+		Prober:        prober,
+		Transcoder:    transcoder,
+		Assets:        assets,
+		HLSDir:        filepath.Join(t.TempDir(), "hls"),
+		SubtitlesDir:  filepath.Join(t.TempDir(), "subtitles"),
+		ThumbnailsDir: filepath.Join(t.TempDir(), "thumbnails"),
+		ID:            "worker-test",
 	}
 
 	processed, err := worker.ProcessNext(ctx)
@@ -92,6 +113,20 @@ func TestWorkerProcessesHLSTranscodeJob(t *testing.T) {
 	}
 	if updatedFile.Status != torrents.FileStatusDone || updatedFile.TranscodingPercent != 100 || updatedFile.HLSPath == "" {
 		t.Fatalf("unexpected processed file: %+v", updatedFile)
+	}
+	if updatedFile.Container != "matroska,webm" || updatedFile.VideoCodec != "h264" || updatedFile.AudioCodec != "ac3" || updatedFile.DurationSeconds != 123.5 || updatedFile.ProcessingMode != HLSModeAudioTranscode {
+		t.Fatalf("unexpected media metadata: %+v", updatedFile)
+	}
+	if !updatedFile.ProgressPreview || updatedFile.ThumbnailSheetPath == "" || updatedFile.ThumbnailVTTPath == "" {
+		t.Fatalf("expected preview metadata to be recorded, got %+v", updatedFile)
+	}
+
+	subtitles, err := torrentStore.ListSubtitlesForFileOwner(ctx, file.ID, user.ID)
+	if err != nil {
+		t.Fatalf("ListSubtitlesForFileOwner returned error: %v", err)
+	}
+	if len(subtitles) != 1 || subtitles[0].Language != "en" {
+		t.Fatalf("expected one recorded subtitle, got %+v", subtitles)
 	}
 
 	completedJob, err := jobStore.FindJobByID(ctx, createdJob.ID)
@@ -111,9 +146,32 @@ func TestWorkerProcessesHLSTranscodeJob(t *testing.T) {
 	if transcoder.calls[0].outputPlaylistPath != updatedFile.HLSPath {
 		t.Fatalf("expected output playlist path %q, got %q", updatedFile.HLSPath, transcoder.calls[0].outputPlaylistPath)
 	}
+	if transcoder.calls[0].plan.Mode != HLSModeAudioTranscode {
+		t.Fatalf("expected audio transcode plan, got %+v", transcoder.calls[0].plan)
+	}
 	if observedProgress != 42.5 {
 		t.Fatalf("expected intermediate progress to be recorded, got %v", observedProgress)
 	}
+}
+
+type fakeProber struct {
+	info MediaInfo
+	err  error
+}
+
+func (f fakeProber) Probe(context.Context, string) (MediaInfo, error) {
+	return f.info, f.err
+}
+
+type fakeAssetProcessor struct {
+	result MediaAssetResult
+	err    error
+	calls  []MediaAssetRequest
+}
+
+func (f *fakeAssetProcessor) ProcessMediaAssets(_ context.Context, request MediaAssetRequest) (MediaAssetResult, error) {
+	f.calls = append(f.calls, request)
+	return f.result, f.err
 }
 
 type fakeTranscoder struct {
@@ -125,13 +183,15 @@ type fakeTranscodeCall struct {
 	inputPath          string
 	outputPlaylistPath string
 	segmentPattern     string
+	plan               HLSPlan
 }
 
-func (f *fakeTranscoder) TranscodeHLS(_ context.Context, inputPath string, outputPlaylistPath string, segmentPattern string, onProgress ProgressReporter) error {
+func (f *fakeTranscoder) TranscodeHLS(_ context.Context, inputPath string, outputPlaylistPath string, segmentPattern string, plan HLSPlan, onProgress ProgressReporter) error {
 	f.calls = append(f.calls, fakeTranscodeCall{
 		inputPath:          inputPath,
 		outputPlaylistPath: outputPlaylistPath,
 		segmentPattern:     segmentPattern,
+		plan:               plan,
 	})
 	if onProgress != nil {
 		if err := onProgress(42.5); err != nil {

@@ -64,12 +64,16 @@ func main() {
 
 	if cfg.WorkerEnabled {
 		worker := transcoding.Worker{
-			Jobs:         jobs.NewStore(db),
-			Torrents:     torrents.NewStore(db),
-			Transcoder:   transcoding.FFmpegTranscoder{Binary: cfg.FFmpegPath},
-			HLSDir:       cfg.HLSDir,
-			PollInterval: cfg.WorkerPollInterval,
-			Logger:       logger,
+			Jobs:          jobs.NewStore(db),
+			Torrents:      torrents.NewStore(db),
+			Prober:        transcoding.FFprobeProber{Binary: cfg.FFprobePath},
+			Transcoder:    transcoding.FFmpegTranscoder{Binary: cfg.FFmpegPath},
+			Assets:        transcoding.FFmpegAssetProcessor{Binary: cfg.FFmpegPath},
+			HLSDir:        cfg.HLSDir,
+			SubtitlesDir:  cfg.SubtitlesDir,
+			ThumbnailsDir: cfg.ThumbnailsDir,
+			PollInterval:  cfg.WorkerPollInterval,
+			Logger:        logger,
 		}
 		go worker.Run(ctx)
 	} else {

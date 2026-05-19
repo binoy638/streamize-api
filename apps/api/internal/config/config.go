@@ -43,6 +43,7 @@ type Config struct {
 	WorkerEnabled       bool
 	WorkerPollInterval  time.Duration
 	FFmpegPath          string
+	FFprobePath         string
 }
 
 func Load() (Config, error) {
@@ -82,6 +83,7 @@ func Load() (Config, error) {
 		WorkerEnabled:       envBool("STREAMIZE_WORKER_ENABLED", true),
 		WorkerPollInterval:  envDuration("STREAMIZE_WORKER_POLL_INTERVAL", 5*time.Second),
 		FFmpegPath:          envString("STREAMIZE_FFMPEG_PATH", "ffmpeg"),
+		FFprobePath:         envString("STREAMIZE_FFPROBE_PATH", "ffprobe"),
 	}
 
 	if cfg.Environment == "" {
@@ -122,6 +124,9 @@ func Load() (Config, error) {
 	}
 	if cfg.FFmpegPath == "" {
 		return Config{}, errors.New("STREAMIZE_FFMPEG_PATH cannot be empty")
+	}
+	if cfg.FFprobePath == "" {
+		return Config{}, errors.New("STREAMIZE_FFPROBE_PATH cannot be empty")
 	}
 
 	return cfg, nil

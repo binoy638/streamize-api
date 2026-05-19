@@ -19,6 +19,7 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("STREAMIZE_WORKER_ENABLED", "")
 	t.Setenv("STREAMIZE_WORKER_POLL_INTERVAL", "")
 	t.Setenv("STREAMIZE_FFMPEG_PATH", "")
+	t.Setenv("STREAMIZE_FFPROBE_PATH", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -60,6 +61,9 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.FFmpegPath != "ffmpeg" {
 		t.Fatalf("expected default ffmpeg path, got %q", cfg.FFmpegPath)
+	}
+	if cfg.FFprobePath != "ffprobe" {
+		t.Fatalf("expected default ffprobe path, got %q", cfg.FFprobePath)
 	}
 }
 

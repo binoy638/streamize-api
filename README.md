@@ -36,13 +36,20 @@ DELETE /api/torrents/{id}
 GET /api/jobs
 POST /api/jobs/{id}/retry
 POST /api/jobs/{id}/cancel
+GET /api/files/{id}/original
 GET /api/files/{id}/hls/index.m3u8
 GET /api/files/{id}/hls/{segment}
+GET /api/files/{id}/subtitles
+GET /api/files/{id}/preview/thumbnails.vtt
+GET /api/files/{id}/preview/{asset}
+GET /api/subtitles/{id}/track.vtt
 GET /api/admin/users
 POST /api/admin/users
 ```
 
 In development, the bootstrap admin defaults to `admin` / `adminadmin`. Override it with `STREAMIZE_ADMIN_USERNAME` and `STREAMIZE_ADMIN_PASSWORD`.
+
+Media workers use `ffmpeg` and `ffprobe` by default. Override them with `STREAMIZE_FFMPEG_PATH` and `STREAMIZE_FFPROBE_PATH` if the binaries live outside `PATH`.
 
 ## Web Development
 

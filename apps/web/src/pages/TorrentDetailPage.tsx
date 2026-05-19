@@ -331,9 +331,9 @@ function apiFileToRow(file: api.TorrentFile): FileRow {
     size: formatOptionalBytes(file.sizeBytes),
     status: file.status,
     progress: progressForFile(file),
-    codec: extensionLabel(file.ext || file.name),
+    codec: codecLabel(file),
     subtitles: file.progressPreview ? "Preview ready" : "Pending",
-    canOpen: file.status === "done" && Boolean(file.hlsPath),
+    canOpen: (file.status === "done" && Boolean(file.hlsPath)) || file.directPlayable,
   };
 }
 
@@ -451,6 +451,14 @@ function formatDuration(totalSeconds: number) {
 
 function formatOptionalBytes(bytes: number): string {
   return bytes > 0 ? formatBytes(bytes) : "Pending";
+}
+
+function codecLabel(file: api.TorrentFile): string {
+  const codecs = [file.videoCodec, file.audioCodec].filter(Boolean);
+  if (codecs.length > 0) {
+    return codecs.map((codec) => String(codec).toUpperCase()).join(" / ");
+  }
+  return extensionLabel(file.ext || file.name);
 }
 
 function extensionLabel(value: string): string {

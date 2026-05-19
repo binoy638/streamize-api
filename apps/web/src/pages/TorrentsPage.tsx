@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import { Link } from "react-router-dom";
 
 import * as api from "../lib/api";
+import { DeleteTorrentModal } from "../components/DeleteTorrentModal";
 import { Badge, Button, EmptyState, Field, Input, Modal, Progress, StatCard, Textarea } from "../components/ui";
 import { formatBytes, formatDate, formatTransferRate } from "../lib/format";
 import { type Torrent as MockTorrent, torrents as initialTorrents } from "../lib/mock-data";
@@ -44,6 +45,7 @@ export function TorrentsPage() {
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [deletingId, setDeletingId] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<TorrentRow | null>(null);
 
   const loadTorrents = useCallback(async ({ showLoading = true, fallbackToMock = true }: LoadTorrentsOptions = {}) => {
     if (showLoading) {
@@ -122,18 +124,20 @@ export function TorrentsPage() {
     );
   }
 
-  async function removeTorrent(torrent: TorrentRow) {
+  async function removeTorrent(torrent: TorrentRow, options: Required<api.DeleteTorrentOptions>) {
     if (torrent.source === "mock") {
       setTorrents((current) => current.filter((item) => item.id !== torrent.id));
       setNotice({ tone: "warn", text: "Prototype torrent removed locally." });
+      setPendingDelete(null);
       return;
     }
 
     setDeletingId(torrent.id);
     try {
-      await api.deleteTorrent(torrent.id);
+      await api.deleteTorrent(torrent.id, options);
       setTorrents((current) => current.filter((item) => item.id !== torrent.id));
       setNotice({ tone: "success", text: "Torrent deleted from the API." });
+      setPendingDelete(null);
     } catch (err) {
       setNotice({ tone: "warn", text: err instanceof Error ? err.message : "Unable to delete torrent." });
     } finally {
@@ -272,7 +276,7 @@ export function TorrentsPage() {
                       <Button disabled={torrent.source === "api"} onClick={() => updateStatus(torrent.id, "queued")}>
                         Retry
                       </Button>
-                      <Button variant="danger" disabled={deletingId === torrent.id} onClick={() => void removeTorrent(torrent)}>
+                      <Button variant="danger" disabled={deletingId === torrent.id} onClick={() => setPendingDelete(torrent)}>
                         {deletingId === torrent.id ? "Deleting..." : "Delete"}
                       </Button>
                     </div>
@@ -293,6 +297,17 @@ export function TorrentsPage() {
         onCreate={addTorrent}
         onRecordedFailure={refreshAfterSubmissionFailure}
         usingMock={usingMock}
+      />
+      <DeleteTorrentModal
+        open={pendingDelete !== null}
+        title={pendingDelete?.name || "this torrent"}
+        busy={deletingId !== ""}
+        onClose={() => {
+          if (!deletingId) {
+            setPendingDelete(null);
+          }
+        }}
+        onConfirm={(options) => (pendingDelete ? removeTorrent(pendingDelete, options) : undefined)}
       />
     </section>
   );

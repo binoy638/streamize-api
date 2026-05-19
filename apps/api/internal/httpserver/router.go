@@ -108,6 +108,9 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 		Deleter:       options.torrentDeleter,
 		Resumer:       options.torrentResumer,
 		SavePath:      cfg.OriginalsDir,
+		HLSDir:        cfg.HLSDir,
+		SubtitlesDir:  cfg.SubtitlesDir,
+		ThumbnailsDir: cfg.ThumbnailsDir,
 		Logger:        logger,
 		FreeDiskBytes: options.freeDiskBytes,
 	}
@@ -116,8 +119,11 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 		TorrentStore: torrentStore,
 	}
 	playbackHandler := PlaybackHandler{
-		Store:  torrentStore,
-		HLSDir: cfg.HLSDir,
+		Store:         torrentStore,
+		OriginalsDir:  cfg.OriginalsDir,
+		HLSDir:        cfg.HLSDir,
+		SubtitlesDir:  cfg.SubtitlesDir,
+		ThumbnailsDir: cfg.ThumbnailsDir,
 	}
 
 	router.Route("/api", func(api chi.Router) {
@@ -138,8 +144,13 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 			protected.Get("/jobs", jobHandler.ListJobs)
 			protected.Post("/jobs/{id}/retry", jobHandler.RetryJob)
 			protected.Post("/jobs/{id}/cancel", jobHandler.CancelJob)
+			protected.Get("/files/{id}/original", playbackHandler.ServeOriginalFile)
 			protected.Get("/files/{id}/hls/index.m3u8", playbackHandler.ServeHLSPlaylist)
 			protected.Get("/files/{id}/hls/{segment}", playbackHandler.ServeHLSSegment)
+			protected.Get("/files/{id}/subtitles", playbackHandler.ListSubtitles)
+			protected.Get("/files/{id}/preview/thumbnails.vtt", playbackHandler.ServePreviewVTT)
+			protected.Get("/files/{id}/preview/{asset}", playbackHandler.ServePreviewAsset)
+			protected.Get("/subtitles/{id}/track.vtt", playbackHandler.ServeSubtitleTrack)
 
 			protected.Route("/admin", func(admin chi.Router) {
 				admin.Use(RequireAdmin)

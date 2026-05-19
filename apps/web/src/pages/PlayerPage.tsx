@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Maximize2, Pause, Play, Volume2 } from "lucide-react";
 import type Hls from "hls.js";
@@ -18,9 +18,21 @@ type PlayerFile = {
   codec: string;
   subtitles: number | string;
   playable: boolean;
+  directPlayable: boolean;
+  previewReady: boolean;
 };
 
 type HlsInstance = InstanceType<typeof Hls>;
+
+type PreviewCue = {
+  start: number;
+  end: number;
+  image: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 export function PlayerPage() {
   const { fileId } = useParams();
@@ -38,7 +50,15 @@ export function PlayerPage() {
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [usingMock, setUsingMock] = useState(true);
   const [error, setError] = useState("");
+  const [subtitles, setSubtitles] = useState<api.Subtitle[]>([]);
+  const [previewCues, setPreviewCues] = useState<PreviewCue[]>([]);
+  const [previewPercent, setPreviewPercent] = useState<number | null>(null);
   const hlsSource = selectedFile?.source === "api" && selectedFile.playable ? hlsPlaylistURL(selectedFile.id) : "";
+  const directSource = selectedFile?.source === "api" && !hlsSource && selectedFile.directPlayable ? originalFileURL(selectedFile.id) : "";
+  const playbackSource = hlsSource || directSource;
+  const previewStyle = selectedFile?.source === "api" && selectedFile.previewReady && previewPercent !== null && durationSeconds > 0
+    ? spritePreviewStyle(previewCues, previewPercent, durationSeconds)
+    : undefined;
 
   const loadAPIFile = useCallback(async () => {
     if (!fileId) {
@@ -76,7 +96,8 @@ export function PlayerPage() {
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !hlsSource) {
+    setDurationSeconds(0);
+    if (!video || !playbackSource) {
       return;
     }
 
@@ -85,6 +106,14 @@ export function PlayerPage() {
     setPosition(0);
     video.removeAttribute("src");
     video.load();
+
+    if (directSource) {
+      video.src = directSource;
+      return () => {
+        video.removeAttribute("src");
+        video.load();
+      };
+    }
 
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = hlsSource;
@@ -130,11 +159,64 @@ export function PlayerPage() {
       canceled = true;
       hls?.destroy();
     };
-  }, [hlsSource]);
+  }, [directSource, hlsSource, playbackSource]);
+
+  useEffect(() => {
+    setSubtitles([]);
+    if (selectedFile?.source !== "api") {
+      return;
+    }
+
+    let canceled = false;
+    api
+      .listSubtitles(selectedFile.id)
+      .then((records) => {
+        if (!canceled) {
+          setSubtitles(records);
+        }
+      })
+      .catch(() => {
+        if (!canceled) {
+          setSubtitles([]);
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [selectedFile?.id, selectedFile?.source]);
+
+  useEffect(() => {
+    setPreviewCues([]);
+    if (selectedFile?.source !== "api" || !selectedFile.previewReady) {
+      return;
+    }
+
+    let canceled = false;
+    fetch(previewVTTURL(selectedFile.id), {
+      credentials: "include",
+      headers: { Accept: "text/vtt" },
+    })
+      .then((response) => (response.ok ? response.text() : ""))
+      .then((body) => {
+        if (!canceled) {
+          setPreviewCues(parsePreviewVTT(body));
+        }
+      })
+      .catch(() => {
+        if (!canceled) {
+          setPreviewCues([]);
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [selectedFile?.id, selectedFile?.previewReady, selectedFile?.source]);
 
   async function togglePlayback() {
     const video = videoRef.current;
-    if (!video || !hlsSource) {
+    if (!video || !playbackSource) {
       return;
     }
 
@@ -155,6 +237,16 @@ export function PlayerPage() {
     video.currentTime = (percent / 100) * video.duration;
   }
 
+  function updatePreviewFromPointer(event: PointerEvent<HTMLInputElement>) {
+    if (!selectedFile?.previewReady) {
+      setPreviewPercent(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const nextPercent = ((event.clientX - rect.left) / rect.width) * 100;
+    setPreviewPercent(Math.max(0, Math.min(nextPercent, 100)));
+  }
+
   return (
     <section className="content player-content">
       {usingMock && error ? (
@@ -164,7 +256,7 @@ export function PlayerPage() {
 
       <div className="player-layout">
         <section className={`player-stage ${playing ? "is-playing" : ""}`} aria-label="Video player">
-          {hlsSource ? (
+          {playbackSource ? (
             <video
               ref={videoRef}
               className="video-player"
@@ -178,30 +270,44 @@ export function PlayerPage() {
                 const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationSeconds;
                 setPosition(duration > 0 ? Math.round((video.currentTime / duration) * 100) : 0);
               }}
-            />
+            >
+              {subtitles.map((subtitle) => (
+                <track
+                  key={subtitle.id}
+                  kind="subtitles"
+                  src={subtitle.url}
+                  srcLang={subtitle.language}
+                  label={subtitle.title || subtitle.language.toUpperCase()}
+                />
+              ))}
+            </video>
           ) : (
             <div className="player-frame">
               <div className="player-gradient">
-                <span className="eyebrow">HLS Manifest</span>
+                <span className="eyebrow">Playback</span>
                 <strong>{selectedFile?.name || initialMedia.title}</strong>
-                <p>{selectedFile?.playable ? "Loading stream." : "HLS output is not ready for this file yet."}</p>
+                <p>HLS output is not ready and the original file is not directly playable yet.</p>
               </div>
             </div>
           )}
           <div className="player-controls">
-            <Button variant="primary" onClick={() => void togglePlayback()} aria-pressed={playing} disabled={!hlsSource}>
+            <Button variant="primary" onClick={() => void togglePlayback()} aria-pressed={playing} disabled={!playbackSource}>
               {playing ? <Pause size={16} /> : <Play size={16} />} {playing ? "Pause" : "Play"}
             </Button>
-            <input
-              className="range"
-              type="range"
-              min="0"
-              max="100"
-              value={position}
-              onChange={(event) => seek(Number(event.target.value))}
-              aria-label="Playback position"
-              disabled={!hlsSource}
-            />
+            <span className="scrub-host" onPointerLeave={() => setPreviewPercent(null)}>
+              {previewStyle ? <span className="scrub-preview" style={previewStyle} /> : null}
+              <input
+                className="range"
+                type="range"
+                min="0"
+                max="100"
+                value={position}
+                onChange={(event) => seek(Number(event.target.value))}
+                onPointerMove={updatePreviewFromPointer}
+                aria-label="Playback position"
+                disabled={!playbackSource}
+              />
+            </span>
             <span className="mono">{position}%</span>
             <Button>
               <Volume2 size={16} /> Audio
@@ -248,25 +354,25 @@ export function PlayerPage() {
       <div className="stats-row">
         <StatCard label="Pieces" value="98%" detail="availability" />
         <StatCard label="Peers" value="18" detail="healthy swarm" />
-        <StatCard label="Duration" value={formatDuration(durationSeconds)} detail="local HLS" />
-        <StatCard label="Subtitles" value={String(selectedFile?.subtitles || 0)} detail="tracks detected" />
+        <StatCard label="Duration" value={formatDuration(durationSeconds)} detail={hlsSource ? "local HLS" : directSource ? "original file" : "pending"} />
+        <StatCard label="Subtitles" value={String(subtitles.length || selectedFile?.subtitles || 0)} detail="tracks detected" />
       </div>
 
       <div className="panel">
         <div className="timeline-list">
           <div className="timeline-item">
-            <Badge tone="online">Direct</Badge>
+            <Badge tone={directSource ? "online" : hlsSource ? "ready" : "paused"}>{directSource ? "Direct" : hlsSource ? "HLS" : "Pending"}</Badge>
             <div>
               <strong>{selectedFile?.codec || "H.264 / AAC"}</strong>
-              <p className="muted">HLS manifest ready, source retained, previews generated.</p>
+              <p className="muted">{previewCues.length > 0 ? "Preview sprites ready." : "Preview sprites pending."}</p>
             </div>
             <Progress value={100} />
           </div>
           <div className="timeline-item">
             <Badge tone="ready">Subtitles</Badge>
             <div>
-              <strong>English, Spanish, Japanese</strong>
-              <p className="muted">Default track stays off until selected by the viewer.</p>
+              <strong>{subtitles.length > 0 ? subtitles.map((subtitle) => subtitle.language.toUpperCase()).join(", ") : "No tracks yet"}</strong>
+              <p className="muted">Extracted tracks can be selected from the native player controls.</p>
             </div>
             <Button>Manage</Button>
           </div>
@@ -284,9 +390,11 @@ function apiFileToPlayerFile(file: api.TorrentFile, torrentId: string): PlayerFi
     name: file.name,
     size: file.sizeBytes > 0 ? formatBytes(file.sizeBytes) : "Pending",
     status: file.status,
-    codec: extensionLabel(file.ext || file.name),
-    subtitles: file.progressPreview ? "Preview ready" : "Pending",
+    codec: codecLabel(file),
+    subtitles: 0,
     playable: file.status === "done" && Boolean(file.hlsPath),
+    directPlayable: file.directPlayable,
+    previewReady: file.progressPreview,
   };
 }
 
@@ -301,11 +409,108 @@ function mockFileToPlayerFile(file: (typeof torrentFiles)[number]): PlayerFile {
     codec: file.codec,
     subtitles: file.subtitles,
     playable: false,
+    directPlayable: false,
+    previewReady: false,
   };
 }
 
 function hlsPlaylistURL(fileID: string): string {
   return `/api/files/${encodeURIComponent(fileID)}/hls/index.m3u8`;
+}
+
+function originalFileURL(fileID: string): string {
+  return `/api/files/${encodeURIComponent(fileID)}/original`;
+}
+
+function previewVTTURL(fileID: string): string {
+  return `/api/files/${encodeURIComponent(fileID)}/preview/thumbnails.vtt`;
+}
+
+function spritePreviewStyle(cues: PreviewCue[], percent: number, durationSeconds: number): CSSProperties | undefined {
+  if (cues.length === 0) {
+    return undefined;
+  }
+
+  const seconds = (percent / 100) * durationSeconds;
+  const cue = cues.find((candidate) => seconds >= candidate.start && seconds < candidate.end) || cues[cues.length - 1];
+  return {
+    backgroundImage: `url(${cue.image})`,
+    backgroundPosition: `-${cue.x}px -${cue.y}px`,
+    height: `${cue.height}px`,
+    left: `${Math.max(0, Math.min(percent, 100))}%`,
+    width: `${cue.width}px`,
+  };
+}
+
+function parsePreviewVTT(body: string): PreviewCue[] {
+  const lines = body.split(/\r?\n/);
+  const cues: PreviewCue[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (!line.includes("-->")) {
+      continue;
+    }
+
+    const [startText, endText] = line.split("-->").map((part) => part.trim());
+    const start = parseVTTTime(startText);
+    const end = parseVTTTime(endText);
+    if (start === null || end === null || end <= start) {
+      continue;
+    }
+
+    let assetLine = "";
+    for (let assetIndex = index + 1; assetIndex < lines.length; assetIndex += 1) {
+      const candidate = lines[assetIndex].trim();
+      if (!candidate) {
+        break;
+      }
+      assetLine = candidate;
+      break;
+    }
+
+    const [image, fragment = ""] = assetLine.split("#xywh=");
+    const coordinates = fragment.split(",").map((value) => Number(value));
+    if (!image || coordinates.length !== 4 || coordinates.some((value) => !Number.isFinite(value))) {
+      continue;
+    }
+
+    cues.push({
+      start,
+      end,
+      image,
+      x: coordinates[0],
+      y: coordinates[1],
+      width: coordinates[2],
+      height: coordinates[3],
+    });
+  }
+
+  return cues;
+}
+
+function parseVTTTime(value: string): number | null {
+  const parts = value.split(":");
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  const hours = Number(parts[0]);
+  const minutes = Number(parts[1]);
+  const seconds = Number(parts[2]);
+  if (![hours, minutes, seconds].every(Number.isFinite)) {
+    return null;
+  }
+
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+function codecLabel(file: api.TorrentFile): string {
+  const codecs = [file.videoCodec, file.audioCodec].filter(Boolean);
+  if (codecs.length > 0) {
+    return codecs.map((codec) => String(codec).toUpperCase()).join(" / ");
+  }
+  return extensionLabel(file.ext || file.name);
 }
 
 function extensionLabel(value: string): string {

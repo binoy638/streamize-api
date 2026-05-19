@@ -35,6 +35,7 @@ func TestHLSTranscodeArgsUseRelativeFMP4InitFilename(t *testing.T) {
 		"/media/originals/movie.mkv",
 		"/media/hls/tfi_123/index.m3u8",
 		"/media/hls/tfi_123/segment_%05d.m4s",
+		HLSPlan{Mode: HLSModeFullTranscode},
 	)
 
 	index := slices.Index(args, "-hls_fmp4_init_filename")
@@ -44,4 +45,61 @@ func TestHLSTranscodeArgsUseRelativeFMP4InitFilename(t *testing.T) {
 	if args[index+1] != "init.mp4" {
 		t.Fatalf("expected relative init filename, got %q", args[index+1])
 	}
+}
+
+func TestHLSTranscodeArgsUseStreamCopyForRemux(t *testing.T) {
+	args := hlsTranscodeArgs(
+		"/media/originals/movie.mp4",
+		"/media/hls/tfi_123/index.m3u8",
+		"/media/hls/tfi_123/segment_%05d.m4s",
+		HLSPlan{Mode: HLSModeRemux},
+	)
+
+	if !hasArgValue(args, "-c:v", "copy") || !hasArgValue(args, "-c:a", "copy") {
+		t.Fatalf("expected remux args to copy audio and video: %#v", args)
+	}
+	if slices.Contains(args, "-force_key_frames") {
+		t.Fatalf("expected remux args not to force keyframes: %#v", args)
+	}
+}
+
+func TestHLSTranscodeArgsCopyVideoAndTranscodeAudio(t *testing.T) {
+	args := hlsTranscodeArgs(
+		"/media/originals/movie.mkv",
+		"/media/hls/tfi_123/index.m3u8",
+		"/media/hls/tfi_123/segment_%05d.m4s",
+		HLSPlan{Mode: HLSModeAudioTranscode},
+	)
+
+	if !hasArgValue(args, "-c:v", "copy") || !hasArgValue(args, "-c:a", "aac") {
+		t.Fatalf("expected audio-transcode args to copy video and encode audio: %#v", args)
+	}
+	if slices.Contains(args, "-force_key_frames") {
+		t.Fatalf("expected audio-transcode args not to force keyframes: %#v", args)
+	}
+}
+
+func TestHLSTranscodeArgsUseFullTranscodeDefaults(t *testing.T) {
+	args := hlsTranscodeArgs(
+		"/media/originals/movie.mkv",
+		"/media/hls/tfi_123/index.m3u8",
+		"/media/hls/tfi_123/segment_%05d.m4s",
+		HLSPlan{Mode: HLSModeFullTranscode},
+	)
+
+	if !hasArgValue(args, "-c:v", "libx264") || !hasArgValue(args, "-c:a", "aac") || !hasArgValue(args, "-crf", "23") {
+		t.Fatalf("expected full transcode args to encode video and audio: %#v", args)
+	}
+	if !slices.Contains(args, "-force_key_frames") {
+		t.Fatalf("expected full transcode args to force HLS keyframes: %#v", args)
+	}
+}
+
+func hasArgValue(args []string, key string, value string) bool {
+	for index, arg := range args {
+		if arg == key && index+1 < len(args) && args[index+1] == value {
+			return true
+		}
+	}
+	return false
 }

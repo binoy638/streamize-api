@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -48,6 +49,9 @@ type TorrentHandler struct {
 	Deleter       TorrentDeleter
 	Resumer       TorrentResumer
 	SavePath      string
+	HLSDir        string
+	SubtitlesDir  string
+	ThumbnailsDir string
 	Logger        *slog.Logger
 	FreeDiskBytes FreeDiskBytesFunc
 }
@@ -227,15 +231,23 @@ func (h TorrentHandler) DeleteTorrent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	deleteFiles := boolQuery(r, "deleteFiles", false)
+	deleteGenerated := boolQuery(r, "deleteGenerated", true)
+	files, err := h.Store.ListTorrentFiles(r.Context(), record.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list torrent files for cleanup")
+		return
+	}
+
 	if h.Deleter != nil {
 		hash := torrentDeleteHash(record)
 		if hash != "" {
 			h.info(r.Context(), "deleting torrent from qBittorrent",
 				slog.String("torrent_id", record.ID),
 				slog.String("hash", hash),
-				slog.Bool("delete_files", false),
+				slog.Bool("delete_files", deleteFiles),
 			)
-			if err := h.Deleter.DeleteTorrent(r.Context(), hash, false); err != nil {
+			if err := h.Deleter.DeleteTorrent(r.Context(), hash, deleteFiles); err != nil {
 				h.warn(r.Context(), "qBittorrent torrent delete failed",
 					slog.String("torrent_id", record.ID),
 					slog.String("hash", hash),
@@ -244,6 +256,27 @@ func (h TorrentHandler) DeleteTorrent(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadGateway, "failed to delete torrent from qBittorrent")
 				return
 			}
+		}
+	}
+
+	if deleteFiles {
+		if err := h.cleanupTorrentOriginalFiles(r.Context(), files); err != nil {
+			h.warn(r.Context(), "downloaded media cleanup failed",
+				slog.String("torrent_id", record.ID),
+				slog.Any("error", err),
+			)
+			writeError(w, http.StatusInternalServerError, "failed to delete downloaded media files")
+			return
+		}
+	}
+	if deleteGenerated {
+		if err := h.cleanupTorrentGeneratedFiles(r.Context(), files); err != nil {
+			h.warn(r.Context(), "generated media cleanup failed",
+				slog.String("torrent_id", record.ID),
+				slog.Any("error", err),
+			)
+			writeError(w, http.StatusInternalServerError, "failed to delete generated media files")
+			return
 		}
 	}
 
@@ -269,6 +302,18 @@ func torrentDeleteHash(record torrents.Torrent) string {
 	}
 
 	return strings.TrimSpace(record.InfoHash)
+}
+
+func boolQuery(r *http.Request, key string, fallback bool) bool {
+	value := strings.TrimSpace(r.URL.Query().Get(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func (h TorrentHandler) syncTorrentStates(ctx context.Context, records []torrents.Torrent) []torrents.Torrent {

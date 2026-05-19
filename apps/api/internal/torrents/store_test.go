@@ -238,6 +238,35 @@ func TestTorrentFileStatusUpdates(t *testing.T) {
 		t.Fatalf("unexpected progressed file: %+v", progressed)
 	}
 
+	if err := store.UpdateTorrentFileMediaMetadata(ctx, UpdateTorrentFileMediaMetadataParams{
+		ID:              file.ID,
+		Container:       "Matroska,WEBM",
+		VideoCodec:      "H264",
+		AudioCodec:      "AC3",
+		DurationSeconds: 123.5,
+		ProcessingMode:  "audio_transcode_hls",
+	}); err != nil {
+		t.Fatalf("UpdateTorrentFileMediaMetadata returned error: %v", err)
+	}
+	withMetadata, err := store.FindTorrentFileByID(ctx, file.ID)
+	if err != nil {
+		t.Fatalf("FindTorrentFileByID returned error: %v", err)
+	}
+	if withMetadata.Container != "matroska,webm" || withMetadata.VideoCodec != "h264" || withMetadata.AudioCodec != "ac3" || withMetadata.DurationSeconds != 123.5 || withMetadata.ProcessingMode != "audio_transcode_hls" {
+		t.Fatalf("unexpected media metadata: %+v", withMetadata)
+	}
+
+	if err := store.MarkTorrentFilePreviewReady(ctx, file.ID, "/media/thumbnails/tfi_123/sprite_00000.jpg", "/media/thumbnails/tfi_123/thumbnails.vtt"); err != nil {
+		t.Fatalf("MarkTorrentFilePreviewReady returned error: %v", err)
+	}
+	previewed, err := store.FindTorrentFileByID(ctx, file.ID)
+	if err != nil {
+		t.Fatalf("FindTorrentFileByID returned error: %v", err)
+	}
+	if !previewed.ProgressPreview || previewed.ThumbnailSheetPath == "" || previewed.ThumbnailVTTPath == "" {
+		t.Fatalf("unexpected preview metadata: %+v", previewed)
+	}
+
 	if err := store.MarkTorrentFileDone(ctx, file.ID, "/media/hls/tfi_123/index.m3u8"); err != nil {
 		t.Fatalf("MarkTorrentFileDone returned error: %v", err)
 	}
@@ -256,7 +285,7 @@ func TestTorrentFileStatusUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindTorrentFileByID returned error: %v", err)
 	}
-	if reset.Status != FileStatusQueued || reset.HLSPath != "" || reset.ProgressPreview || reset.TranscodingPercent != 0 || reset.ErrorMessage != "" {
+	if reset.Status != FileStatusQueued || reset.HLSPath != "" || reset.ProgressPreview || reset.ThumbnailSheetPath != "" || reset.ThumbnailVTTPath != "" || reset.TranscodingPercent != 0 || reset.ErrorMessage != "" {
 		t.Fatalf("unexpected reset file: %+v", reset)
 	}
 
@@ -269,6 +298,73 @@ func TestTorrentFileStatusUpdates(t *testing.T) {
 	}
 	if errored.Status != FileStatusError || errored.ErrorMessage != "ffmpeg failed" {
 		t.Fatalf("unexpected errored file: %+v", errored)
+	}
+}
+
+func TestSubtitlesAreFileOwnerScoped(t *testing.T) {
+	ctx := context.Background()
+	store, ownerID := newTestStore(t)
+
+	torrent, err := store.CreateTorrent(ctx, CreateTorrentParams{
+		OwnerUserID: ownerID,
+		MagnetURI:   testMagnet,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrent returned error: %v", err)
+	}
+	file, _, err := store.CreateTorrentFileIfMissing(ctx, CreateTorrentFileParams{
+		TorrentID:    torrent.ID,
+		Name:         "movie.mp4",
+		Ext:          ".mp4",
+		OriginalPath: "/media/originals/movie.mp4",
+		SizeBytes:    4096,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing returned error: %v", err)
+	}
+
+	subtitle, inserted, err := store.CreateSubtitleIfMissing(ctx, CreateSubtitleParams{
+		TorrentFileID: file.ID,
+		FileName:      "movie.en.vtt",
+		Title:         "English",
+		Language:      "en",
+		Path:          "/media/subtitles/movie.en.vtt",
+	})
+	if err != nil {
+		t.Fatalf("CreateSubtitleIfMissing returned error: %v", err)
+	}
+	if !inserted {
+		t.Fatal("expected subtitle to be inserted")
+	}
+
+	duplicate, inserted, err := store.CreateSubtitleIfMissing(ctx, CreateSubtitleParams{
+		TorrentFileID: file.ID,
+		FileName:      "movie.en.vtt",
+		Title:         "English",
+		Language:      "en",
+		Path:          "/media/subtitles/movie.en.vtt",
+	})
+	if err != nil {
+		t.Fatalf("duplicate CreateSubtitleIfMissing returned error: %v", err)
+	}
+	if inserted || duplicate.ID != subtitle.ID {
+		t.Fatalf("expected duplicate to reuse subtitle, inserted=%t duplicate=%+v", inserted, duplicate)
+	}
+
+	subtitles, err := store.ListSubtitlesForFileOwner(ctx, file.ID, ownerID)
+	if err != nil {
+		t.Fatalf("ListSubtitlesForFileOwner returned error: %v", err)
+	}
+	if len(subtitles) != 1 || subtitles[0].ID != subtitle.ID {
+		t.Fatalf("expected one subtitle, got %+v", subtitles)
+	}
+
+	hidden, err := store.ListSubtitlesForFileOwner(ctx, file.ID, "usr_other")
+	if err != nil {
+		t.Fatalf("ListSubtitlesForFileOwner wrong owner returned error: %v", err)
+	}
+	if len(hidden) != 0 {
+		t.Fatalf("expected subtitles to be hidden from another owner, got %+v", hidden)
 	}
 }
 

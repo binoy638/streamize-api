@@ -16,15 +16,19 @@ import (
 )
 
 type Worker struct {
-	Jobs         *jobs.Store
-	Torrents     *torrents.Store
-	Transcoder   Transcoder
-	HLSDir       string
-	ID           string
-	PollInterval time.Duration
-	Lease        time.Duration
-	RetryDelay   time.Duration
-	Logger       *slog.Logger
+	Jobs          *jobs.Store
+	Torrents      *torrents.Store
+	Prober        Prober
+	Transcoder    Transcoder
+	Assets        AssetProcessor
+	HLSDir        string
+	SubtitlesDir  string
+	ThumbnailsDir string
+	ID            string
+	PollInterval  time.Duration
+	Lease         time.Duration
+	RetryDelay    time.Duration
+	Logger        *slog.Logger
 }
 
 func (w Worker) Run(ctx context.Context) {
@@ -118,11 +122,28 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 		return w.failJob(ctx, job, file, err)
 	}
 
+	prober := w.Prober
+	if prober == nil {
+		prober = FFprobeProber{}
+	}
+	mediaInfo, err := prober.Probe(ctx, file.OriginalPath)
+	if err != nil {
+		return w.failJob(ctx, job, file, err)
+	}
+	plan, err := PlanHLS(mediaInfo)
+	if err != nil {
+		return w.failJob(ctx, job, file, err)
+	}
+	if err := w.Torrents.UpdateTorrentFileMediaMetadata(ctx, torrentFileMediaMetadata(file.ID, mediaInfo, plan)); err != nil {
+		return w.failJob(ctx, job, file, err)
+	}
+
 	w.info(ctx, "hls transcode started",
 		slog.String("job_id", job.ID),
 		slog.String("torrent_file_id", file.ID),
 		slog.String("input_path", file.OriginalPath),
 		slog.String("output_playlist", playlistPath),
+		slog.String("processing_mode", plan.Mode),
 	)
 
 	transcoder := w.Transcoder
@@ -130,13 +151,16 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 		transcoder = FFmpegTranscoder{}
 	}
 	progressReporter := w.progressReporter(ctx, file.ID)
-	if err := transcoder.TranscodeHLS(ctx, file.OriginalPath, playlistPath, segmentPattern, progressReporter); err != nil {
+	if err := transcoder.TranscodeHLS(ctx, file.OriginalPath, playlistPath, segmentPattern, plan, progressReporter); err != nil {
 		return w.failJob(ctx, job, file, err)
 	}
 
 	if err := w.Torrents.MarkTorrentFileDone(ctx, file.ID, playlistPath); err != nil {
 		return w.failJob(ctx, job, file, err)
 	}
+
+	w.processMediaAssets(ctx, file, mediaInfo)
+
 	if err := w.Jobs.Complete(ctx, job.ID); err != nil {
 		return err
 	}
@@ -145,9 +169,73 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 		slog.String("job_id", job.ID),
 		slog.String("torrent_file_id", file.ID),
 		slog.String("output_playlist", playlistPath),
+		slog.String("processing_mode", plan.Mode),
 	)
 
 	return nil
+}
+
+func (w Worker) processMediaAssets(ctx context.Context, file torrents.TorrentFile, mediaInfo MediaInfo) {
+	processor := w.Assets
+	if processor == nil {
+		processor = FFmpegAssetProcessor{}
+	}
+
+	result, err := processor.ProcessMediaAssets(ctx, MediaAssetRequest{
+		InputPath:     file.OriginalPath,
+		TorrentFileID: file.ID,
+		SubtitlesDir:  w.SubtitlesDir,
+		ThumbnailsDir: w.ThumbnailsDir,
+		Info:          mediaInfo,
+	})
+	if err != nil {
+		w.warn(ctx, "media asset processing failed",
+			slog.String("torrent_file_id", file.ID),
+			slog.Any("error", err),
+		)
+		return
+	}
+
+	for _, subtitle := range result.Subtitles {
+		if _, _, err := w.Torrents.CreateSubtitleIfMissing(ctx, torrents.CreateSubtitleParams{
+			TorrentFileID: file.ID,
+			FileName:      subtitle.FileName,
+			Title:         subtitle.Title,
+			Language:      subtitle.Language,
+			Path:          subtitle.Path,
+		}); err != nil {
+			w.warn(ctx, "record subtitle failed",
+				slog.String("torrent_file_id", file.ID),
+				slog.String("path", subtitle.Path),
+				slog.Any("error", err),
+			)
+		}
+	}
+
+	if strings.TrimSpace(result.ThumbnailSheetPath) != "" && strings.TrimSpace(result.ThumbnailVTTPath) != "" {
+		if err := w.Torrents.MarkTorrentFilePreviewReady(ctx, file.ID, result.ThumbnailSheetPath, result.ThumbnailVTTPath); err != nil {
+			w.warn(ctx, "record thumbnail preview failed",
+				slog.String("torrent_file_id", file.ID),
+				slog.Any("error", err),
+			)
+		}
+	}
+}
+
+func torrentFileMediaMetadata(id string, mediaInfo MediaInfo, plan HLSPlan) torrents.UpdateTorrentFileMediaMetadataParams {
+	params := torrents.UpdateTorrentFileMediaMetadataParams{
+		ID:              id,
+		Container:       mediaInfo.Container,
+		DurationSeconds: mediaInfo.DurationSeconds,
+		ProcessingMode:  plan.Mode,
+	}
+	if mediaInfo.Video != nil {
+		params.VideoCodec = mediaInfo.Video.CodecName
+	}
+	if mediaInfo.Audio != nil {
+		params.AudioCodec = mediaInfo.Audio.CodecName
+	}
+	return params
 }
 
 func (w Worker) progressReporter(ctx context.Context, torrentFileID string) ProgressReporter {

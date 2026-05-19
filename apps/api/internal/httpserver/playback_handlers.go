@@ -17,8 +17,11 @@ import (
 )
 
 type PlaybackHandler struct {
-	Store  *torrents.Store
-	HLSDir string
+	Store         *torrents.Store
+	OriginalsDir  string
+	HLSDir        string
+	SubtitlesDir  string
+	ThumbnailsDir string
 }
 
 func (h PlaybackHandler) ServeHLSPlaylist(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +82,145 @@ func (h PlaybackHandler) ServeHLSSegment(w http.ResponseWriter, r *http.Request)
 	http.ServeFile(w, r, segmentPath)
 }
 
-func (h PlaybackHandler) loadPlayableFile(w http.ResponseWriter, r *http.Request) (torrents.TorrentFile, bool) {
+func (h PlaybackHandler) ServeOriginalFile(w http.ResponseWriter, r *http.Request) {
+	file, ok := h.loadOwnedFile(w, r)
+	if !ok {
+		return
+	}
+	if !file.DirectPlayable {
+		writeError(w, http.StatusConflict, "original file is not directly playable")
+		return
+	}
+
+	originalPath, ok := h.safeOriginalPath(file.OriginalPath)
+	if !ok {
+		writeError(w, http.StatusNotFound, "original file not found")
+		return
+	}
+	if _, err := os.Stat(originalPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusNotFound, "original file not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load original file")
+		return
+	}
+
+	contentType := mime.TypeByExtension(strings.ToLower(filepath.Ext(originalPath)))
+	if contentType == "" {
+		contentType = "video/mp4"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	http.ServeFile(w, r, originalPath)
+}
+
+func (h PlaybackHandler) ListSubtitles(w http.ResponseWriter, r *http.Request) {
+	user, ok := CurrentUser(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	subtitles, err := h.Store.ListSubtitlesForFileOwner(r.Context(), chi.URLParam(r, "id"), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list subtitles")
+		return
+	}
+	for index := range subtitles {
+		subtitles[index].URL = fmt.Sprintf("/api/subtitles/%s/track.vtt", url.PathEscape(subtitles[index].ID))
+		subtitles[index].Path = ""
+	}
+
+	writeJSON(w, http.StatusOK, map[string][]torrents.Subtitle{"subtitles": subtitles})
+}
+
+func (h PlaybackHandler) ServeSubtitleTrack(w http.ResponseWriter, r *http.Request) {
+	user, ok := CurrentUser(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	subtitle, err := h.Store.FindSubtitleByIDForOwner(r.Context(), chi.URLParam(r, "id"), user.ID)
+	if err != nil {
+		if errors.Is(err, torrents.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "subtitle not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load subtitle")
+		return
+	}
+
+	subtitlePath, ok := h.safeSubtitlePath(subtitle.Path)
+	if !ok {
+		writeError(w, http.StatusNotFound, "subtitle file not found")
+		return
+	}
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	http.ServeFile(w, r, subtitlePath)
+}
+
+func (h PlaybackHandler) ServePreviewVTT(w http.ResponseWriter, r *http.Request) {
+	file, ok := h.loadOwnedFile(w, r)
+	if !ok {
+		return
+	}
+	vttPath, ok := h.safeThumbnailPath(file.ThumbnailVTTPath)
+	if !ok {
+		writeError(w, http.StatusNotFound, "preview thumbnails not found")
+		return
+	}
+
+	body, err := os.ReadFile(vttPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusNotFound, "preview thumbnails not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to read preview thumbnails")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(rewritePreviewVTT(file.ID, string(body)))
+}
+
+func (h PlaybackHandler) ServePreviewAsset(w http.ResponseWriter, r *http.Request) {
+	file, ok := h.loadOwnedFile(w, r)
+	if !ok {
+		return
+	}
+	vttPath, ok := h.safeThumbnailPath(file.ThumbnailVTTPath)
+	if !ok {
+		writeError(w, http.StatusNotFound, "preview thumbnails not found")
+		return
+	}
+
+	assetName := strings.TrimSpace(chi.URLParam(r, "asset"))
+	if !isSafePreviewAssetName(assetName) {
+		writeError(w, http.StatusBadRequest, "invalid preview asset")
+		return
+	}
+	assetPath, ok := h.safeThumbnailPath(filepath.Join(filepath.Dir(vttPath), assetName))
+	if !ok {
+		writeError(w, http.StatusNotFound, "preview asset not found")
+		return
+	}
+
+	contentType := mime.TypeByExtension(strings.ToLower(filepath.Ext(assetPath)))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	http.ServeFile(w, r, assetPath)
+}
+
+func (h PlaybackHandler) loadOwnedFile(w http.ResponseWriter, r *http.Request) (torrents.TorrentFile, bool) {
 	user, ok := CurrentUser(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "authentication required")
@@ -95,6 +236,14 @@ func (h PlaybackHandler) loadPlayableFile(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, "failed to load file")
 		return torrents.TorrentFile{}, false
 	}
+	return file, true
+}
+
+func (h PlaybackHandler) loadPlayableFile(w http.ResponseWriter, r *http.Request) (torrents.TorrentFile, bool) {
+	file, ok := h.loadOwnedFile(w, r)
+	if !ok {
+		return torrents.TorrentFile{}, false
+	}
 	if file.Status != torrents.FileStatusDone || strings.TrimSpace(file.HLSPath) == "" {
 		writeError(w, http.StatusConflict, "HLS output is not ready")
 		return torrents.TorrentFile{}, false
@@ -104,11 +253,33 @@ func (h PlaybackHandler) loadPlayableFile(w http.ResponseWriter, r *http.Request
 }
 
 func (h PlaybackHandler) safeHLSPath(candidate string) (string, bool) {
-	root, err := filepath.Abs(strings.TrimSpace(h.HLSDir))
+	return safePathInRoot(h.HLSDir, candidate)
+}
+
+func (h PlaybackHandler) safeOriginalPath(candidate string) (string, bool) {
+	return safePathInRoot(h.OriginalsDir, candidate)
+}
+
+func (h PlaybackHandler) safeSubtitlePath(candidate string) (string, bool) {
+	return safePathInRoot(h.SubtitlesDir, candidate)
+}
+
+func (h PlaybackHandler) safeThumbnailPath(candidate string) (string, bool) {
+	return safePathInRoot(h.ThumbnailsDir, candidate)
+}
+
+func safePathInRoot(rootPath string, candidate string) (string, bool) {
+	rootPath = strings.TrimSpace(rootPath)
+	candidate = strings.TrimSpace(candidate)
+	if rootPath == "" || candidate == "" {
+		return "", false
+	}
+
+	root, err := filepath.Abs(rootPath)
 	if err != nil || root == "" {
 		return "", false
 	}
-	cleaned, err := filepath.Abs(strings.TrimSpace(candidate))
+	cleaned, err := filepath.Abs(candidate)
 	if err != nil || cleaned == "" {
 		return "", false
 	}
@@ -198,6 +369,48 @@ func isSafeHLSAssetName(name string) bool {
 
 	switch strings.ToLower(filepath.Ext(name)) {
 	case ".ts", ".m4s", ".mp4":
+		return true
+	default:
+		return false
+	}
+}
+
+func rewritePreviewVTT(fileID string, body string) []byte {
+	lines := strings.Split(body, "\n")
+	for index, line := range lines {
+		assetName, ok := previewAssetNameFromVTTLine(line)
+		if !ok {
+			continue
+		}
+		lines[index] = strings.Replace(line, assetName, fmt.Sprintf("/api/files/%s/preview/%s", url.PathEscape(fileID), url.PathEscape(assetName)), 1)
+	}
+	return []byte(strings.Join(lines, "\n"))
+}
+
+func previewAssetNameFromVTTLine(line string) (string, bool) {
+	line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+	if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "WEBVTT") || strings.Contains(line, "-->") {
+		return "", false
+	}
+	beforeFragment, _, _ := strings.Cut(line, "#")
+	name := filepath.Base(beforeFragment)
+	if !isSafePreviewAssetName(name) {
+		return "", false
+	}
+	return name, true
+}
+
+func isSafePreviewAssetName(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	if name != filepath.Base(name) || strings.ContainsAny(name, `/\`) {
+		return false
+	}
+
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".jpg", ".jpeg", ".png", ".webp":
 		return true
 	default:
 		return false
