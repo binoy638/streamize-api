@@ -27,6 +27,17 @@ services:
     volumes:
       - ${STREAMIZE_HOST_DATA_DIR:-./data}:/data
       - ${STREAMIZE_HOST_MEDIA_DIR:-./media}:/media
+    networks:
+      - default
+      - traefik
+    labels:
+      # Routed by the existing Traefik instance (n8n-compose-traefik-1).
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-n8n-compose_default}"
+      - "traefik.http.routers.streamize.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.streamize.entrypoints=websecure"
+      - "traefik.http.routers.streamize.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.streamize.loadbalancer.server.port=8080"
     restart: unless-stopped
 
   qbittorrent:
@@ -44,23 +55,14 @@ services:
     volumes:
       - ${QBITTORRENT_HOST_CONFIG_DIR:-./data/qbittorrent-config}:/config
       - ${STREAMIZE_HOST_MEDIA_DIR:-./media}:/media
+    networks:
+      - default
     restart: unless-stopped
 
-  caddy:
-    image: caddy:2
-    environment:
-      DOMAIN: ${DOMAIN}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - api
-    restart: unless-stopped
-
-volumes:
-  caddy_data:
-  caddy_config:
+networks:
+  # Internal network for api <-> qbittorrent.
+  default:
+  # The pre-existing Traefik network — Traefik reaches the api over this.
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-n8n-compose_default}

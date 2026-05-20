@@ -56,14 +56,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Copy compose files to VPS
+      - name: Copy compose file to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          source: "deploy/docker-compose.prod.yml,deploy/Caddyfile"
+          source: "deploy/docker-compose.prod.yml"
           target: "/opt/streamize"
           strip_components: 1
 

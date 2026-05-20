@@ -81,8 +81,13 @@ The Compose stack runs the Go API and qBittorrent. SQLite, qBittorrent config, a
 Production deploys are continuous: every push to `master` (and the manual **Run workflow** button) triggers `.github/workflows/deploy.yml`, which builds a single Docker image — the Go API with the React UI embedded — pushes it to GitHub Container Registry, then SSHes to the VPS to pull and restart.
 
 ```text
-Internet ──443──> Caddy (auto-HTTPS) ──> api:8080 (Go + embedded SPA) ──> qbittorrent
+Internet ──443──> Traefik (TLS) ──> api:8080 (Go + embedded SPA) ──> qbittorrent
 ```
+
+TLS and routing are handled by an existing Traefik instance on the VPS. The `api` container
+joins Traefik's Docker network and is routed by labels in `docker-compose.prod.yml`
+(`Host(${DOMAIN})` → port `8080`, cert resolver `mytlschallenge`). Set `TRAEFIK_NETWORK` in
+`.env` to the network Traefik watches.
 
 ### One-time VPS setup
 
@@ -100,7 +105,7 @@ Internet ──443──> Caddy (auto-HTTPS) ──> api:8080 (Go + embedded SPA
 3. **Add the environment file** — copy `deploy/.env.prod.example` to `/opt/streamize/.env` and set real secrets plus `DOMAIN`.
 4. **SSH key** — add the deploy public key to the VPS user's `~/.ssh/authorized_keys`.
 5. **DNS** — point an `A` record for `DOMAIN` at the VPS public IP.
-6. **Firewall** — allow `22`, `80`, `443`, and `6881` (tcp+udp).
+6. **Firewall** — allow `22` and `6881` (tcp+udp). Ports `80`/`443` are already served by Traefik.
 
 ### GitHub configuration
 
@@ -115,7 +120,7 @@ Add these repository **secrets** (Settings → Secrets and variables → Actions
 
 GHCR push uses the built-in `GITHUB_TOKEN` — no extra secret needed. After the first deploy publishes the package, set its visibility to **public** under the repo's Packages settings so the VPS can pull without registry auth. (No secrets are baked into the image — all config comes from `.env` at runtime.)
 
-The deploy job copies `docker-compose.prod.yml` and `Caddyfile` to `/opt/streamize` on each run, then runs `docker compose pull && up -d`. Database migrations apply automatically on API start.
+The deploy job copies `docker-compose.prod.yml` to `/opt/streamize` on each run, then runs `docker compose pull && up -d`. Database migrations apply automatically on API start.
 
 ### qBittorrent WebUI
 
