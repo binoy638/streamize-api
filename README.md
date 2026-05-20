@@ -124,8 +124,22 @@ The deploy job copies `docker-compose.prod.yml` to `/opt/streamize` on each run,
 
 ### qBittorrent WebUI
 
-The WebUI port is bound to `127.0.0.1` on the VPS — reach it through an SSH tunnel rather than the public internet:
+The WebUI port is bound to `127.0.0.1` on the VPS — reach it through an SSH tunnel rather than the public internet. Point ssh at your VPS private key with `-i`:
 
 ```bash
-ssh -L 8081:127.0.0.1:8081 <VPS_USER>@<VPS_HOST>   # then open http://localhost:8081
+chmod 600 /path/to/vps-key                                  # one-time: ssh rejects loose perms
+ssh -i /path/to/vps-key -L 8081:127.0.0.1:8081 ubuntu@<VPS_HOST>
 ```
+
+While that session is open, browse `http://localhost:8081` for the qBittorrent WebUI.
+
+To avoid passing `-i` every time, add an entry to `~/.ssh/config`:
+
+```
+Host streamize-vps
+    HostName <VPS_HOST>
+    User ubuntu
+    IdentityFile /path/to/vps-key
+```
+
+Then the tunnel shortens to `ssh -L 8081:127.0.0.1:8081 streamize-vps`.

@@ -306,12 +306,20 @@ func (c *Client) login(ctx context.Context) error {
 	defer response.Body.Close()
 
 	body, _ := io.ReadAll(io.LimitReader(response.Body, 1024))
-	if response.StatusCode != http.StatusOK {
+
+	switch response.StatusCode {
+	case http.StatusNoContent:
+		// qBittorrent 5.x answers a successful login with 204 and an empty
+		// body; the session cookie is captured by the client's cookie jar.
+		return nil
+	case http.StatusOK:
+		// Older qBittorrent answers 200 with body "Ok." on success or
+		// "Fails." when the credentials are rejected.
+		if strings.EqualFold(strings.TrimSpace(string(body)), "Ok.") {
+			return nil
+		}
+		return fmt.Errorf("qBittorrent login failed: invalid credentials")
+	default:
 		return fmt.Errorf("qBittorrent login failed with status %d", response.StatusCode)
 	}
-	if !strings.EqualFold(strings.TrimSpace(string(body)), "Ok.") {
-		return fmt.Errorf("qBittorrent login failed")
-	}
-
-	return nil
 }
