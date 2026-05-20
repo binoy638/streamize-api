@@ -1,0 +1,6 @@
+# Caddy automatically provisions and renews Let's Encrypt TLS for {$DOMAIN}.
+# DOMAIN is injected from the environment (see docker-compose.prod.yml / .env).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:8080
+}

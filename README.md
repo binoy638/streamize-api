@@ -75,3 +75,52 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build
 ```
 
 The Compose stack runs the Go API and qBittorrent. SQLite, qBittorrent config, and media files are bind-mounted into local `data/` and `media/` folders so downloads are visible on the host.
+
+## Production Deployment
+
+Production deploys are continuous: every push to `master` (and the manual **Run workflow** button) triggers `.github/workflows/deploy.yml`, which builds a single Docker image — the Go API with the React UI embedded — pushes it to GitHub Container Registry, then SSHes to the VPS to pull and restart.
+
+```text
+Internet ──443──> Caddy (auto-HTTPS) ──> api:8080 (Go + embedded SPA) ──> qbittorrent
+```
+
+### One-time VPS setup
+
+1. **Install Docker** (Engine + compose plugin) and add the deploy user to the `docker` group:
+   ```bash
+   curl -fsSL https://get.docker.com | sh
+   sudo usermod -aG docker "$USER"   # re-login afterwards
+   ```
+2. **Create the deploy directory** and runtime folders:
+   ```bash
+   sudo mkdir -p /opt/streamize && sudo chown "$USER" /opt/streamize
+   mkdir -p /opt/streamize/data/qbittorrent-config \
+            /opt/streamize/media/{originals,hls,subtitles,thumbnails,tmp}
+   ```
+3. **Add the environment file** — copy `deploy/.env.prod.example` to `/opt/streamize/.env` and set real secrets plus `DOMAIN`.
+4. **SSH key** — add the deploy public key to the VPS user's `~/.ssh/authorized_keys`.
+5. **DNS** — point an `A` record for `DOMAIN` at the VPS public IP.
+6. **Firewall** — allow `22`, `80`, `443`, and `6881` (tcp+udp).
+
+### GitHub configuration
+
+Add these repository **secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `VPS_HOST` | VPS hostname or IP |
+| `VPS_USER` | deploy SSH user |
+| `VPS_SSH_KEY` | the deploy **private** key |
+| `VPS_PORT` | SSH port (optional, defaults to `22`) |
+
+GHCR push uses the built-in `GITHUB_TOKEN` — no extra secret needed. After the first deploy publishes the package, set its visibility to **public** under the repo's Packages settings so the VPS can pull without registry auth. (No secrets are baked into the image — all config comes from `.env` at runtime.)
+
+The deploy job copies `docker-compose.prod.yml` and `Caddyfile` to `/opt/streamize` on each run, then runs `docker compose pull && up -d`. Database migrations apply automatically on API start.
+
+### qBittorrent WebUI
+
+The WebUI port is bound to `127.0.0.1` on the VPS — reach it through an SSH tunnel rather than the public internet:
+
+```bash
+ssh -L 8081:127.0.0.1:8081 <VPS_USER>@<VPS_HOST>   # then open http://localhost:8081
+```

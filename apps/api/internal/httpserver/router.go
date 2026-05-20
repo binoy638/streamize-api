@@ -14,6 +14,7 @@ import (
 	"github.com/binoy638/streamize-api/apps/api/internal/jobs"
 	"github.com/binoy638/streamize-api/apps/api/internal/qbittorrent"
 	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
+	"github.com/binoy638/streamize-api/apps/api/internal/webui"
 )
 
 type RouterOption func(*routerOptions)
@@ -82,7 +83,9 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 	router.Use(requestLogger(logger))
-	router.NotFound(notFoundHandler)
+	// Non-/api routes fall through to the embedded SPA; /api/* keeps its own
+	// JSON 404 via the subrouter's api.NotFound below.
+	router.NotFound(webui.Handler().ServeHTTP)
 	router.MethodNotAllowed(methodNotAllowedHandler)
 
 	authStore := auth.NewStore(db)

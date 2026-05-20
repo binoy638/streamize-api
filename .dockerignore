@@ -1,0 +1,42 @@
+# The image build only needs apps/web and apps/api source. Keep the build
+# context small — everything below is irrelevant to the Dockerfile.
+.git
+.github
+.agents
+.codex
+
+# Dependencies (reinstalled inside the build stages).
+node_modules
+**/node_modules
+
+# Build / test output.
+dist
+**/dist
+coverage
+**/coverage
+bin
+*.test
+coverage.out
+
+# Runtime data — never belongs in an image.
+data
+media
+apps/api/data
+apps/api/media
+tmp
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Reference-only legacy code and docs.
+legacy
+docs
+design-specs
+deploy
+*.md
+
+# Local environment files.
+.env
+.env.*
+!**/.env.example
