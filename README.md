@@ -96,11 +96,13 @@ joins Traefik's Docker network and is routed by labels in `docker-compose.prod.y
    curl -fsSL https://get.docker.com | sh
    sudo usermod -aG docker "$USER"   # re-login afterwards
    ```
-2. **Create the deploy directory** and runtime folders:
+2. **Create the deploy directory** and runtime folders, owned by uid `1000`
+   (both the `api` and `qbittorrent` containers run as `1000:1000`):
    ```bash
    sudo mkdir -p /opt/streamize && sudo chown "$USER" /opt/streamize
    mkdir -p /opt/streamize/data/qbittorrent-config \
             /opt/streamize/media/{originals,hls,subtitles,thumbnails,tmp}
+   sudo chown -R 1000:1000 /opt/streamize/data /opt/streamize/media
    ```
 3. **Add the environment file** — copy `deploy/.env.prod.example` to `/opt/streamize/.env` and set real secrets plus `DOMAIN`.
 4. **SSH key** — add the deploy public key to the VPS user's `~/.ssh/authorized_keys`.

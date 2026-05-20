@@ -1,6 +1,9 @@
 services:
   api:
     image: ghcr.io/binoy638/streamize-api:latest
+    # Run as the same uid/gid as qBittorrent so both can read/write the
+    # bind-mounted media directories without permission errors.
+    user: "${PUID:-1000}:${PGID:-1000}"
     environment:
       STREAMIZE_ENV: ${STREAMIZE_ENV:-production}
       STREAMIZE_HTTP_ADDR: ${STREAMIZE_HTTP_ADDR:-:8080}
