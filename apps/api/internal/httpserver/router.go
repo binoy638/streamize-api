@@ -1,8 +1,11 @@
 package httpserver
 
 import (
+	"bufio"
 	"database/sql"
+	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -14,6 +17,7 @@ import (
 	"github.com/binoy638/streamize-api/apps/api/internal/jobs"
 	"github.com/binoy638/streamize-api/apps/api/internal/qbittorrent"
 	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
+	"github.com/binoy638/streamize-api/apps/api/internal/watchparty"
 	"github.com/binoy638/streamize-api/apps/api/internal/webui"
 )
 
@@ -91,6 +95,8 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 	authStore := auth.NewStore(db)
 	torrentStore := torrents.NewStore(db)
 	jobStore := jobs.NewStore(db)
+	watchPartyStore := watchparty.NewStore(db)
+	watchPartyHub := watchparty.NewHub(watchPartyStore, logger)
 	authHandler := AuthHandler{
 		Config: cfg,
 		Store:  authStore,
@@ -128,6 +134,14 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 		SubtitlesDir:  cfg.SubtitlesDir,
 		ThumbnailsDir: cfg.ThumbnailsDir,
 	}
+	watchPartyHandler := WatchPartyHandler{
+		Store:        watchPartyStore,
+		TorrentStore: torrentStore,
+		AuthStore:    authStore,
+		Config:       cfg,
+		Playback:     playbackHandler,
+		Hub:          watchPartyHub,
+	}
 
 	router.Route("/api", func(api chi.Router) {
 		api.NotFound(notFoundHandler)
@@ -136,6 +150,16 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 		api.Get("/health", healthHandler.ServeHTTP)
 		api.Post("/auth/sign-in", authHandler.SignIn)
 		api.Post("/auth/sign-out", authHandler.SignOut)
+		api.Get("/watch-parties/join/{slug}", watchPartyHandler.PublicMetadata)
+		api.Post("/watch-parties/join/{slug}", watchPartyHandler.Join)
+		api.Get("/watch-parties/join/{slug}/ws", watchPartyHandler.WebSocket)
+		api.Get("/watch-parties/join/{slug}/files/{id}/original", watchPartyHandler.ServeOriginalFile)
+		api.Get("/watch-parties/join/{slug}/files/{id}/hls/index.m3u8", watchPartyHandler.ServeHLSPlaylist)
+		api.Get("/watch-parties/join/{slug}/files/{id}/hls/{segment}", watchPartyHandler.ServeHLSSegment)
+		api.Get("/watch-parties/join/{slug}/files/{id}/subtitles", watchPartyHandler.ListSubtitles)
+		api.Get("/watch-parties/join/{slug}/files/{id}/subtitles/{subtitleID}/track.vtt", watchPartyHandler.ServeSubtitleTrack)
+		api.Get("/watch-parties/join/{slug}/files/{id}/preview/thumbnails.vtt", watchPartyHandler.ServePreviewVTT)
+		api.Get("/watch-parties/join/{slug}/files/{id}/preview/{asset}", watchPartyHandler.ServePreviewAsset)
 
 		api.Group(func(protected chi.Router) {
 			protected.Use(RequireUser(cfg, authStore))
@@ -148,6 +172,9 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 			protected.Get("/jobs", jobHandler.ListJobs)
 			protected.Post("/jobs/{id}/retry", jobHandler.RetryJob)
 			protected.Post("/jobs/{id}/cancel", jobHandler.CancelJob)
+			protected.Get("/watch-parties", watchPartyHandler.List)
+			protected.Post("/watch-parties", watchPartyHandler.Create)
+			protected.Post("/watch-parties/{id}/end", watchPartyHandler.End)
 			protected.Get("/files/{id}/original", playbackHandler.ServeOriginalFile)
 			protected.Get("/files/{id}/hls/index.m3u8", playbackHandler.ServeHLSPlaylist)
 			protected.Get("/files/{id}/hls/{segment}", playbackHandler.ServeHLSSegment)
@@ -222,6 +249,14 @@ func (r *statusRecorder) Write(body []byte) (int, error) {
 	written, err := r.ResponseWriter.Write(body)
 	r.bytesWritten += written
 	return written, err
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("response writer does not support hijacking")
+	}
+	return hijacker.Hijack()
 }
 
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {

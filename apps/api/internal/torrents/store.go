@@ -764,6 +764,33 @@ func (s *Store) ListSubtitlesForFileOwner(ctx context.Context, torrentFileID str
 	return subtitles, nil
 }
 
+func (s *Store) ListSubtitlesForFile(ctx context.Context, torrentFileID string) ([]Subtitle, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, torrent_file_id, file_name, title, language, path, created_at
+		FROM subtitles
+		WHERE torrent_file_id = ?
+		ORDER BY language ASC, title ASC, id ASC
+	`, strings.TrimSpace(torrentFileID))
+	if err != nil {
+		return nil, fmt.Errorf("list subtitles for file: %w", err)
+	}
+	defer rows.Close()
+
+	subtitles := make([]Subtitle, 0)
+	for rows.Next() {
+		subtitle, err := scanSubtitleRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		subtitles = append(subtitles, subtitle)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate subtitles for file: %w", err)
+	}
+
+	return subtitles, nil
+}
+
 func (s *Store) FindSubtitleByID(ctx context.Context, id string) (Subtitle, error) {
 	return scanSubtitle(s.db.QueryRowContext(ctx, `
 		SELECT id, torrent_file_id, file_name, title, language, path, created_at
