@@ -34,8 +34,14 @@ type LibraryItem = {
   pollable: boolean;
   posterHue: number;
   playable: boolean;
+  thumbnailUrl?: string;
   searchText: string;
 };
+
+// A single sprite cell is 160x90 (see transcoding.ProcessSprite). The sheet is
+// a grid of these cells, so dividing the sheet width by this gives the column
+// count needed to crop the first cell as a poster thumbnail.
+const SPRITE_CELL_WIDTH = 160;
 
 type Notice = {
   tone: "success" | "warn";
@@ -202,7 +208,7 @@ export function LibraryPage() {
 
       <div className="stats-row">
         <StatCard label="Ready videos" value={String(stats.ready)} detail={usingMock ? "prototype library" : "playable now"} />
-        <StatCard label="Processing" value={String(stats.processing)} detail="HLS and thumbnails" />
+        <StatCard label="Processing" value={String(stats.processing)} detail="HLS, subtitles, sprites" />
         <StatCard label="Failed" value={String(stats.failed)} detail="needs retry" />
         <StatCard label="Storage" value={stats.storage} detail={usingMock ? "sample data" : "original media listed"} />
       </div>
@@ -233,11 +239,14 @@ export function LibraryPage() {
           {visibleItems.map((item) => (
             <article className="media-card" key={item.id}>
               <div className="poster" style={{ "--poster-hue": item.posterHue } as CSSProperties}>
+                {item.thumbnailUrl ? <SpriteThumbnail src={item.thumbnailUrl} /> : null}
                 <span className="duration">{item.duration}</span>
-                <span className="poster-label">{item.title.split(":")[0]}</span>
+                {item.thumbnailUrl ? null : <span className="poster-label">{item.title.split(":")[0]}</span>}
               </div>
               <div className="media-body">
-                <div className="media-title">{item.title}</div>
+                <div className="media-title" title={item.title}>
+                  {item.title}
+                </div>
                 <div className="media-meta">
                   {item.meta.map((meta) => (
                     <span key={meta}>{meta}</span>
@@ -359,8 +368,48 @@ function apiFileToLibraryItem(file: api.TorrentFile, torrent: api.Torrent | null
     pollable: pollableFileStatuses.has(file.status),
     posterHue: hueFromID(file.id),
     playable,
+    thumbnailUrl: previewSpriteURL(file),
     searchText: [file.name, torrent?.name ?? "", file.status, torrent?.status ?? "", ...meta].join(" ").toLowerCase(),
   };
+}
+
+// previewSpriteURL builds the URL of the generated thumbnail sprite sheet, or
+// returns undefined when the file has no preview asset yet.
+function previewSpriteURL(file: api.TorrentFile): string | undefined {
+  if (!file.thumbnailSheetPath) {
+    return undefined;
+  }
+  const assetName = file.thumbnailSheetPath.split(/[\\/]/).pop();
+  if (!assetName) {
+    return undefined;
+  }
+  return `/api/files/${encodeURIComponent(file.id)}/preview/${encodeURIComponent(assetName)}`;
+}
+
+// SpriteThumbnail renders the first cell of a thumbnail sprite sheet as a
+// poster image. The sheet is a grid of 160x90 cells; once it loads, the image
+// is scaled so the top-left cell exactly fills the (16:9) poster.
+function SpriteThumbnail({ src }: { src: string }) {
+  const [columns, setColumns] = useState(0);
+
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden
+      className="poster-thumb"
+      style={columns > 0 ? { width: `${columns * 100}%`, opacity: 1 } : undefined}
+      onLoad={(event) => {
+        const { naturalWidth } = event.currentTarget;
+        if (naturalWidth > 0) {
+          setColumns(naturalWidth / SPRITE_CELL_WIDTH);
+        }
+      }}
+      onError={(event) => {
+        event.currentTarget.style.display = "none";
+      }}
+    />
+  );
 }
 
 function mockMediaToLibraryItem(item: (typeof mediaItems)[number]): LibraryItem {

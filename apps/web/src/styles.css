@@ -324,10 +324,16 @@
   }
 
   .poster {
-    @apply relative flex min-h-[168px] items-end p-[14px];
+    @apply relative flex aspect-[16/9] min-h-[168px] items-end overflow-hidden p-[14px];
     background:
       radial-gradient(circle at 25% 15%, oklch(72% 0.14 var(--poster-hue, 235) / 0.55), transparent 35%),
       linear-gradient(135deg, oklch(21% 0.08 var(--poster-hue, 235)), oklch(9% 0.032 252));
+  }
+
+  .poster-thumb {
+    @apply absolute left-0 top-0 block max-w-none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
   }
 
   .duration {
@@ -345,8 +351,7 @@
   }
 
   .media-title {
-    @apply font-display text-base font-bold leading-tight;
-    overflow-wrap: anywhere;
+    @apply truncate font-display text-base font-bold leading-tight;
   }
 
   .media-meta {
@@ -495,7 +500,7 @@
   }
 
   .data-table {
-    @apply w-full min-w-[820px] border-collapse;
+    @apply w-full min-w-[1040px] border-collapse;
   }
 
   .data-table th,

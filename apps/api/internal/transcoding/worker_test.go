@@ -63,13 +63,11 @@ func TestWorkerProcessesHLSTranscodeJob(t *testing.T) {
 
 	transcoder := &fakeTranscoder{}
 	assets := &fakeAssetProcessor{
-		result: MediaAssetResult{
-			Subtitles: []SubtitleAsset{
-				{FileName: "movie.en.vtt", Title: "English", Language: "en", Path: "/media/subtitles/tfi/movie.en.vtt"},
-			},
-			ThumbnailSheetPath: "/media/thumbnails/tfi/sprite_00000.jpg",
-			ThumbnailVTTPath:   "/media/thumbnails/tfi/thumbnails.vtt",
+		subtitles: []SubtitleAsset{
+			{FileName: "movie.en.vtt", Title: "English", Language: "en", Path: "/media/subtitles/tfi/movie.en.vtt"},
 		},
+		sheetPath: "/media/thumbnails/tfi/sprite_00000.jpg",
+		vttPath:   "/media/thumbnails/tfi/thumbnails.vtt",
 	}
 	prober := fakeProber{
 		info: MediaInfo{
@@ -117,10 +115,30 @@ func TestWorkerProcessesHLSTranscodeJob(t *testing.T) {
 	if updatedFile.Container != "matroska,webm" || updatedFile.VideoCodec != "h264" || updatedFile.AudioCodec != "ac3" || updatedFile.DurationSeconds != 123.5 || updatedFile.ProcessingMode != HLSModeAudioTranscode {
 		t.Fatalf("unexpected media metadata: %+v", updatedFile)
 	}
-	if !updatedFile.ProgressPreview || updatedFile.ThumbnailSheetPath == "" || updatedFile.ThumbnailVTTPath == "" {
-		t.Fatalf("expected preview metadata to be recorded, got %+v", updatedFile)
+
+	completedJob, err := jobStore.FindJobByID(ctx, createdJob.ID)
+	if err != nil {
+		t.Fatalf("FindJobByID returned error: %v", err)
+	}
+	if completedJob.Status != jobs.StatusSucceeded || completedJob.ProgressPercent != 100 || completedJob.StartedAt == "" || completedJob.FinishedAt == "" {
+		t.Fatalf("expected succeeded hls job with timings, got %+v", completedJob)
 	}
 
+	records, err := jobStore.ListJobsForOwner(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ListJobsForOwner returned error: %v", err)
+	}
+	if len(records) != 3 {
+		t.Fatalf("expected hls plus asset jobs, got %+v", records)
+	}
+
+	processed, err = worker.ProcessNext(ctx)
+	if err != nil {
+		t.Fatalf("ProcessNext subtitle job returned error: %v", err)
+	}
+	if !processed {
+		t.Fatal("expected queued subtitle job to be processed")
+	}
 	subtitles, err := torrentStore.ListSubtitlesForFileOwner(ctx, file.ID, user.ID)
 	if err != nil {
 		t.Fatalf("ListSubtitlesForFileOwner returned error: %v", err)
@@ -129,12 +147,19 @@ func TestWorkerProcessesHLSTranscodeJob(t *testing.T) {
 		t.Fatalf("expected one recorded subtitle, got %+v", subtitles)
 	}
 
-	completedJob, err := jobStore.FindJobByID(ctx, createdJob.ID)
+	processed, err = worker.ProcessNext(ctx)
 	if err != nil {
-		t.Fatalf("FindJobByID returned error: %v", err)
+		t.Fatalf("ProcessNext sprite job returned error: %v", err)
 	}
-	if completedJob.Status != jobs.StatusSucceeded {
-		t.Fatalf("expected succeeded job, got %+v", completedJob)
+	if !processed {
+		t.Fatal("expected queued sprite job to be processed")
+	}
+	updatedFile, err = torrentStore.FindTorrentFileByID(ctx, file.ID)
+	if err != nil {
+		t.Fatalf("FindTorrentFileByID after assets returned error: %v", err)
+	}
+	if !updatedFile.ProgressPreview || updatedFile.ThumbnailSheetPath == "" || updatedFile.ThumbnailVTTPath == "" {
+		t.Fatalf("expected preview metadata to be recorded, got %+v", updatedFile)
 	}
 
 	if len(transcoder.calls) != 1 {
@@ -152,6 +177,12 @@ func TestWorkerProcessesHLSTranscodeJob(t *testing.T) {
 	if observedProgress != 42.5 {
 		t.Fatalf("expected intermediate progress to be recorded, got %v", observedProgress)
 	}
+	if len(assets.subtitleCalls) != 1 {
+		t.Fatalf("expected one subtitle asset call, got %d", len(assets.subtitleCalls))
+	}
+	if len(assets.spriteCalls) != 1 {
+		t.Fatalf("expected one sprite asset call, got %d", len(assets.spriteCalls))
+	}
 }
 
 type fakeProber struct {
@@ -164,14 +195,32 @@ func (f fakeProber) Probe(context.Context, string) (MediaInfo, error) {
 }
 
 type fakeAssetProcessor struct {
-	result MediaAssetResult
-	err    error
-	calls  []MediaAssetRequest
+	subtitles     []SubtitleAsset
+	sheetPath     string
+	vttPath       string
+	err           error
+	subtitleCalls []MediaAssetRequest
+	spriteCalls   []MediaAssetRequest
 }
 
-func (f *fakeAssetProcessor) ProcessMediaAssets(_ context.Context, request MediaAssetRequest) (MediaAssetResult, error) {
-	f.calls = append(f.calls, request)
-	return f.result, f.err
+func (f *fakeAssetProcessor) ProcessSubtitles(_ context.Context, request MediaAssetRequest, onProgress ProgressReporter) ([]SubtitleAsset, error) {
+	f.subtitleCalls = append(f.subtitleCalls, request)
+	if onProgress != nil {
+		if err := onProgress(60); err != nil {
+			return nil, err
+		}
+	}
+	return f.subtitles, f.err
+}
+
+func (f *fakeAssetProcessor) ProcessSprite(_ context.Context, request MediaAssetRequest, onProgress ProgressReporter) (string, string, error) {
+	f.spriteCalls = append(f.spriteCalls, request)
+	if onProgress != nil {
+		if err := onProgress(75); err != nil {
+			return "", "", err
+		}
+	}
+	return f.sheetPath, f.vttPath, f.err
 }
 
 type fakeTranscoder struct {

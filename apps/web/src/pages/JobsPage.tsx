@@ -22,6 +22,8 @@ type JobRow = {
   progress: number;
   attempts: string;
   worker: string;
+  startedAt: string;
+  finishedAt: string;
   updatedAt: string;
   error?: string;
   searchText: string;
@@ -206,6 +208,8 @@ export function JobsPage() {
                 <th>Job</th>
                 <th>Status</th>
                 <th>Progress</th>
+                <th>Started</th>
+                <th>Finished</th>
                 <th>Attempts</th>
                 <th>Worker</th>
                 <th>Updated</th>
@@ -228,6 +232,8 @@ export function JobsPage() {
                     <Progress value={job.progress} />
                     <span>{job.progress}%</span>
                   </td>
+                  <td>{job.startedAt}</td>
+                  <td>{job.finishedAt}</td>
                   <td>{job.attempts}</td>
                   <td>{job.worker}</td>
                   <td>{job.updatedAt}</td>
@@ -257,19 +263,22 @@ function apiJobToRow(job: api.Job): JobRow {
   const worker = job.lockedBy || (job.status === "running" ? "claimed" : "unclaimed");
   const progress = progressForAPIJob(job);
   const attempts = `${job.attempts}/${job.maxAttempts}`;
+  const type = jobTypeLabel(job.type);
 
   return {
     id: job.id,
     source: "api",
-    type: job.type,
+    type,
     target,
     status: job.status,
     progress,
     attempts,
     worker,
+    startedAt: formatJobTime(job.startedAt, "Not started"),
+    finishedAt: formatJobTime(job.finishedAt, job.status === "running" ? "Running" : "Not finished"),
     updatedAt: formatDate(job.updatedAt),
     error: job.lastError,
-    searchText: buildSearchText(job.type, target, job.status, worker, attempts, job.lastError),
+    searchText: buildSearchText(type, job.type, target, job.status, worker, attempts, job.lastError),
   };
 }
 
@@ -283,6 +292,8 @@ function mockJobToRow(job: MockJob): JobRow {
     progress: job.progress,
     attempts: job.attempts,
     worker: job.worker,
+    startedAt: job.status === "queued" ? "Not started" : job.updatedAt,
+    finishedAt: job.status === "succeeded" || job.status === "failed" || job.status === "canceled" ? job.updatedAt : "Not finished",
     updatedAt: job.updatedAt,
     error: job.error,
     searchText: buildSearchText(job.type, job.target, job.status, job.worker, job.error),
@@ -313,4 +324,33 @@ function canCancelJob(job: JobRow): boolean {
 
 function buildSearchText(...values: Array<string | undefined>) {
   return values.filter(Boolean).join(" ").toLowerCase();
+}
+
+function jobTypeLabel(type: string): string {
+  switch (type) {
+    case "hls_transcode":
+      return "HLS transcode";
+    case "subtitle_extract":
+      return "Subtitle extraction";
+    case "sprite_generate":
+      return "Sprite generation";
+    default:
+      return type.replace(/[_-]/g, " ");
+  }
+}
+
+function formatJobTime(value: string | undefined, fallback: string): string {
+  if (!value) {
+    return fallback;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

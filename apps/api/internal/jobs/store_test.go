@@ -238,6 +238,105 @@ func TestCancelKeepsJobUnclaimable(t *testing.T) {
 	}
 }
 
+func TestRequeueStaleRecoversJobsLockedByWorker(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	created, _, err := store.CreateHLSTranscodeJobIfMissing(ctx, "tfi_stale")
+	if err != nil {
+		t.Fatalf("CreateHLSTranscodeJobIfMissing returned error: %v", err)
+	}
+
+	claimed, ok, err := store.ClaimNext(ctx, "worker-1", 30*time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("ClaimNext returned ok=%t err=%v", ok, err)
+	}
+
+	// A foreign worker must not disturb a job still leased to worker-1.
+	recovered, err := store.RequeueStale(ctx, "worker-2")
+	if err != nil {
+		t.Fatalf("RequeueStale(worker-2) returned error: %v", err)
+	}
+	if recovered != 0 {
+		t.Fatalf("expected no jobs reclaimed by a foreign worker, got %d", recovered)
+	}
+	if still, err := store.FindJobByID(ctx, claimed.ID); err != nil {
+		t.Fatalf("FindJobByID returned error: %v", err)
+	} else if still.Status != StatusRunning {
+		t.Fatalf("expected job to stay running, got %q", still.Status)
+	}
+
+	// The same worker restarting reclaims its own orphaned job.
+	recovered, err = store.RequeueStale(ctx, "worker-1")
+	if err != nil {
+		t.Fatalf("RequeueStale(worker-1) returned error: %v", err)
+	}
+	if recovered != 1 {
+		t.Fatalf("expected 1 job reclaimed, got %d", recovered)
+	}
+
+	requeued, err := store.FindJobByID(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("FindJobByID returned error: %v", err)
+	}
+	if requeued.Status != StatusQueued || requeued.LockedBy != "" || requeued.LeaseUntil != "" {
+		t.Fatalf("unexpected requeued job: %+v", requeued)
+	}
+
+	reclaimed, ok, err := store.ClaimNext(ctx, "worker-1", 30*time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("reclaim ClaimNext returned ok=%t err=%v", ok, err)
+	}
+	if reclaimed.ID != created.ID || reclaimed.Attempts != 2 {
+		t.Fatalf("expected recovered job reclaimed with attempts=2, got %+v", reclaimed)
+	}
+}
+
+func TestRequeueStaleFailsJobsThatExhaustAttempts(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	created, _, err := store.CreateHLSTranscodeJobIfMissing(ctx, "tfi_exhaust")
+	if err != nil {
+		t.Fatalf("CreateHLSTranscodeJobIfMissing returned error: %v", err)
+	}
+
+	// Simulate the worker crashing on every attempt until the budget is spent.
+	for attempt := 1; attempt <= created.MaxAttempts; attempt++ {
+		claimed, ok, err := store.ClaimNext(ctx, "worker-1", 30*time.Minute)
+		if err != nil || !ok {
+			t.Fatalf("attempt %d ClaimNext returned ok=%t err=%v", attempt, ok, err)
+		}
+		if claimed.Attempts != attempt {
+			t.Fatalf("attempt %d: expected attempts=%d, got %d", attempt, attempt, claimed.Attempts)
+		}
+		if _, err := store.RequeueStale(ctx, "worker-1"); err != nil {
+			t.Fatalf("attempt %d RequeueStale returned error: %v", attempt, err)
+		}
+	}
+
+	failed, err := store.FindJobByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("FindJobByID returned error: %v", err)
+	}
+	if failed.Status != StatusFailed {
+		t.Fatalf("expected job failed after exhausting attempts, got %q", failed.Status)
+	}
+
+	if _, ok, err := store.ClaimNext(ctx, "worker-1", 30*time.Minute); err != nil || ok {
+		t.Fatalf("expected exhausted job not to be claimable, got ok=%t err=%v", ok, err)
+	}
+
+	// A user can still retry the recovered-but-failed job through the API.
+	retried, err := store.Retry(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("Retry returned error: %v", err)
+	}
+	if retried.Status != StatusQueued {
+		t.Fatalf("expected retried job queued, got %q", retried.Status)
+	}
+}
+
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 

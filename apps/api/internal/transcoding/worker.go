@@ -44,6 +44,18 @@ func (w Worker) Run(ctx context.Context) {
 	)
 	defer w.info(ctx, "media worker stopped", slog.String("worker_id", w.workerID()))
 
+	// Recover jobs a previous worker left running when it crashed or the server
+	// restarted mid-job, so they are retried instead of being stuck forever.
+	if w.Jobs != nil {
+		if recovered, err := w.Jobs.RequeueStale(ctx, w.workerID()); err != nil {
+			if !errors.Is(err, context.Canceled) {
+				w.warn(ctx, "recover stale jobs failed", slog.Any("error", err))
+			}
+		} else if recovered > 0 {
+			w.info(ctx, "recovered stale jobs from a previous run", slog.Int64("count", recovered))
+		}
+	}
+
 	for {
 		processed, err := w.ProcessNext(ctx)
 		if err != nil && !errors.Is(err, context.Canceled) {
@@ -81,8 +93,32 @@ func (w Worker) ProcessNext(ctx context.Context) (bool, error) {
 }
 
 func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
-	var payload jobs.HLSTranscodePayload
-	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
+	// Keep the job's lease fresh for as long as it runs so a slow task is not
+	// mistaken for a crashed worker and reclaimed mid-flight. The heartbeat is
+	// stopped the moment the job returns.
+	heartbeatCtx, stopHeartbeat := context.WithCancel(ctx)
+	defer stopHeartbeat()
+	go w.renewLeaseUntilDone(heartbeatCtx, job.ID)
+
+	switch job.Type {
+	case jobs.TypeHLSTranscode:
+		return w.processHLSTranscodeJob(ctx, job)
+	case jobs.TypeSubtitleExtract:
+		return w.processSubtitleExtractJob(ctx, job)
+	case jobs.TypeSpriteGenerate:
+		return w.processSpriteGenerateJob(ctx, job)
+	default:
+		message := "unsupported media job type"
+		if failErr := w.Jobs.Fail(ctx, job.ID, message, 0); failErr != nil {
+			return failErr
+		}
+		return fmt.Errorf("%s: %s", message, job.Type)
+	}
+}
+
+func (w Worker) processHLSTranscodeJob(ctx context.Context, job jobs.Job) error {
+	payload, err := decodeMediaFilePayload(job)
+	if err != nil {
 		if failErr := w.Jobs.Fail(ctx, job.ID, "invalid hls transcode payload", 0); failErr != nil {
 			return failErr
 		}
@@ -98,6 +134,9 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 	}
 
 	if file.Status == torrents.FileStatusDone && strings.TrimSpace(file.HLSPath) != "" {
+		if err := w.ensureAssetJobs(ctx, file); err != nil {
+			return err
+		}
 		return w.Jobs.Complete(ctx, job.ID)
 	}
 	if strings.TrimSpace(file.OriginalPath) == "" {
@@ -153,7 +192,7 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 	if transcoder == nil {
 		transcoder = FFmpegTranscoder{}
 	}
-	progressReporter := w.progressReporter(ctx, file.ID)
+	progressReporter := w.hlsProgressReporter(ctx, job.ID, file.ID)
 	if err := transcoder.TranscodeHLS(ctx, file.OriginalPath, playlistPath, segmentPattern, plan, progressReporter); err != nil {
 		return w.failJob(ctx, job, file, err)
 	}
@@ -172,7 +211,9 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 		return w.failJob(ctx, job, file, err)
 	}
 
-	w.processMediaAssets(ctx, file, mediaInfo)
+	if err := w.ensureAssetJobs(ctx, file); err != nil {
+		return w.failJob(ctx, job, file, err)
+	}
 
 	if err := w.Jobs.Complete(ctx, job.ID); err != nil {
 		return err
@@ -188,28 +229,55 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 	return nil
 }
 
-func (w Worker) processMediaAssets(ctx context.Context, file torrents.TorrentFile, mediaInfo MediaInfo) {
-	processor := w.Assets
-	if processor == nil {
-		processor = FFmpegAssetProcessor{}
+func (w Worker) processSubtitleExtractJob(ctx context.Context, job jobs.Job) error {
+	payload, err := decodeMediaFilePayload(job)
+	if err != nil {
+		if failErr := w.Jobs.Fail(ctx, job.ID, "invalid subtitle extraction payload", 0); failErr != nil {
+			return failErr
+		}
+		return err
 	}
 
-	result, err := processor.ProcessMediaAssets(ctx, MediaAssetRequest{
+	file, err := w.Torrents.FindTorrentFileByID(ctx, payload.TorrentFileID)
+	if err != nil {
+		if failErr := w.Jobs.Fail(ctx, job.ID, err.Error(), 0); failErr != nil {
+			return failErr
+		}
+		return err
+	}
+	if strings.TrimSpace(file.OriginalPath) == "" {
+		message := "torrent file original path is empty"
+		if failErr := w.Jobs.Fail(ctx, job.ID, message, 0); failErr != nil {
+			return failErr
+		}
+		return fmt.Errorf("%s", message)
+	}
+
+	prober := w.Prober
+	if prober == nil {
+		prober = FFprobeProber{}
+	}
+	mediaInfo, err := prober.Probe(ctx, file.OriginalPath)
+	if err != nil {
+		return w.failAssetJob(ctx, job, file, err)
+	}
+
+	w.info(ctx, "subtitle extraction started",
+		slog.String("job_id", job.ID),
+		slog.String("torrent_file_id", file.ID),
+	)
+
+	subtitles, err := w.assetProcessor().ProcessSubtitles(ctx, MediaAssetRequest{
 		InputPath:     file.OriginalPath,
 		TorrentFileID: file.ID,
 		SubtitlesDir:  w.SubtitlesDir,
-		ThumbnailsDir: w.ThumbnailsDir,
 		Info:          mediaInfo,
-	})
+	}, w.jobProgressReporter(ctx, job.ID))
 	if err != nil {
-		w.warn(ctx, "media asset processing failed",
-			slog.String("torrent_file_id", file.ID),
-			slog.Any("error", err),
-		)
-		return
+		return w.failAssetJob(ctx, job, file, err)
 	}
 
-	for _, subtitle := range result.Subtitles {
+	for _, subtitle := range subtitles {
 		if _, _, err := w.Torrents.CreateSubtitleIfMissing(ctx, torrents.CreateSubtitleParams{
 			TorrentFileID: file.ID,
 			FileName:      subtitle.FileName,
@@ -225,14 +293,87 @@ func (w Worker) processMediaAssets(ctx context.Context, file torrents.TorrentFil
 		}
 	}
 
-	if strings.TrimSpace(result.ThumbnailSheetPath) != "" && strings.TrimSpace(result.ThumbnailVTTPath) != "" {
-		if err := w.Torrents.MarkTorrentFilePreviewReady(ctx, file.ID, result.ThumbnailSheetPath, result.ThumbnailVTTPath); err != nil {
-			w.warn(ctx, "record thumbnail preview failed",
-				slog.String("torrent_file_id", file.ID),
-				slog.Any("error", err),
-			)
+	if err := w.Jobs.Complete(ctx, job.ID); err != nil {
+		return err
+	}
+
+	w.info(ctx, "subtitle extraction completed",
+		slog.String("job_id", job.ID),
+		slog.String("torrent_file_id", file.ID),
+		slog.Int("subtitle_count", len(subtitles)),
+	)
+
+	return nil
+}
+
+func (w Worker) processSpriteGenerateJob(ctx context.Context, job jobs.Job) error {
+	payload, err := decodeMediaFilePayload(job)
+	if err != nil {
+		if failErr := w.Jobs.Fail(ctx, job.ID, "invalid sprite generation payload", 0); failErr != nil {
+			return failErr
+		}
+		return err
+	}
+
+	file, err := w.Torrents.FindTorrentFileByID(ctx, payload.TorrentFileID)
+	if err != nil {
+		if failErr := w.Jobs.Fail(ctx, job.ID, err.Error(), 0); failErr != nil {
+			return failErr
+		}
+		return err
+	}
+	if strings.TrimSpace(file.OriginalPath) == "" {
+		message := "torrent file original path is empty"
+		if failErr := w.Jobs.Fail(ctx, job.ID, message, 0); failErr != nil {
+			return failErr
+		}
+		return fmt.Errorf("%s", message)
+	}
+
+	mediaInfo := MediaInfo{DurationSeconds: file.DurationSeconds}
+	if mediaInfo.DurationSeconds <= 0 {
+		prober := w.Prober
+		if prober == nil {
+			prober = FFprobeProber{}
+		}
+		mediaInfo, err = prober.Probe(ctx, file.OriginalPath)
+		if err != nil {
+			return w.failAssetJob(ctx, job, file, err)
 		}
 	}
+
+	w.info(ctx, "sprite generation started",
+		slog.String("job_id", job.ID),
+		slog.String("torrent_file_id", file.ID),
+	)
+
+	sheetPath, vttPath, err := w.assetProcessor().ProcessSprite(ctx, MediaAssetRequest{
+		InputPath:     file.OriginalPath,
+		TorrentFileID: file.ID,
+		ThumbnailsDir: w.ThumbnailsDir,
+		Info:          mediaInfo,
+	}, w.jobProgressReporter(ctx, job.ID))
+	if err != nil {
+		return w.failAssetJob(ctx, job, file, err)
+	}
+
+	if strings.TrimSpace(sheetPath) != "" && strings.TrimSpace(vttPath) != "" {
+		if err := w.Torrents.MarkTorrentFilePreviewReady(ctx, file.ID, sheetPath, vttPath); err != nil {
+			return w.failAssetJob(ctx, job, file, err)
+		}
+	}
+
+	if err := w.Jobs.Complete(ctx, job.ID); err != nil {
+		return err
+	}
+
+	w.info(ctx, "sprite generation completed",
+		slog.String("job_id", job.ID),
+		slog.String("torrent_file_id", file.ID),
+		slog.String("thumbnail_sheet_path", sheetPath),
+	)
+
+	return nil
 }
 
 func torrentFileMediaMetadata(id string, mediaInfo MediaInfo, plan HLSPlan) torrents.UpdateTorrentFileMediaMetadataParams {
@@ -251,7 +392,61 @@ func torrentFileMediaMetadata(id string, mediaInfo MediaInfo, plan HLSPlan) torr
 	return params
 }
 
-func (w Worker) progressReporter(ctx context.Context, torrentFileID string) ProgressReporter {
+func decodeMediaFilePayload(job jobs.Job) (jobs.MediaFilePayload, error) {
+	var payload jobs.MediaFilePayload
+	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
+		return jobs.MediaFilePayload{}, err
+	}
+	if strings.TrimSpace(payload.TorrentFileID) == "" {
+		return jobs.MediaFilePayload{}, fmt.Errorf("torrent file id cannot be empty")
+	}
+	return payload, nil
+}
+
+func (w Worker) ensureAssetJobs(ctx context.Context, file torrents.TorrentFile) error {
+	subtitleJob, subtitleInserted, err := w.Jobs.CreateSubtitleExtractJobIfMissing(ctx, file.ID)
+	if err != nil {
+		return err
+	}
+	if subtitleInserted {
+		w.info(ctx, "subtitle extraction job queued",
+			slog.String("torrent_file_id", file.ID),
+			slog.String("job_id", subtitleJob.ID),
+			slog.String("job_type", jobs.TypeSubtitleExtract),
+		)
+	}
+
+	spriteJob, spriteInserted, err := w.Jobs.CreateSpriteGenerateJobIfMissing(ctx, file.ID)
+	if err != nil {
+		return err
+	}
+	if !spriteInserted && spriteJob.Status == jobs.StatusSucceeded && !file.ProgressPreview {
+		retried, err := w.Jobs.Retry(ctx, spriteJob.ID)
+		if err != nil {
+			return err
+		}
+		spriteJob = retried
+		spriteInserted = true
+	}
+	if spriteInserted {
+		w.info(ctx, "sprite generation job queued",
+			slog.String("torrent_file_id", file.ID),
+			slog.String("job_id", spriteJob.ID),
+			slog.String("job_type", jobs.TypeSpriteGenerate),
+		)
+	}
+
+	return nil
+}
+
+func (w Worker) assetProcessor() AssetProcessor {
+	if w.Assets != nil {
+		return w.Assets
+	}
+	return FFmpegAssetProcessor{}
+}
+
+func (w Worker) hlsProgressReporter(ctx context.Context, jobID string, torrentFileID string) ProgressReporter {
 	var lastPercent float64
 	var lastReportedAt time.Time
 
@@ -273,7 +468,36 @@ func (w Worker) progressReporter(ctx context.Context, torrentFileID string) Prog
 
 		lastPercent = percent
 		lastReportedAt = now
-		return w.Torrents.UpdateTorrentFileTranscodingProgress(ctx, torrentFileID, percent)
+		if err := w.Torrents.UpdateTorrentFileTranscodingProgress(ctx, torrentFileID, percent); err != nil {
+			return err
+		}
+		return w.Jobs.UpdateProgress(ctx, jobID, percent)
+	}
+}
+
+func (w Worker) jobProgressReporter(ctx context.Context, jobID string) ProgressReporter {
+	var lastPercent float64
+	var lastReportedAt time.Time
+
+	return func(percent float64) error {
+		if percent < 0 {
+			percent = 0
+		}
+		if percent > 100 {
+			percent = 100
+		}
+		if percent < lastPercent {
+			return nil
+		}
+
+		now := time.Now()
+		if percent-lastPercent < 1 && !lastReportedAt.IsZero() && now.Sub(lastReportedAt) < 2*time.Second {
+			return nil
+		}
+
+		lastPercent = percent
+		lastReportedAt = now
+		return w.Jobs.UpdateProgress(ctx, jobID, percent)
 	}
 }
 
@@ -288,6 +512,22 @@ func (w Worker) failJob(ctx context.Context, job jobs.Job, file torrents.Torrent
 
 	w.warn(ctx, "hls transcode failed",
 		slog.String("job_id", job.ID),
+		slog.String("torrent_file_id", file.ID),
+		slog.Any("error", err),
+	)
+
+	return err
+}
+
+func (w Worker) failAssetJob(ctx context.Context, job jobs.Job, file torrents.TorrentFile, err error) error {
+	message := err.Error()
+	if failErr := w.Jobs.Fail(ctx, job.ID, message, w.retryDelay()); failErr != nil {
+		return failErr
+	}
+
+	w.warn(ctx, "media asset job failed",
+		slog.String("job_id", job.ID),
+		slog.String("job_type", job.Type),
 		slog.String("torrent_file_id", file.ID),
 		slog.Any("error", err),
 	)
@@ -314,6 +554,35 @@ func (w Worker) leaseDuration() time.Duration {
 	}
 
 	return 30 * time.Minute
+}
+
+// renewLeaseUntilDone extends the claimed job's lease on a fixed interval so a
+// long-running task (a large transcode) is not reclaimed as stale while it is
+// still making progress. It exits when ctx is canceled, which the caller does
+// as soon as the job finishes.
+func (w Worker) renewLeaseUntilDone(ctx context.Context, jobID string) {
+	lease := w.leaseDuration()
+	interval := lease / 3
+	if interval < 30*time.Second {
+		interval = 30 * time.Second
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := w.Jobs.RenewLease(ctx, jobID, w.workerID(), lease); err != nil && ctx.Err() == nil {
+				w.warn(ctx, "renew job lease failed",
+					slog.String("job_id", jobID),
+					slog.Any("error", err),
+				)
+			}
+		}
+	}
 }
 
 func (w Worker) retryDelay() time.Duration {

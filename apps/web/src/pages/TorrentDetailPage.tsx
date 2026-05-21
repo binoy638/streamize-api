@@ -52,6 +52,8 @@ type JobRow = {
   status: api.JobStatus | MockJob["status"];
   progress: number;
   worker: string;
+  startedAt: string;
+  finishedAt: string;
   updatedAt: string;
 };
 
@@ -250,6 +252,9 @@ export function TorrentDetailPage() {
                   <p className="muted">
                     {job.target} · {job.worker} · {job.updatedAt}
                   </p>
+                  <p className="muted">
+                    Started {job.startedAt} · Finished {job.finishedAt}
+                  </p>
                 </div>
                 <Progress value={job.progress} />
               </div>
@@ -353,11 +358,13 @@ function mockFileToRow(file: MockTorrentFile): FileRow {
 function apiJobToDetailRow(job: api.Job): JobRow {
   return {
     id: job.id,
-    type: job.type,
+    type: jobTypeLabel(job.type),
     target: job.target || job.torrentFileId || "Unattached job",
     status: job.status,
     progress: progressForJob(job),
     worker: job.lockedBy || (job.status === "running" ? "claimed" : "unclaimed"),
+    startedAt: formatJobTime(job.startedAt, "not started"),
+    finishedAt: formatJobTime(job.finishedAt, job.status === "running" ? "running" : "not finished"),
     updatedAt: formatDate(job.updatedAt),
   };
 }
@@ -370,6 +377,8 @@ function mockJobToDetailRow(job: MockJob): JobRow {
     status: job.status,
     progress: job.progress,
     worker: job.worker,
+    startedAt: job.status === "queued" ? "not started" : job.updatedAt,
+    finishedAt: job.status === "succeeded" || job.status === "failed" || job.status === "canceled" ? job.updatedAt : "not finished",
     updatedAt: job.updatedAt,
   };
 }
@@ -467,6 +476,35 @@ function codecLabel(file: api.TorrentFile): string {
 function extensionLabel(value: string): string {
   const extension = value.includes(".") ? value.slice(value.lastIndexOf(".") + 1) : value;
   return extension ? extension.toUpperCase() : "Pending";
+}
+
+function jobTypeLabel(type: string): string {
+  switch (type) {
+    case "hls_transcode":
+      return "HLS transcode";
+    case "subtitle_extract":
+      return "Subtitle extraction";
+    case "sprite_generate":
+      return "Sprite generation";
+    default:
+      return type.replace(/[_-]/g, " ");
+  }
+}
+
+function formatJobTime(value: string | undefined, fallback: string): string {
+  if (!value) {
+    return fallback;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function shortHash(value: string): string {

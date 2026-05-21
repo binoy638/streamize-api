@@ -89,16 +89,18 @@ export type Job = {
   dedupeKey?: string;
   attempts: number;
   maxAttempts: number;
+  progressPercent: number;
   leaseUntil?: string;
   lockedBy?: string;
   lastError?: string;
   availableAt: string;
+  startedAt?: string;
+  finishedAt?: string;
   createdAt: string;
   updatedAt: string;
   torrentId?: string;
   torrentFileId?: string;
   target?: string;
-  progressPercent: number;
 };
 
 export type WatchParty = {
