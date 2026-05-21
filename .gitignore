@@ -4,8 +4,10 @@ node_modules/
 # Environment files
 .env
 .env.*
+deploy/env.prod
 !.env.example
 !**/.env.example
+!deploy/.env.prod.example
 
 # Build and test output
 dist/

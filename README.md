@@ -149,3 +149,71 @@ Host streamize-vps
 ```
 
 Then the tunnel shortens to `ssh -L 8081:127.0.0.1:8081 streamize-vps`.
+
+qBittorrent 5.x ships **no default password**. On a fresh config it prints a one-time
+WebUI password in the container logs (`docker logs streamize-qbittorrent-1 | grep -i password`).
+Log in with it, then set the WebUI password (Tools → Options → Web UI) to match
+`STREAMIZE_QBITTORRENT_PASSWORD` in `.env` — otherwise the API gets `502 Bad Gateway`
+on every torrent operation.
+
+### Troubleshooting
+
+**Ownership rules — most deploy issues trace back to these.** There are two distinct
+owners under `/opt/streamize`, and they must not be collapsed:
+
+| Path | Owner | Why |
+|---|---|---|
+| `/opt/streamize/` and the files in it (`.env`, `docker-compose.prod.yml`) | the **deploy SSH user** | CI must overwrite the compose file on every deploy |
+| `/opt/streamize/data/` and `/opt/streamize/media/` | **`PUID:PGID`** | the `api` and `qbittorrent` containers read/write them |
+
+Never run `chown -R` on `/opt/streamize` as a whole — it forces one owner onto both
+and breaks either CI or the containers. If `PUID`/`PGID` equal the deploy user's own
+ids (the recommended setup), the two happen to coincide, but still chown the subtrees
+separately so the intent is explicit.
+
+**CI deploy fails with `tar: docker-compose.prod.yml: Cannot open: Permission denied`.**
+The deploy user can't overwrite the compose file — it or `/opt/streamize` is owned by
+`root`, usually left over from earlier `sudo` use. Fix on the VPS, then re-run the workflow:
+
+```bash
+sudo chown <deploy-user>:<deploy-user> /opt/streamize
+sudo rm -f /opt/streamize/docker-compose.prod.yml   # drop the stale root-owned file
+```
+
+**qBittorrent WebUI unreachable** — `curl http://127.0.0.1:8081` returns
+`Connection reset by peer`, and the API logs show
+`dial tcp ...:8081: connect: no route to host`. qBittorrent is crash-looping *inside*
+its container. `docker compose ps` can still show it `Up` — that is the container's
+init process (`/init`), not qBittorrent itself. Confirm by checking the logs:
+
+```bash
+docker logs --tail=100 streamize-qbittorrent-1
+```
+
+If the LinuxServer banner prints more than once and the logs never reach
+`WebUI: Now listening`, the qBittorrent process keeps dying. The usual cause is a
+config it cannot read — check that `data/qbittorrent-config` is owned by `PUID:PGID`,
+or reset the config (below).
+
+**Reset qBittorrent config** — archives the settings file so a fresh one is generated
+on next start. Downloaded torrents (`BT_backup/`) are untouched:
+
+```bash
+docker compose -f docker-compose.prod.yml stop qbittorrent
+sudo mv data/qbittorrent-config/qBittorrent/qBittorrent.conf{,.bak}
+docker compose -f docker-compose.prod.yml up -d qbittorrent
+```
+
+**Full reset** — tear down and wipe all state (DB, qBittorrent config, all media):
+
+```bash
+docker compose -f docker-compose.prod.yml down --remove-orphans
+sudo rm -rf data media
+mkdir -p data media && sudo chown <PUID>:<PGID> data media
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
+
+**Container-to-container `no route to host` that persists after the above** usually
+means Docker's iptables rules were flushed (often by a `ufw`/`firewalld` reload).
+Rebuild them with `sudo systemctl restart docker`, then bring the stack back up.
