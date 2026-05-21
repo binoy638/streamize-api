@@ -14,6 +14,7 @@ import { SignInPage } from "./pages/SignInPage";
 import { StyleGuidePage } from "./pages/StyleGuidePage";
 import { TorrentDetailPage } from "./pages/TorrentDetailPage";
 import { TorrentsPage } from "./pages/TorrentsPage";
+import { WatchPartyPage } from "./pages/WatchPartyPage";
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -81,6 +82,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/library" replace />} />
         <Route path="/sign-in" element={<SignInRoute />} />
+        <Route path="/watch/:slug" element={<WatchPartyPage />} />
         <Route
           path="/library"
           element={

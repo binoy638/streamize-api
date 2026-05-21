@@ -19,6 +19,8 @@ export type Health = {
 export type TorrentStatus = "added" | "downloading" | "paused" | "queued" | "processing" | "done" | "error";
 export type TorrentFileStatus = "downloading" | "queued" | "processing" | "done" | "error";
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
+export type WatchPartyControlMode = "host_only" | "everyone";
+export type WatchPartyStatus = "active" | "ended";
 
 export type Torrent = {
   id: string;
@@ -99,6 +101,61 @@ export type Job = {
   progressPercent: number;
 };
 
+export type WatchParty = {
+  id: string;
+  ownerUserId: string;
+  slug: string;
+  torrentFileId: string;
+  controlMode: WatchPartyControlMode;
+  status: WatchPartyStatus;
+  currentPositionSeconds: number;
+  durationSeconds: number;
+  isPlaying: boolean;
+  lastEventAt: string;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WatchPartyFile = {
+  id: string;
+  torrentId: string;
+  name: string;
+  ext: string;
+  sizeBytes: number;
+  status: TorrentFileStatus;
+  progressPreview: boolean;
+  durationSeconds?: number;
+  container?: string;
+  videoCodec?: string;
+  audioCodec?: string;
+  hlsReady: boolean;
+  directPlayable: boolean;
+};
+
+export type WatchPartyParticipant = {
+  id: string;
+  watchPartyId: string;
+  userId?: string;
+  displayName: string;
+  role: "host" | "guest";
+  connected: boolean;
+  createdAt: string;
+  lastSeenAt: string;
+};
+
+export type WatchPartySession = {
+  participant: WatchPartyParticipant;
+  token: string;
+};
+
+export type WatchPartyResponse = {
+  party: WatchParty;
+  file: WatchPartyFile;
+  joinUrl: string;
+  session?: WatchPartySession;
+};
+
 export type CreateUserInput = {
   username: string;
   password: string;
@@ -114,6 +171,12 @@ export type CreateTorrentInput = {
 export type DeleteTorrentOptions = {
   deleteFiles?: boolean;
   deleteGenerated?: boolean;
+};
+
+export type CreateWatchPartyInput = {
+  torrentFileId: string;
+  controlMode: WatchPartyControlMode;
+  displayName?: string;
 };
 
 type ApiErrorBody = {
@@ -252,4 +315,79 @@ export async function cancelJob(id: string): Promise<Job> {
 
 export async function getHealth(): Promise<Health> {
   return apiFetch<Health>("/api/health");
+}
+
+export async function createWatchParty(input: CreateWatchPartyInput): Promise<WatchPartyResponse> {
+  return apiFetch<WatchPartyResponse>("/api/watch-parties", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getWatchParty(slug: string): Promise<WatchPartyResponse> {
+  return apiFetch<WatchPartyResponse>(`/api/watch-parties/join/${encodeURIComponent(slug)}`);
+}
+
+export async function joinWatchParty(slug: string, displayName: string): Promise<WatchPartyResponse> {
+  return apiFetch<WatchPartyResponse>(`/api/watch-parties/join/${encodeURIComponent(slug)}`, {
+    method: "POST",
+    body: JSON.stringify({ displayName }),
+  });
+}
+
+export async function endWatchParty(id: string): Promise<WatchParty> {
+  const body = await apiFetch<{ party: WatchParty }>(`/api/watch-parties/${encodeURIComponent(id)}/end`, {
+    method: "POST",
+  });
+  return body.party;
+}
+
+export async function listWatchPartySubtitles(
+  slug: string,
+  fileId: string,
+  session: WatchPartySession,
+): Promise<Subtitle[]> {
+  const body = await apiFetch<{ subtitles: Subtitle[] }>(
+    `/api/watch-parties/join/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}/subtitles?${watchPartyQuery(session)}`,
+  );
+  return body.subtitles;
+}
+
+export function watchPartyWebSocketURL(slug: string, session: WatchPartySession): string {
+  return watchPartyWebSocketURLs(slug, session)[0];
+}
+
+export function watchPartyWebSocketURLs(slug: string, session: WatchPartySession): string[] {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const path = `/api/watch-parties/join/${encodeURIComponent(slug)}/ws?${watchPartyQuery(session)}`;
+  const urls = [`${protocol}//${window.location.host}${path}`];
+
+  if (window.location.protocol === "http:" && ["5173", "5174"].includes(window.location.port)) {
+    urls.push(`ws://${window.location.hostname}:8080${path}`);
+    if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      urls.push(`ws://localhost:8080${path}`);
+    }
+  }
+
+  return Array.from(new Set(urls));
+}
+
+export function watchPartyHLSPlaylistURL(slug: string, fileId: string, session: WatchPartySession): string {
+  return `/api/watch-parties/join/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}/hls/index.m3u8?${watchPartyQuery(session)}`;
+}
+
+export function watchPartyOriginalURL(slug: string, fileId: string, session: WatchPartySession): string {
+  return `/api/watch-parties/join/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}/original?${watchPartyQuery(session)}`;
+}
+
+export function watchPartyPreviewVTTURL(slug: string, fileId: string, session: WatchPartySession): string {
+  return `/api/watch-parties/join/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}/preview/thumbnails.vtt?${watchPartyQuery(session)}`;
+}
+
+function watchPartyQuery(session: WatchPartySession): string {
+  const params = new URLSearchParams({
+    participantId: session.participant.id,
+    token: session.token,
+  });
+  return params.toString();
 }

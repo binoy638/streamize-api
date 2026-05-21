@@ -13,17 +13,16 @@ import {
 import { NavLink, useLocation } from "react-router-dom";
 
 import { useAuth } from "../lib/auth";
-import { mediaItems, torrents } from "../lib/mock-data";
 
 const pageCopy: Record<string, { title: string; subtitle: string; search: string }> = {
   "/library": {
     title: "Library",
-    subtitle: `${mediaItems.length * 32} videos indexed`,
+    subtitle: "Playback readiness",
     search: "Search titles, codecs, categories",
   },
   "/torrents": {
     title: "Torrents",
-    subtitle: `${torrents.length} active records`,
+    subtitle: "Transfer records",
     search: "Search torrents, hashes, statuses",
   },
   "/jobs": {

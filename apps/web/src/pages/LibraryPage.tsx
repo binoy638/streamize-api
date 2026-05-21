@@ -16,6 +16,7 @@ const filters = [
 ];
 
 const pollableTorrentStatuses = new Set<api.TorrentStatus>(["added", "queued", "downloading", "processing"]);
+const pollableFileStatuses = new Set<api.TorrentFileStatus>(["queued", "downloading", "processing"]);
 
 type LibraryStatus = "ready" | "processing" | "failed";
 
@@ -29,6 +30,8 @@ type LibraryItem = {
   status: LibraryStatus;
   tags: string[];
   progress: number;
+  sizeBytes: number;
+  pollable: boolean;
   posterHue: number;
   playable: boolean;
   searchText: string;
@@ -90,7 +93,7 @@ export function LibraryPage() {
     }
 
     const hasActiveTorrent = torrents.some((torrent) => pollableTorrentStatuses.has(torrent.status));
-    const hasActiveFile = items.some((item) => item.source === "api" && item.status === "processing");
+    const hasActiveFile = items.some((item) => item.source === "api" && item.pollable);
     if (!hasActiveTorrent && !hasActiveFile) {
       return;
     }
@@ -115,9 +118,7 @@ export function LibraryPage() {
     const ready = items.filter((item) => item.status === "ready").length;
     const processing = items.filter((item) => item.status === "processing").length;
     const failed = items.filter((item) => item.status === "failed").length;
-    const storage = items
-      .filter((item) => item.source === "api")
-      .reduce((total, item) => total + sizeFromMeta(item.meta[0]), 0);
+    const storage = items.filter((item) => item.source === "api").reduce((total, item) => total + item.sizeBytes, 0);
 
     return {
       ready,
@@ -284,22 +285,30 @@ export function LibraryPage() {
             </div>
           </div>
           <div className="timeline-list">
-            <div className="timeline-item">
-              <Badge tone="ready">Ready</Badge>
-              <div>
-                <strong>{stats.ready} playable</strong>
-                <p className="muted">HLS output or direct MP4 playback is available.</p>
-              </div>
-              <Progress value={items.length > 0 ? (stats.ready / items.length) * 100 : 0} />
-            </div>
-            <div className="timeline-item">
-              <Badge tone="processing">Processing</Badge>
-              <div>
-                <strong>{stats.processing} active</strong>
-                <p className="muted">Files are queued, downloading, or transcoding.</p>
-              </div>
-              <Progress value={items.length > 0 ? (stats.processing / items.length) * 100 : 0} />
-            </div>
+            <OperationalStateRow
+              tone="ready"
+              label="Ready"
+              count={stats.ready}
+              total={items.length}
+              headline="playable"
+              detail="HLS output or direct MP4 playback is available."
+            />
+            <OperationalStateRow
+              tone="processing"
+              label="Processing"
+              count={stats.processing}
+              total={items.length}
+              headline="active"
+              detail="Files are queued, downloading, transcoding, or awaiting playback output."
+            />
+            <OperationalStateRow
+              tone="failed"
+              label="Failed"
+              count={stats.failed}
+              total={items.length}
+              headline="needs retry"
+              detail="The file or parent torrent reported an API error state."
+            />
           </div>
         </aside>
       </div>
@@ -322,28 +331,32 @@ export function LibraryPage() {
 }
 
 function apiFileToLibraryItem(file: api.TorrentFile, torrent: api.Torrent | null): LibraryItem {
-  const playable = ((file.status === "done" || file.status === "processing") && Boolean(file.hlsPath)) || file.directPlayable;
-  const failed = file.status === "error";
+  const playable = Boolean(file.hlsPath) || file.directPlayable;
+  const failed = file.status === "error" || torrent?.status === "error";
   const status: LibraryStatus = failed ? "failed" : playable ? "ready" : "processing";
   const torrentProgress = torrent?.progressPercent ?? 0;
   const downloadProgress = file.status === "downloading" ? (file.downloadPercent || torrentProgress) : 0;
-  const progress = playable ? 100 : Math.round(file.transcodingPercent || downloadProgress || torrentProgress || 0);
+  const progress = playable ? 100 : clampPercent(file.transcodingPercent || downloadProgress || torrentProgress || 0);
+  const transferLabel = file.processingMode ? file.processingMode.replace(/_/g, " ") : (torrent?.status ?? file.status);
   const meta = [
     file.sizeBytes > 0 ? formatBytes(file.sizeBytes) : "Pending",
     codecLabel(file),
-    file.processingMode ? file.processingMode.replace(/_/g, " ") : (torrent?.status ?? file.status),
+    transferLabel,
   ];
+  const tags = [status, "recent", file.status, torrent?.status].filter(Boolean) as string[];
 
   return {
     id: file.id,
     source: "api",
-    torrentId: torrent?.id ?? "",
+    torrentId: file.torrentId,
     title: file.name,
     duration: formatDuration(file.durationSeconds || 0),
     meta,
     status,
-    tags: [status, "recent"],
+    tags,
     progress,
+    sizeBytes: file.sizeBytes,
+    pollable: pollableFileStatuses.has(file.status),
     posterHue: hueFromID(file.id),
     playable,
     searchText: [file.name, torrent?.name ?? "", file.status, torrent?.status ?? "", ...meta].join(" ").toLowerCase(),
@@ -362,10 +375,43 @@ function mockMediaToLibraryItem(item: (typeof mediaItems)[number]): LibraryItem 
     status,
     tags: item.tags,
     progress: item.progress,
+    sizeBytes: sizeFromMeta(item.meta[0]),
+    pollable: status === "processing",
     posterHue: item.posterHue,
     playable: status === "ready",
     searchText: [item.title, item.status, ...item.meta].join(" ").toLowerCase(),
   };
+}
+
+function OperationalStateRow({
+  tone,
+  label,
+  count,
+  total,
+  headline,
+  detail,
+}: {
+  tone: LibraryStatus;
+  label: string;
+  count: number;
+  total: number;
+  headline: string;
+  detail: string;
+}) {
+  return (
+    <div className="timeline-item">
+      <div className="timeline-item-main">
+        <Badge tone={tone}>{label}</Badge>
+        <div className="timeline-copy">
+          <strong>
+            {count} {headline}
+          </strong>
+          <p className="muted">{detail}</p>
+        </div>
+      </div>
+      <Progress value={total > 0 ? (count / total) * 100 : 0} />
+    </div>
+  );
 }
 
 function statusLabel(status: string) {
@@ -405,6 +451,13 @@ function hueFromID(value: string): number {
     hash = (hash * 31 + char.charCodeAt(0)) % 360;
   }
   return hash;
+}
+
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.round(Math.max(0, Math.min(100, value)));
 }
 
 function sizeFromMeta(value: string): number {

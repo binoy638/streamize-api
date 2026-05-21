@@ -1,10 +1,10 @@
-import { type CSSProperties, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Maximize2, Pause, Play, Volume2 } from "lucide-react";
 import type Hls from "hls.js";
 
 import * as api from "../lib/api";
-import { Badge, Button, Progress, StatCard } from "../components/ui";
+import { Badge, Button, Field, Input, Modal, Progress, Select, StatCard } from "../components/ui";
 import { formatBytes } from "../lib/format";
 import { filesForTorrent, findMedia, torrentFiles } from "../lib/mock-data";
 
@@ -53,6 +53,13 @@ export function PlayerPage() {
   const [subtitles, setSubtitles] = useState<api.Subtitle[]>([]);
   const [previewCues, setPreviewCues] = useState<PreviewCue[]>([]);
   const [previewPercent, setPreviewPercent] = useState<number | null>(null);
+  const [partyOpen, setPartyOpen] = useState(false);
+  const [partyMode, setPartyMode] = useState<api.WatchPartyControlMode>("host_only");
+  const [partyDisplayName, setPartyDisplayName] = useState("");
+  const [partyBusy, setPartyBusy] = useState(false);
+  const [partyError, setPartyError] = useState("");
+  const [partyLink, setPartyLink] = useState("");
+  const [activeParty, setActiveParty] = useState<api.WatchPartyResponse | null>(null);
   const hlsSource = selectedFile?.source === "api" && selectedFile.playable ? hlsPlaylistURL(selectedFile.id) : "";
   const directSource = selectedFile?.source === "api" && !hlsSource && selectedFile.directPlayable ? originalFileURL(selectedFile.id) : "";
   const playbackSource = hlsSource || directSource;
@@ -247,12 +254,64 @@ export function PlayerPage() {
     setPreviewPercent(Math.max(0, Math.min(nextPercent, 100)));
   }
 
+  async function submitWatchParty(event: FormEvent) {
+    event.preventDefault();
+    setPartyError("");
+    setPartyLink("");
+    if (!selectedFile || selectedFile.source !== "api") {
+      setPartyError("Watch parties can be created after this file loads from the API.");
+      return;
+    }
+    if (!selectedFile.playable && !selectedFile.directPlayable) {
+      setPartyError("This file is not ready for watch party playback yet.");
+      return;
+    }
+
+    setPartyBusy(true);
+    try {
+      const response = await api.createWatchParty({
+        torrentFileId: selectedFile.id,
+        controlMode: partyMode,
+        displayName: partyDisplayName.trim() || undefined,
+      });
+      if (response.session) {
+        sessionStorage.setItem(watchPartySessionStorageKey(response.party.slug), JSON.stringify(response.session));
+      }
+      const localPartyLink = watchPartyURL(response.party.slug);
+      setActiveParty({ ...response, joinUrl: localPartyLink });
+      setPartyLink(localPartyLink);
+      await navigator.clipboard?.writeText(localPartyLink);
+    } catch (err) {
+      setPartyError(err instanceof Error ? err.message : "Unable to create watch party.");
+    } finally {
+      setPartyBusy(false);
+    }
+  }
+
   return (
     <section className="content player-content">
       {usingMock && error ? (
         <div className="alert alert-warn is-visible">Using prototype player data because the API file could not load: {error}</div>
       ) : null}
       {!usingMock && error ? <div className="alert alert-error is-visible">{error}</div> : null}
+      {activeParty ? (
+        <div className="watch-party-banner">
+          <div className="watch-party-banner-copy">
+            <Badge tone="online">Watch party active</Badge>
+            <strong>{activeParty.file.name}</strong>
+            <p className="muted">
+              {activeParty.party.controlMode === "everyone" ? "Everyone can control playback." : "Only the host can control playback."}
+            </p>
+          </div>
+          <div className="component-row">
+            <Input readOnly value={activeParty.joinUrl} aria-label="Watch party link" />
+            <Button onClick={() => void navigator.clipboard?.writeText(activeParty.joinUrl)}>Copy</Button>
+            <Link className="btn btn-primary" to={watchPartyPath(activeParty.party.slug)}>
+              Open host room
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       <div className="player-layout">
         <section className={`player-stage ${playing ? "is-playing" : ""}`} aria-label="Video player">
@@ -332,7 +391,7 @@ export function PlayerPage() {
                 key={file.id}
                 onClick={() => setSelectedFileId(file.id)}
               >
-                <span>
+                <span className="file-row-copy">
                   <strong>{file.name}</strong>
                   <small>
                     {file.size} · {file.codec}
@@ -346,7 +405,7 @@ export function PlayerPage() {
             <Link className="btn btn-ghost" to={`/torrents/${selectedFile?.torrentId || initialMedia.torrentId}`}>
               Torrent detail
             </Link>
-            <Button>Share</Button>
+            <Button onClick={() => setPartyOpen(true)}>Watch party</Button>
           </div>
         </aside>
       </div>
@@ -359,27 +418,89 @@ export function PlayerPage() {
       </div>
 
       <div className="panel">
-        <div className="timeline-list">
-          <div className="timeline-item">
-            <Badge tone={directSource ? "online" : hlsSource ? "ready" : "paused"}>{directSource ? "Direct preview" : hlsSource ? (selectedFile?.status === "processing" ? "Live HLS" : "HLS") : "Pending"}</Badge>
-            <div>
+        <div className="playback-health">
+          <div className="playback-health-item">
+            <div className="playback-health-copy">
+              <Badge tone={directSource ? "online" : hlsSource ? "ready" : "paused"}>
+                {directSource ? "Direct preview" : hlsSource ? (selectedFile?.status === "processing" ? "Live HLS" : "HLS") : "Pending"}
+              </Badge>
               <strong>{selectedFile?.codec || "H.264 / AAC"}</strong>
               <p className="muted">{previewCues.length > 0 ? "Preview sprites ready." : "Preview sprites pending."}</p>
             </div>
-            <Progress value={100} />
+            <Progress value={playbackSource ? 100 : 0} />
           </div>
-          <div className="timeline-item">
-            <Badge tone="ready">Subtitles</Badge>
-            <div>
+          <div className="playback-health-item">
+            <div className="playback-health-copy">
+              <Badge tone={subtitles.length > 0 ? "ready" : "paused"}>Subtitles</Badge>
               <strong>{subtitles.length > 0 ? subtitles.map((subtitle) => subtitle.language.toUpperCase()).join(", ") : "No tracks yet"}</strong>
-              <p className="muted">Extracted tracks can be selected from the native player controls.</p>
+              <p className="muted">Detected tracks appear in the native player controls.</p>
             </div>
             <Button>Manage</Button>
           </div>
         </div>
       </div>
+
+      <Modal
+        title="Create watch party"
+        open={partyOpen}
+        onClose={() => {
+          if (!partyBusy) {
+            setPartyOpen(false);
+          }
+        }}
+        footer={
+          <>
+            <Button type="button" onClick={() => setPartyOpen(false)} disabled={partyBusy}>
+              Close
+            </Button>
+            <Button variant="primary" type="submit" form="create-watch-party-form" disabled={partyBusy || Boolean(partyLink)}>
+              {partyBusy ? "Creating..." : partyLink ? "Created" : "Create"}
+            </Button>
+          </>
+        }
+      >
+        <form id="create-watch-party-form" className="contents" onSubmit={submitWatchParty}>
+          {partyError ? <div className="alert alert-error is-visible">{partyError}</div> : null}
+          <Field label="Display name">
+            <Input
+              value={partyDisplayName}
+              onChange={(event) => setPartyDisplayName(event.target.value)}
+              placeholder="Shown as host"
+            />
+          </Field>
+          <Field label="Playback control">
+            <Select value={partyMode} onChange={(event) => setPartyMode(event.target.value as api.WatchPartyControlMode)}>
+              <option value="host_only">Host only</option>
+              <option value="everyone">Everyone can control</option>
+            </Select>
+          </Field>
+          {partyLink ? (
+            <div className="form-grid">
+              <div className="alert alert-success is-visible">Watch party created and link copied.</div>
+              <div className="share-link">
+                <Input readOnly value={partyLink} />
+                <Link className="btn btn-primary" to={activeParty ? watchPartyPath(activeParty.party.slug) : "/library"}>
+                  Open
+                </Link>
+              </div>
+            </div>
+          ) : null}
+        </form>
+      </Modal>
     </section>
   );
+}
+
+function watchPartySessionStorageKey(slug: string): string {
+  return `watchPartySession:${slug}`;
+}
+
+function watchPartyPath(slug: string): string {
+  return `/watch/${encodeURIComponent(slug)}`;
+}
+
+function watchPartyURL(slug: string): string {
+  return `${window.location.origin}${watchPartyPath(slug)}`;
 }
 
 function apiFileToPlayerFile(file: api.TorrentFile, torrentId: string): PlayerFile {

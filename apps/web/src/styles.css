@@ -188,10 +188,12 @@
 
   .page-title strong {
     @apply block font-display text-lg font-bold leading-tight;
+    overflow-wrap: anywhere;
   }
 
   .page-title span {
     @apply text-xs text-[var(--muted)];
+    overflow-wrap: anywhere;
   }
 
   .search {
@@ -234,15 +236,25 @@
   }
 
   .content {
-    @apply mx-auto w-full max-w-[1440px] px-[26px] pb-14 pt-[34px];
+    @apply mx-auto w-full max-w-[1440px] px-[26px] pb-14 pt-6;
   }
 
   .screen-header {
-    @apply mb-6 flex items-start justify-between gap-6;
+    @apply mb-[18px] flex items-start justify-between gap-6 border-b border-[var(--border)] pb-4;
+  }
+
+  .screen-header > div {
+    @apply min-w-0;
+  }
+
+  .screen-header h1 {
+    @apply mt-2 max-w-[780px] font-display text-[30px] font-bold leading-[1.08] tracking-normal;
+    overflow-wrap: anywhere;
   }
 
   .screen-header p {
-    @apply mt-[14px] max-w-[760px] text-[15px] text-[var(--muted)];
+    @apply mt-2 max-w-[760px] text-[14px] text-[var(--muted)];
+    overflow-wrap: anywhere;
   }
 
   .stats-row {
@@ -269,10 +281,12 @@
 
   .stat-card strong {
     @apply mt-1.5 block font-display text-[25px] font-bold leading-none tracking-[-0.02em];
+    overflow-wrap: anywhere;
   }
 
   .stat-card small {
     @apply mt-[7px] block text-[var(--subtle)];
+    overflow-wrap: anywhere;
   }
 
   .filters {
@@ -323,6 +337,7 @@
 
   .poster-label {
     @apply font-display text-2xl font-bold leading-none tracking-[-0.02em];
+    overflow-wrap: anywhere;
   }
 
   .media-body {
@@ -331,10 +346,15 @@
 
   .media-title {
     @apply font-display text-base font-bold leading-tight;
+    overflow-wrap: anywhere;
   }
 
   .media-meta {
     @apply flex flex-wrap gap-[7px] text-xs text-[var(--muted)];
+  }
+
+  .media-meta span {
+    overflow-wrap: anywhere;
   }
 
   .progress-row {
@@ -423,6 +443,7 @@
 
   .panel-title {
     @apply font-display text-base font-bold leading-tight;
+    overflow-wrap: anywhere;
   }
 
   .empty-state {
@@ -492,10 +513,12 @@
 
   .table-title strong {
     @apply font-display text-sm font-bold leading-tight;
+    overflow-wrap: anywhere;
   }
 
   .table-title span {
     @apply text-xs text-[var(--muted)];
+    overflow-wrap: anywhere;
   }
 
   .table-progress {
@@ -572,6 +595,7 @@
   .auth-card h1 {
     @apply m-0 max-w-none;
     font-size: clamp(34px, 8vw, 48px);
+    overflow-wrap: anywhere;
   }
 
   .admin-band {
@@ -621,8 +645,34 @@
   }
 
   .timeline-item {
-    @apply grid grid-cols-[auto_minmax(0,1fr)_minmax(140px,240px)] items-center gap-3 rounded-lg border border-[var(--border)] p-3;
+    @apply grid min-w-0 gap-3 rounded-lg border border-[var(--border)] p-3;
     background: oklch(12% 0.024 252);
+  }
+
+  .timeline-item > .badge,
+  .timeline-item > .btn {
+    @apply justify-self-start;
+  }
+
+  .timeline-item-main {
+    @apply flex min-w-0 items-start gap-3;
+  }
+
+  .timeline-item-main .badge {
+    @apply mt-0.5 flex-none;
+  }
+
+  .timeline-copy {
+    @apply grid min-w-0 gap-1;
+  }
+
+  .timeline-copy strong {
+    @apply font-display text-sm font-bold leading-tight;
+    overflow-wrap: anywhere;
+  }
+
+  .timeline-copy p {
+    @apply text-xs leading-snug;
   }
 
   .player-content {
@@ -658,6 +708,11 @@
   .player-gradient strong {
     @apply font-display font-bold leading-none tracking-[-0.02em];
     font-size: clamp(32px, 5vw, 64px);
+    overflow-wrap: anywhere;
+  }
+
+  .player-gradient p {
+    overflow-wrap: anywhere;
   }
 
   .player-controls {
@@ -691,20 +746,88 @@
   }
 
   .file-row {
-    @apply flex w-full justify-between gap-3 rounded-lg border border-[var(--border)] p-3 text-left text-[var(--fg)];
+    @apply grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 rounded-lg border border-[var(--border)] p-3 text-left text-[var(--fg)] transition duration-150;
     background: oklch(12% 0.024 252);
+    transition-property: border-color, background, transform;
+  }
+
+  .file-row:hover {
+    @apply border-[var(--border-strong)];
+    background: oklch(15% 0.026 252);
   }
 
   .file-row.active {
     @apply border-[var(--accent)] bg-[var(--accent-soft)];
   }
 
-  .file-row span {
-    @apply grid gap-1;
+  .file-row.active:hover {
+    @apply bg-[var(--accent-soft)];
   }
 
-  .file-row small {
-    @apply text-[var(--muted)];
+  .file-row-copy {
+    @apply grid min-w-0 gap-1.5;
+  }
+
+  .file-row-copy strong {
+    @apply text-sm font-bold leading-snug;
+    overflow-wrap: anywhere;
+  }
+
+  .file-row-copy small {
+    @apply text-xs leading-tight text-[var(--muted)];
+    overflow-wrap: anywhere;
+  }
+
+  .playback-health {
+    @apply grid grid-cols-2 gap-3;
+  }
+
+  .playback-health-item {
+    @apply grid min-w-0 gap-3 rounded-lg border border-[var(--border)] p-3;
+    background: oklch(12% 0.024 252);
+  }
+
+  .playback-health-copy {
+    @apply grid min-w-0 gap-2;
+  }
+
+  .playback-health-copy .badge {
+    @apply justify-self-start;
+  }
+
+  .playback-health-copy strong {
+    @apply font-display text-sm font-bold leading-tight;
+    overflow-wrap: anywhere;
+  }
+
+  .playback-health-copy p {
+    @apply text-xs leading-snug;
+  }
+
+  .watch-party-banner {
+    @apply mb-[18px] grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)] items-center gap-4 rounded-[var(--radius)] border border-[var(--border)] p-4;
+    background: linear-gradient(180deg, oklch(16% 0.028 252), oklch(12% 0.026 252));
+  }
+
+  .watch-party-banner-copy {
+    @apply grid min-w-0 gap-2;
+  }
+
+  .watch-party-banner-copy .badge {
+    @apply justify-self-start;
+  }
+
+  .watch-party-banner-copy strong,
+  .watch-party-banner-copy p {
+    overflow-wrap: anywhere;
+  }
+
+  .watch-party-banner .component-row {
+    @apply min-w-0 justify-end;
+  }
+
+  .watch-party-banner .input {
+    @apply min-w-0 flex-1;
   }
 }
 
@@ -722,7 +845,9 @@
   }
 
   .layout-grid,
-  .player-layout {
+  .player-layout,
+  .watch-party-banner,
+  .playback-health {
     @apply grid-cols-1;
   }
 
@@ -778,10 +903,6 @@
   .screen-header,
   .detail-hero {
     @apply grid grid-cols-1;
-  }
-
-  .screen-header h1 {
-    font-size: clamp(34px, 11vw, 48px);
   }
 
   .media-grid,
