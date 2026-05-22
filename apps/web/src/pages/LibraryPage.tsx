@@ -21,9 +21,13 @@ type LibraryItem = {
   title: string;
   duration: string;
   meta: string[];
+  detail: string;
   status: LibraryStatus;
   tags: string[];
   progress: number;
+  watchPercent: number;
+  resumeFileId?: string;
+  watched: boolean;
   sizeBytes: number;
   pollable: boolean;
   posterHue: number;
@@ -40,6 +44,11 @@ type LibraryItem = {
 // a grid of these cells, so dividing the sheet width by this gives the column
 // count needed to crop the first cell as a poster thumbnail.
 const SPRITE_CELL_WIDTH = 160;
+
+// Saved playback below this many seconds is treated as "not started"; at/above
+// this fraction of the runtime the video counts as fully watched.
+const WATCH_RESUME_MIN_SECONDS = 5;
+const WATCH_FINISHED_FRACTION = 0.95;
 
 type Notice = {
   tone: "success" | "warn";
@@ -65,10 +74,15 @@ export function LibraryPage() {
     }
 
     try {
-      const [records, libraryItems] = await Promise.all([api.listTorrents(), api.listLibrary()]);
+      const [records, libraryItems, progress] = await Promise.all([
+        api.listTorrents(),
+        api.listLibrary(),
+        // Watch progress is a nice-to-have; never fail the whole load over it.
+        api.listVideoProgress().catch(() => [] as api.VideoProgress[]),
+      ]);
 
       setTorrents(records);
-      setItems(libraryItems.map(apiCatalogItemToLibraryItem));
+      setItems(libraryItems.map((item) => apiCatalogItemToLibraryItem(item, progress)));
       setUsingMock(false);
       setError("");
     } catch (err) {
@@ -224,7 +238,6 @@ export function LibraryPage() {
                     className={item.playable ? "poster" : "poster poster-static"}
                     style={{ "--poster-hue": item.posterHue } as CSSProperties}
                   >
-                    <Badge tone={item.status}>{statusLabel(item.status)}</Badge>
                     {item.metadataStatus === "unmatched" || item.metadataStatus === "failed" ? (
                       <Badge tone="warn">metadata {item.metadataStatus}</Badge>
                     ) : null}
@@ -234,26 +247,33 @@ export function LibraryPage() {
                     {item.posterUrl || item.thumbnailUrl ? null : (
                       <span className="poster-label">{item.title.split(":")[0]}</span>
                     )}
+                    {item.watchPercent > 0 ? (
+                      <span className="poster-progress" aria-hidden>
+                        <span style={{ width: `${item.watchPercent}%` }} />
+                      </span>
+                    ) : null}
                   </div>
                 </Link>
                 <div className="media-body">
                   <div className="media-title" title={item.title}>
                     {item.title}
                   </div>
-                  <div className="media-meta">
-                    {item.meta.map((meta) => (
-                      <span key={meta}>{meta}</span>
-                    ))}
+                  <div className="media-meta" title={item.detail}>
+                    {item.meta.join(" · ")}
                   </div>
                   <div className="progress-row">
-                    <Progress value={item.progress} />
-                    <span>{item.progress === 100 ? "Ready" : `${item.progress}%`}</span>
+                    <Progress value={item.watchPercent} />
+                    <span>{watchLabel(item)}</span>
                   </div>
                   <div className="media-actions">
-                    {item.playable ? (
+                    {item.resumeFileId ? (
+                      <Link className="btn btn-primary flex-1" to={`/player/${item.resumeFileId}`}>
+                        <Play size={15} /> Continue
+                      </Link>
+                    ) : item.playable ? (
                       <Link className="btn btn-primary flex-1" to={cardTarget}>
                         {item.fileCount > 1 ? <Layers size={15} /> : <Play size={15} />}
-                        {item.fileCount > 1 ? "Open" : "Watch"}
+                        {item.fileCount > 1 ? "Open" : item.watched ? "Watch again" : "Watch"}
                       </Link>
                     ) : (
                       <Link className="btn flex-1" to={cardTarget}>
@@ -303,7 +323,7 @@ export function LibraryPage() {
   );
 }
 
-function apiCatalogItemToLibraryItem(item: api.LibraryCatalogItem): LibraryItem {
+function apiCatalogItemToLibraryItem(item: api.LibraryCatalogItem, watchProgress: api.VideoProgress[]): LibraryItem {
   const files = item.files;
   const primary = files.find((file) => Boolean(file.hlsPath) || file.directPlayable) || files[0];
   const playable = files.some((file) => Boolean(file.hlsPath) || file.directPlayable);
@@ -321,8 +341,22 @@ function apiCatalogItemToLibraryItem(item: api.LibraryCatalogItem): LibraryItem 
     episodeCount > 0 ? `${episodeCount} episodes` : typeLabel,
     transferLabel,
   ];
+  // detail is the full string surfaced on hover; it adds the codec, which is
+  // too long to keep on the always-visible single-line meta row.
+  const detail = [...meta, primary ? codecLabel(primary) : ""].filter(Boolean).join(" · ");
   const tags = [status, item.mediaType, item.metadataStatus, primary?.status].filter(Boolean) as string[];
   const target = fileCount === 1 && playable && primary ? `/player/${primary.id}` : `/library/${encodeURIComponent(item.id)}`;
+
+  // watchProgress arrives most-recently-watched first, so the first match is
+  // the file the user touched last within this catalog item.
+  const fileIDs = new Set(files.map((file) => file.id));
+  const watch = watchProgress.find((record) => fileIDs.has(record.torrentFileId));
+  const watchedFile = watch ? files.find((file) => file.id === watch.torrentFileId) : undefined;
+  const watchDuration = watch && watch.durationSeconds > 0 ? watch.durationSeconds : watchedFile?.durationSeconds || 0;
+  const watchPosition = watch ? Math.max(0, watch.positionSeconds || 0) : 0;
+  const watchPercent = watchDuration > 0 ? clampPercent((watchPosition / watchDuration) * 100) : 0;
+  const watched = watchDuration > 0 && watchPosition >= watchDuration * WATCH_FINISHED_FRACTION;
+  const resumeFileId = watch && !watched && watchPosition >= WATCH_RESUME_MIN_SECONDS ? watch.torrentFileId : undefined;
 
   return {
     id: item.id,
@@ -332,9 +366,13 @@ function apiCatalogItemToLibraryItem(item: api.LibraryCatalogItem): LibraryItem 
     title: item.title,
     duration: primary ? formatDuration(primary.durationSeconds || 0) : "Pending",
     meta,
+    detail,
     status,
     tags,
     progress,
+    watchPercent,
+    resumeFileId,
+    watched,
     sizeBytes,
     pollable: files.some((file) => pollableFileStatuses.has(file.status)),
     posterHue: hueFromID(item.id),
@@ -408,9 +446,13 @@ function mockMediaToLibraryItem(item: (typeof mediaItems)[number]): LibraryItem 
     title: item.title,
     duration: item.duration,
     meta: item.meta,
+    detail: item.meta.join(" · "),
     status,
     tags: item.tags,
     progress: item.progress,
+    watchPercent: 0,
+    resumeFileId: undefined,
+    watched: false,
     sizeBytes: sizeFromMeta(item.meta[0]),
     pollable: status === "processing",
     posterHue: item.posterHue,
@@ -422,8 +464,14 @@ function mockMediaToLibraryItem(item: (typeof mediaItems)[number]): LibraryItem 
   };
 }
 
-function statusLabel(status: string) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+function watchLabel(item: LibraryItem): string {
+  if (item.watched) {
+    return "Watched";
+  }
+  if (item.watchPercent > 0) {
+    return `${item.watchPercent}% watched`;
+  }
+  return "Not started";
 }
 
 function codecLabel(file: api.TorrentFile): string {

@@ -368,6 +368,63 @@ func TestSubtitlesAreFileOwnerScoped(t *testing.T) {
 	}
 }
 
+func TestVideoProgressIsFileOwnerScoped(t *testing.T) {
+	ctx := context.Background()
+	store, ownerID := newTestStore(t)
+
+	torrent, err := store.CreateTorrent(ctx, CreateTorrentParams{
+		OwnerUserID: ownerID,
+		MagnetURI:   testMagnet,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrent returned error: %v", err)
+	}
+	file, _, err := store.CreateTorrentFileIfMissing(ctx, CreateTorrentFileParams{
+		TorrentID:    torrent.ID,
+		Name:         "movie.mp4",
+		Ext:          ".mp4",
+		OriginalPath: "/media/originals/movie.mp4",
+		SizeBytes:    4096,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing returned error: %v", err)
+	}
+
+	if _, err := store.FindVideoProgressForOwner(ctx, file.ID, ownerID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected missing progress to return ErrNotFound, got %v", err)
+	}
+
+	progress, err := store.UpsertVideoProgressForOwner(ctx, UpdateVideoProgressParams{
+		TorrentFileID:   file.ID,
+		UserID:          ownerID,
+		PositionSeconds: 95,
+		DurationSeconds: 90,
+	})
+	if err != nil {
+		t.Fatalf("UpsertVideoProgressForOwner returned error: %v", err)
+	}
+	if progress.TorrentFileID != file.ID || progress.PositionSeconds != 90 || progress.DurationSeconds != 90 || progress.UpdatedAt == "" {
+		t.Fatalf("unexpected saved progress: %+v", progress)
+	}
+
+	found, err := store.FindVideoProgressForOwner(ctx, file.ID, ownerID)
+	if err != nil {
+		t.Fatalf("FindVideoProgressForOwner returned error: %v", err)
+	}
+	if found.PositionSeconds != 90 || found.DurationSeconds != 90 {
+		t.Fatalf("unexpected found progress: %+v", found)
+	}
+
+	if _, err := store.UpsertVideoProgressForOwner(ctx, UpdateVideoProgressParams{
+		TorrentFileID:   file.ID,
+		UserID:          "usr_someone_else",
+		PositionSeconds: 12,
+		DurationSeconds: 120,
+	}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected wrong-owner upsert to return ErrNotFound, got %v", err)
+	}
+}
+
 func TestDeleteTorrentIsOwnerScoped(t *testing.T) {
 	ctx := context.Background()
 	store, ownerID := newTestStore(t)

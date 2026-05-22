@@ -118,6 +118,13 @@ export type Subtitle = {
   createdAt: string;
 };
 
+export type VideoProgress = {
+  torrentFileId: string;
+  positionSeconds: number;
+  durationSeconds: number;
+  updatedAt?: string;
+};
+
 export type Job = {
   id: string;
   type: string;
@@ -210,6 +217,11 @@ export type CreateTorrentInput = {
 export type DeleteTorrentOptions = {
   deleteFiles?: boolean;
   deleteGenerated?: boolean;
+};
+
+export type UpdateVideoProgressInput = {
+  positionSeconds: number;
+  durationSeconds: number;
 };
 
 export type CreateWatchPartyInput = {
@@ -343,6 +355,24 @@ export async function refreshFileMetadata(id: string): Promise<Job> {
 export async function listSubtitles(fileId: string): Promise<Subtitle[]> {
   const body = await apiFetch<{ subtitles: Subtitle[] }>(`/api/files/${encodeURIComponent(fileId)}/subtitles`);
   return body.subtitles;
+}
+
+export async function listVideoProgress(): Promise<VideoProgress[]> {
+  const body = await apiFetch<{ progress: VideoProgress[] }>("/api/progress");
+  return body.progress;
+}
+
+export async function getVideoProgress(fileId: string): Promise<VideoProgress> {
+  const body = await apiFetch<{ progress: VideoProgress }>(`/api/files/${encodeURIComponent(fileId)}/progress`);
+  return body.progress;
+}
+
+export async function saveVideoProgress(fileId: string, input: UpdateVideoProgressInput): Promise<VideoProgress> {
+  const body = await apiFetch<{ progress: VideoProgress }>(`/api/files/${encodeURIComponent(fileId)}/progress`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+  return body.progress;
 }
 
 export async function listJobs(): Promise<Job[]> {

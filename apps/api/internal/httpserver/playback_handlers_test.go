@@ -192,6 +192,135 @@ func TestPlaybackRouteServesDirectOriginalForCompatibleFile(t *testing.T) {
 	}
 }
 
+func TestPlaybackRoutesSaveAndReturnVideoProgress(t *testing.T) {
+	ctx := context.Background()
+	cfg := testConfig()
+	db := testDB(t)
+	authStore := auth.NewStore(db)
+	if err := authStore.BootstrapAdmin(ctx, cfg); err != nil {
+		t.Fatalf("BootstrapAdmin returned error: %v", err)
+	}
+	user, err := authStore.FindUserByUsername(ctx, "admin")
+	if err != nil {
+		t.Fatalf("FindUserByUsername returned error: %v", err)
+	}
+
+	store := torrents.NewStore(db)
+	torrent, err := store.CreateTorrent(ctx, torrents.CreateTorrentParams{
+		OwnerUserID: user.ID,
+		MagnetURI:   testTorrentMagnet,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrent returned error: %v", err)
+	}
+	file, _, err := store.CreateTorrentFileIfMissing(ctx, torrents.CreateTorrentFileParams{
+		TorrentID:    torrent.ID,
+		Name:         "movie.mp4",
+		Ext:          ".mp4",
+		OriginalPath: "/media/originals/movie.mp4",
+		SizeBytes:    4096,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing returned error: %v", err)
+	}
+
+	router := NewRouter(cfg, db, slog.Default())
+	cookie := signInForTorrentTest(t, router)
+
+	initialResponse := performJSONRequest(router, http.MethodGet, "/api/files/"+file.ID+"/progress", "", cookie)
+	if initialResponse.Code != http.StatusOK {
+		t.Fatalf("expected initial progress status %d, got %d: %s", http.StatusOK, initialResponse.Code, initialResponse.Body.String())
+	}
+	var initialBody videoProgressResponse
+	if err := json.Unmarshal(initialResponse.Body.Bytes(), &initialBody); err != nil {
+		t.Fatalf("initial progress response is not valid JSON: %v", err)
+	}
+	if initialBody.Progress.TorrentFileID != file.ID || initialBody.Progress.PositionSeconds != 0 || initialBody.Progress.DurationSeconds != 0 {
+		t.Fatalf("unexpected initial progress: %+v", initialBody.Progress)
+	}
+
+	saveResponse := performJSONRequest(router, http.MethodPut, "/api/files/"+file.ID+"/progress", `{"positionSeconds":42.5,"durationSeconds":120}`, cookie)
+	if saveResponse.Code != http.StatusOK {
+		t.Fatalf("expected save progress status %d, got %d: %s", http.StatusOK, saveResponse.Code, saveResponse.Body.String())
+	}
+	var saveBody videoProgressResponse
+	if err := json.Unmarshal(saveResponse.Body.Bytes(), &saveBody); err != nil {
+		t.Fatalf("save progress response is not valid JSON: %v", err)
+	}
+	if saveBody.Progress.TorrentFileID != file.ID || saveBody.Progress.PositionSeconds != 42.5 || saveBody.Progress.DurationSeconds != 120 || saveBody.Progress.UpdatedAt == "" {
+		t.Fatalf("unexpected saved progress: %+v", saveBody.Progress)
+	}
+
+	foundResponse := performJSONRequest(router, http.MethodGet, "/api/files/"+file.ID+"/progress", "", cookie)
+	if foundResponse.Code != http.StatusOK {
+		t.Fatalf("expected found progress status %d, got %d: %s", http.StatusOK, foundResponse.Code, foundResponse.Body.String())
+	}
+	var foundBody videoProgressResponse
+	if err := json.Unmarshal(foundResponse.Body.Bytes(), &foundBody); err != nil {
+		t.Fatalf("found progress response is not valid JSON: %v", err)
+	}
+	if foundBody.Progress.PositionSeconds != 42.5 || foundBody.Progress.DurationSeconds != 120 {
+		t.Fatalf("unexpected found progress: %+v", foundBody.Progress)
+	}
+}
+
+func TestPlaybackProgressRoutesHideFilesOwnedByOtherUsers(t *testing.T) {
+	ctx := context.Background()
+	cfg := testConfig()
+	db := testDB(t)
+	authStore := auth.NewStore(db)
+	if err := authStore.BootstrapAdmin(ctx, cfg); err != nil {
+		t.Fatalf("BootstrapAdmin returned error: %v", err)
+	}
+	admin, err := authStore.FindUserByUsername(ctx, "admin")
+	if err != nil {
+		t.Fatalf("FindUserByUsername admin returned error: %v", err)
+	}
+	if _, err := authStore.CreateUser(ctx, auth.CreateUserParams{
+		Username: "viewer",
+		Password: "viewer-password",
+		Role:     auth.RoleUser,
+	}); err != nil {
+		t.Fatalf("CreateUser returned error: %v", err)
+	}
+
+	store := torrents.NewStore(db)
+	torrent, err := store.CreateTorrent(ctx, torrents.CreateTorrentParams{
+		OwnerUserID: admin.ID,
+		MagnetURI:   testTorrentMagnet,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrent returned error: %v", err)
+	}
+	file, _, err := store.CreateTorrentFileIfMissing(ctx, torrents.CreateTorrentFileParams{
+		TorrentID:    torrent.ID,
+		Name:         "movie.mp4",
+		Ext:          ".mp4",
+		OriginalPath: "/media/originals/movie.mp4",
+		SizeBytes:    4096,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing returned error: %v", err)
+	}
+
+	router := NewRouter(cfg, db, slog.Default())
+	signInResponse := performJSONRequest(router, http.MethodPost, "/api/auth/sign-in", `{"username":"viewer","password":"viewer-password"}`, nil)
+	if signInResponse.Code != http.StatusOK {
+		t.Fatalf("expected sign-in status %d, got %d: %s", http.StatusOK, signInResponse.Code, signInResponse.Body.String())
+	}
+	cookie := signInResponse.Result().Cookies()[0]
+
+	getResponse := performJSONRequest(router, http.MethodGet, "/api/files/"+file.ID+"/progress", "", cookie)
+	if getResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected get progress not found status %d, got %d: %s", http.StatusNotFound, getResponse.Code, getResponse.Body.String())
+	}
+
+	saveResponse := performJSONRequest(router, http.MethodPut, "/api/files/"+file.ID+"/progress", `{"positionSeconds":10,"durationSeconds":120}`, cookie)
+	if saveResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected save progress not found status %d, got %d: %s", http.StatusNotFound, saveResponse.Code, saveResponse.Body.String())
+	}
+}
+
 func TestPlaybackRoutesServeSubtitlesAndPreviewAssets(t *testing.T) {
 	ctx := context.Background()
 	cfg := testConfig()

@@ -46,6 +46,10 @@ type PreviewCue = {
 };
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const CONTROLS_HIDE_DELAY_MS = 2800;
+const PROGRESS_SAVE_INTERVAL_MS = 10_000;
+const PROGRESS_SAVE_DELTA_SECONDS = 5;
+const RESUME_SKIP_AT_END_SECONDS = 8;
 
 export function PlayerPage() {
   const { fileId } = useParams();
@@ -69,9 +73,13 @@ export function PlayerPage() {
   const [activeTrack, setActiveTrack] = useState(-1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [menu, setMenu] = useState<ControlMenu>(null);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const hideControlsTimerRef = useRef<number | null>(null);
+  const pointerOverControlsRef = useRef(false);
   const [usingMock, setUsingMock] = useState(true);
   const [error, setError] = useState("");
   const [subtitles, setSubtitles] = useState<api.Subtitle[]>([]);
+  const [savedProgress, setSavedProgress] = useState<api.VideoProgress | null>(null);
   const [previewCues, setPreviewCues] = useState<PreviewCue[]>([]);
   const [previewPercent, setPreviewPercent] = useState<number | null>(null);
   const [partyOpen, setPartyOpen] = useState(false);
@@ -81,6 +89,8 @@ export function PlayerPage() {
   const [partyError, setPartyError] = useState("");
   const [partyLink, setPartyLink] = useState("");
   const [activeParty, setActiveParty] = useState<api.WatchPartyResponse | null>(null);
+  const resumeAppliedRef = useRef("");
+  const lastProgressSaveRef = useRef({ fileId: "", positionSeconds: 0, savedAt: 0 });
   const hlsSource = selectedFile?.source === "api" && selectedFile.playable ? hlsPlaylistURL(selectedFile.id) : "";
   const directSource = selectedFile?.source === "api" && !hlsSource && selectedFile.directPlayable ? originalFileURL(selectedFile.id) : "";
   const playbackSource = hlsSource || directSource;
@@ -129,6 +139,7 @@ export function PlayerPage() {
       return;
     }
 
+    resumeAppliedRef.current = "";
     setError("");
     setPlaying(false);
     setPosition(0);
@@ -190,6 +201,34 @@ export function PlayerPage() {
     };
   }, [directSource, hlsSource, playbackSource]);
 
+  useEffect(() => {
+    setSavedProgress(null);
+    resumeAppliedRef.current = "";
+    lastProgressSaveRef.current = { fileId: selectedFile?.id || "", positionSeconds: 0, savedAt: 0 };
+
+    if (selectedFile?.source !== "api" || !playbackSource) {
+      return;
+    }
+
+    let canceled = false;
+    api
+      .getVideoProgress(selectedFile.id)
+      .then((progress) => {
+        if (!canceled) {
+          setSavedProgress(progress);
+        }
+      })
+      .catch(() => {
+        if (!canceled) {
+          setSavedProgress(null);
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [selectedFile?.id, selectedFile?.source, playbackSource]);
+
   // Keep volume / mute / speed applied to the element, including after a source swap.
   useEffect(() => {
     const video = videoRef.current;
@@ -218,6 +257,31 @@ export function PlayerPage() {
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
+
+  // Reveal the controls and, while playback is running, schedule them to fade back out.
+  const revealControls = useCallback(() => {
+    setControlsVisible(true);
+    if (hideControlsTimerRef.current !== null) {
+      window.clearTimeout(hideControlsTimerRef.current);
+      hideControlsTimerRef.current = null;
+    }
+    if (playing && !menu && !pointerOverControlsRef.current) {
+      hideControlsTimerRef.current = window.setTimeout(() => {
+        setControlsVisible(false);
+      }, CONTROLS_HIDE_DELAY_MS);
+    }
+  }, [playing, menu]);
+
+  // Re-evaluate auto-hide whenever play state or an open menu changes.
+  useEffect(() => {
+    revealControls();
+    return () => {
+      if (hideControlsTimerRef.current !== null) {
+        window.clearTimeout(hideControlsTimerRef.current);
+        hideControlsTimerRef.current = null;
+      }
+    };
+  }, [revealControls]);
 
   // Close an open control menu when clicking elsewhere.
   useEffect(() => {
@@ -287,6 +351,94 @@ export function PlayerPage() {
     };
   }, [selectedFile?.id, selectedFile?.previewReady, selectedFile?.source]);
 
+  const persistProgress = useCallback(
+    (positionValue: number, durationValue: number, force = false) => {
+      if (!selectedFile || selectedFile.source !== "api" || !playbackSource) {
+        return;
+      }
+
+      const fileId = selectedFile.id;
+      const nextPosition = normalizeProgressSeconds(positionValue);
+      const nextDuration = normalizeProgressSeconds(durationValue);
+      const now = Date.now();
+      const last = lastProgressSaveRef.current;
+      if (
+        !force &&
+        last.fileId === fileId &&
+        now - last.savedAt < PROGRESS_SAVE_INTERVAL_MS &&
+        Math.abs(nextPosition - last.positionSeconds) < PROGRESS_SAVE_DELTA_SECONDS
+      ) {
+        return;
+      }
+
+      lastProgressSaveRef.current = { fileId, positionSeconds: nextPosition, savedAt: now };
+      void api.saveVideoProgress(fileId, {
+        positionSeconds: nextPosition,
+        durationSeconds: nextDuration,
+      }).catch(() => undefined);
+    },
+    [playbackSource, selectedFile?.id, selectedFile?.source],
+  );
+
+  const applySavedProgress = useCallback(
+    (video: HTMLVideoElement) => {
+      if (
+        !selectedFile ||
+        selectedFile.source !== "api" ||
+        !savedProgress ||
+        savedProgress.torrentFileId !== selectedFile.id ||
+        resumeAppliedRef.current === selectedFile.id
+      ) {
+        return;
+      }
+
+      const savedSeconds = normalizeProgressSeconds(savedProgress.positionSeconds);
+      if (savedSeconds < 1) {
+        resumeAppliedRef.current = selectedFile.id;
+        return;
+      }
+      if (video.readyState < 1) {
+        return;
+      }
+      if (normalizeProgressSeconds(video.currentTime) > 1) {
+        resumeAppliedRef.current = selectedFile.id;
+        return;
+      }
+
+      const duration = normalizeProgressSeconds(video.duration || savedProgress.durationSeconds);
+      if (duration > 0 && savedSeconds >= Math.max(duration - RESUME_SKIP_AT_END_SECONDS, 0)) {
+        resumeAppliedRef.current = selectedFile.id;
+        return;
+      }
+
+      video.currentTime = duration > 0 ? Math.min(savedSeconds, Math.max(duration - 1, 0)) : savedSeconds;
+      setCurrentSeconds(video.currentTime || 0);
+      setPosition(duration > 0 ? (video.currentTime / duration) * 100 : 0);
+      resumeAppliedRef.current = selectedFile.id;
+    },
+    [savedProgress, selectedFile?.id, selectedFile?.source],
+  );
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !playbackSource) {
+      return;
+    }
+    applySavedProgress(video);
+  }, [applySavedProgress, playbackSource]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      const video = videoRef.current;
+      if (video) {
+        persistProgress(video.currentTime, video.duration, true);
+      }
+    };
+
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [persistProgress]);
+
   async function togglePlayback() {
     const video = videoRef.current;
     if (!video || !playbackSource) {
@@ -308,6 +460,7 @@ export function PlayerPage() {
     }
 
     video.currentTime = (percent / 100) * video.duration;
+    persistProgress(video.currentTime, video.duration, true);
   }
 
   function changeVolume(value: number) {
@@ -415,7 +568,12 @@ export function PlayerPage() {
       ) : null}
 
       <div className="player-layout">
-        <section className="player-stage" ref={stageRef} aria-label="Video player">
+        <section
+          className={`player-stage${controlsVisible ? "" : " controls-hidden"}`}
+          ref={stageRef}
+          aria-label="Video player"
+          onPointerMove={revealControls}
+        >
           {playbackSource ? (
             <video
               ref={videoRef}
@@ -423,13 +581,25 @@ export function PlayerPage() {
               playsInline
               onClick={() => void togglePlayback()}
               onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-              onLoadedMetadata={(event) => setDurationSeconds(event.currentTarget.duration || 0)}
+              onPause={(event) => {
+                setPlaying(false);
+                persistProgress(event.currentTarget.currentTime, event.currentTarget.duration, true);
+              }}
+              onEnded={(event) => {
+                setPlaying(false);
+                persistProgress(0, event.currentTarget.duration, true);
+              }}
+              onLoadedMetadata={(event) => {
+                const video = event.currentTarget;
+                setDurationSeconds(normalizeProgressSeconds(video.duration));
+                applySavedProgress(video);
+              }}
               onTimeUpdate={(event) => {
                 const video = event.currentTarget;
                 const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationSeconds;
                 setCurrentSeconds(video.currentTime || 0);
                 setPosition(duration > 0 ? (video.currentTime / duration) * 100 : 0);
+                persistProgress(video.currentTime, duration);
               }}
             >
               {subtitles.map((subtitle) => (
@@ -453,7 +623,17 @@ export function PlayerPage() {
           )}
 
           {playbackSource ? (
-            <div className="player-controls">
+            <div
+              className={`player-controls${controlsVisible ? "" : " is-hidden"}`}
+              onPointerEnter={() => {
+                pointerOverControlsRef.current = true;
+                revealControls();
+              }}
+              onPointerLeave={() => {
+                pointerOverControlsRef.current = false;
+                revealControls();
+              }}
+            >
               <span className="scrub-host" onPointerLeave={() => setPreviewPercent(null)}>
                 {previewStyle ? <span className="scrub-preview" style={previewStyle} /> : null}
                 <input
@@ -843,6 +1023,10 @@ function codecLabel(file: api.TorrentFile): string {
 function extensionLabel(value: string): string {
   const extension = value.includes(".") ? value.slice(value.lastIndexOf(".") + 1) : value;
   return extension ? extension.toUpperCase() : "Pending";
+}
+
+function normalizeProgressSeconds(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 function formatDuration(totalSeconds: number): string {

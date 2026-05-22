@@ -99,6 +99,13 @@ type Subtitle struct {
 	CreatedAt     string `json:"createdAt"`
 }
 
+type VideoProgress struct {
+	TorrentFileID   string  `json:"torrentFileId"`
+	PositionSeconds float64 `json:"positionSeconds"`
+	DurationSeconds float64 `json:"durationSeconds"`
+	UpdatedAt       string  `json:"updatedAt,omitempty"`
+}
+
 type CreateTorrentParams struct {
 	OwnerUserID string
 	MagnetURI   string
@@ -145,6 +152,13 @@ type CreateSubtitleParams struct {
 	Title         string
 	Language      string
 	Path          string
+}
+
+type UpdateVideoProgressParams struct {
+	TorrentFileID   string
+	UserID          string
+	PositionSeconds float64
+	DurationSeconds float64
 }
 
 func NewStore(db *sql.DB) *Store {
@@ -816,6 +830,83 @@ func (s *Store) findSubtitleByPath(ctx context.Context, torrentFileID string, pa
 	`, strings.TrimSpace(torrentFileID), strings.TrimSpace(path)))
 }
 
+func (s *Store) FindVideoProgressForOwner(ctx context.Context, torrentFileID string, ownerUserID string) (VideoProgress, error) {
+	return scanVideoProgress(s.db.QueryRowContext(ctx, `
+		SELECT vp.torrent_file_id, vp.position_seconds, vp.duration_seconds, vp.updated_at
+		FROM video_progress vp
+		INNER JOIN torrent_files tf ON tf.id = vp.torrent_file_id
+		WHERE vp.torrent_file_id = ? AND vp.user_id = ? AND tf.owner_user_id = ?
+	`, strings.TrimSpace(torrentFileID), strings.TrimSpace(ownerUserID), strings.TrimSpace(ownerUserID)))
+}
+
+// ListVideoProgressForOwner returns every saved playback position for the
+// owner, most recently watched first.
+func (s *Store) ListVideoProgressForOwner(ctx context.Context, ownerUserID string) ([]VideoProgress, error) {
+	ownerUserID = strings.TrimSpace(ownerUserID)
+	if ownerUserID == "" {
+		return nil, nil
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT vp.torrent_file_id, vp.position_seconds, vp.duration_seconds, vp.updated_at
+		FROM video_progress vp
+		INNER JOIN torrent_files tf ON tf.id = vp.torrent_file_id
+		WHERE vp.user_id = ? AND tf.owner_user_id = ?
+		ORDER BY vp.updated_at DESC
+	`, ownerUserID, ownerUserID)
+	if err != nil {
+		return nil, fmt.Errorf("list video progress: %w", err)
+	}
+	defer rows.Close()
+
+	progress := make([]VideoProgress, 0)
+	for rows.Next() {
+		record, err := scanVideoProgressValues(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan video progress: %w", err)
+		}
+		progress = append(progress, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate video progress: %w", err)
+	}
+
+	return progress, nil
+}
+
+func (s *Store) UpsertVideoProgressForOwner(ctx context.Context, params UpdateVideoProgressParams) (VideoProgress, error) {
+	torrentFileID := strings.TrimSpace(params.TorrentFileID)
+	userID := strings.TrimSpace(params.UserID)
+	if torrentFileID == "" || userID == "" {
+		return VideoProgress{}, ErrNotFound
+	}
+
+	positionSeconds := maxFloat(params.PositionSeconds, 0)
+	durationSeconds := maxFloat(params.DurationSeconds, 0)
+	if durationSeconds > 0 && positionSeconds > durationSeconds {
+		positionSeconds = durationSeconds
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		INSERT INTO video_progress (user_id, torrent_file_id, position_seconds, duration_seconds, updated_at)
+		SELECT ?, tf.id, ?, ?, CURRENT_TIMESTAMP
+		FROM torrent_files tf
+		WHERE tf.id = ? AND tf.owner_user_id = ?
+		ON CONFLICT(user_id, torrent_file_id) DO UPDATE SET
+			position_seconds = excluded.position_seconds,
+			duration_seconds = excluded.duration_seconds,
+			updated_at = CURRENT_TIMESTAMP
+	`, userID, positionSeconds, durationSeconds, torrentFileID, userID)
+	if err != nil {
+		return VideoProgress{}, fmt.Errorf("upsert video progress: %w", err)
+	}
+	if err := checkRowsAffected(result); err != nil {
+		return VideoProgress{}, err
+	}
+
+	return s.FindVideoProgressForOwner(ctx, torrentFileID, userID)
+}
+
 func (s *Store) MarkTorrentError(ctx context.Context, id string, message string) error {
 	message = strings.TrimSpace(message)
 	if message == "" {
@@ -1012,6 +1103,32 @@ func scanSubtitleValues(row rowScanner) (Subtitle, error) {
 	}
 
 	return subtitle, nil
+}
+
+func scanVideoProgress(row rowScanner) (VideoProgress, error) {
+	progress, err := scanVideoProgressValues(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return VideoProgress{}, ErrNotFound
+		}
+		return VideoProgress{}, fmt.Errorf("scan video progress: %w", err)
+	}
+
+	return progress, nil
+}
+
+func scanVideoProgressValues(row rowScanner) (VideoProgress, error) {
+	var progress VideoProgress
+	if err := row.Scan(
+		&progress.TorrentFileID,
+		&progress.PositionSeconds,
+		&progress.DurationSeconds,
+		&progress.UpdatedAt,
+	); err != nil {
+		return VideoProgress{}, err
+	}
+
+	return progress, nil
 }
 
 func IsDirectPlayable(file TorrentFile) bool {

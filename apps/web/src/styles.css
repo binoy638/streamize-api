@@ -605,6 +605,17 @@
     text-shadow: 0 2px 14px oklch(0% 0 0 / 0.7);
   }
 
+  /* continue-watching strip pinned to the bottom edge of the poster */
+  .poster-progress {
+    @apply pointer-events-none absolute inset-x-0 bottom-0 z-[4] h-[4px];
+    background: oklch(0% 0 0 / 0.55);
+  }
+
+  .poster-progress > span {
+    @apply block h-full rounded-r-full;
+    background: var(--accent);
+  }
+
   .media-body {
     @apply flex flex-1 flex-col gap-3 p-[14px];
   }
@@ -613,12 +624,9 @@
     @apply truncate font-display text-base font-bold leading-tight tracking-[-0.01em];
   }
 
+  /* single-line so every card's footer aligns; full string shows on hover */
   .media-meta {
-    @apply flex flex-wrap gap-x-[7px] gap-y-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--muted)];
-  }
-
-  .media-meta span {
-    overflow-wrap: anywhere;
+    @apply truncate font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--muted)];
   }
 
   /* card footer — primary action fills, share/delete are compact icons */
@@ -1186,6 +1194,15 @@
   .player-controls {
     @apply absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1.5 px-3 pb-3 pt-12;
     background: linear-gradient(to top, oklch(0% 0 0 / 0.9), oklch(0% 0 0 / 0.45) 56%, transparent);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+
+  .player-controls.is-hidden {
+    @apply pointer-events-none translate-y-3 opacity-0;
+  }
+
+  .player-stage.controls-hidden {
+    cursor: none;
   }
 
   .control-row {

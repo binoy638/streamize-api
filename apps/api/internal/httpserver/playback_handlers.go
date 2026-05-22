@@ -24,6 +24,19 @@ type PlaybackHandler struct {
 	ThumbnailsDir string
 }
 
+type videoProgressResponse struct {
+	Progress torrents.VideoProgress `json:"progress"`
+}
+
+type videoProgressListResponse struct {
+	Progress []torrents.VideoProgress `json:"progress"`
+}
+
+type updateVideoProgressRequest struct {
+	PositionSeconds float64 `json:"positionSeconds"`
+	DurationSeconds float64 `json:"durationSeconds"`
+}
+
 func (h PlaybackHandler) ServeHLSPlaylist(w http.ResponseWriter, r *http.Request) {
 	file, ok := h.loadPlayableFile(w, r)
 	if !ok {
@@ -113,6 +126,86 @@ func (h PlaybackHandler) ServeOriginalFile(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	http.ServeFile(w, r, originalPath)
+}
+
+func (h PlaybackHandler) GetVideoProgress(w http.ResponseWriter, r *http.Request) {
+	user, ok := CurrentUser(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	fileID := chi.URLParam(r, "id")
+	if _, err := h.Store.FindTorrentFileByIDForOwner(r.Context(), fileID, user.ID); err != nil {
+		if errors.Is(err, torrents.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "file not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load file")
+		return
+	}
+
+	progress, err := h.Store.FindVideoProgressForOwner(r.Context(), fileID, user.ID)
+	if err != nil {
+		if errors.Is(err, torrents.ErrNotFound) {
+			progress = torrents.VideoProgress{TorrentFileID: strings.TrimSpace(fileID)}
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to load video progress")
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, videoProgressResponse{Progress: progress})
+}
+
+func (h PlaybackHandler) ListVideoProgress(w http.ResponseWriter, r *http.Request) {
+	user, ok := CurrentUser(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	progress, err := h.Store.ListVideoProgressForOwner(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load video progress")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, videoProgressListResponse{Progress: progress})
+}
+
+func (h PlaybackHandler) SaveVideoProgress(w http.ResponseWriter, r *http.Request) {
+	user, ok := CurrentUser(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var request updateVideoProgressRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if request.PositionSeconds < 0 || request.DurationSeconds < 0 {
+		writeError(w, http.StatusBadRequest, "progress values must be non-negative")
+		return
+	}
+
+	progress, err := h.Store.UpsertVideoProgressForOwner(r.Context(), torrents.UpdateVideoProgressParams{
+		TorrentFileID:   chi.URLParam(r, "id"),
+		UserID:          user.ID,
+		PositionSeconds: request.PositionSeconds,
+		DurationSeconds: request.DurationSeconds,
+	})
+	if err != nil {
+		if errors.Is(err, torrents.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "file not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to save video progress")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, videoProgressResponse{Progress: progress})
 }
 
 func (h PlaybackHandler) ListSubtitles(w http.ResponseWriter, r *http.Request) {
