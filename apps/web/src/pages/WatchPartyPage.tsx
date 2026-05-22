@@ -1,12 +1,10 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type Hls from "hls.js";
 
 import * as api from "../lib/api";
 import { Badge, Button, Field, Input, LoadingScreen, StatCard } from "../components/ui";
+import { VideoPlayer } from "../components/VideoPlayer";
 import { formatBytes } from "../lib/format";
-
-type HlsInstance = InstanceType<typeof Hls>;
 
 type PartySocketMessage = {
   type: "snapshot" | "play" | "pause" | "seek" | "sync" | "participant_joined" | "participant_left" | "ended" | "error";
@@ -69,67 +67,6 @@ export function WatchPartyPage() {
   useEffect(() => {
     void loadParty();
   }, [loadParty]);
-
-  useEffect(() => {
-    if (!playbackSource || !file) {
-      return;
-    }
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-
-    setNotice("");
-    video.removeAttribute("src");
-    video.load();
-
-    if (!file.hlsReady) {
-      video.src = playbackSource;
-      return () => {
-        video.removeAttribute("src");
-        video.load();
-      };
-    }
-
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = playbackSource;
-      return () => {
-        video.removeAttribute("src");
-        video.load();
-      };
-    }
-
-    let canceled = false;
-    let hls: HlsInstance | null = null;
-    void import("hls.js")
-      .then(({ default: Hls }) => {
-        if (canceled) {
-          return;
-        }
-        if (!Hls.isSupported()) {
-          setNotice("This browser cannot play HLS streams.");
-          return;
-        }
-        hls = new Hls({
-          xhrSetup: (xhr) => {
-            xhr.withCredentials = true;
-          },
-        });
-        hls.loadSource(playbackSource);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.ERROR, (_, data) => {
-          if (data.fatal) {
-            setNotice("Playback failed while loading the party stream.");
-          }
-        });
-      })
-      .catch(() => setNotice("Unable to load the HLS player."));
-
-    return () => {
-      canceled = true;
-      hls?.destroy();
-    };
-  }, [file, playbackSource]);
 
   useEffect(() => {
     if (!party || !file || !session) {
@@ -389,28 +326,24 @@ export function WatchPartyPage() {
       ) : null}
 
       <div className="player-layout">
-        <section className="player-stage" aria-label="Watch party player">
-          {playbackSource ? (
-            <video
-              ref={videoRef}
-              className="video-player"
-              controls={canControl}
-              playsInline
-              onPlay={() => sendPlayback("play")}
-              onPause={() => sendPlayback("pause")}
-              onSeeked={() => sendPlayback("seek")}
-            >
-              {subtitles.map((subtitle) => (
-                <track
-                  key={subtitle.id}
-                  kind="subtitles"
-                  src={subtitle.url}
-                  srcLang={subtitle.language}
-                  label={subtitle.title || subtitle.language.toUpperCase()}
-                />
-              ))}
-            </video>
-          ) : (
+        <VideoPlayer
+          source={playbackSource}
+          isDirect={Boolean(file && !file.hlsReady && file.directPlayable)}
+          withCredentials
+          subtitles={subtitles}
+          previewVTTURL={
+            file?.progressPreview && party && session
+              ? api.watchPartyPreviewVTTURL(party.slug, file.id, session)
+              : undefined
+          }
+          previewWithCredentials
+          transportLocked={!canControl}
+          videoRef={videoRef}
+          onPlay={() => sendPlayback("play")}
+          onPause={() => sendPlayback("pause")}
+          onSeeked={() => sendPlayback("seek")}
+          onError={(message) => setNotice(message)}
+          fallback={
             <div className="player-frame">
               <div className="player-gradient">
                 <span className="eyebrow">Playback</span>
@@ -418,8 +351,8 @@ export function WatchPartyPage() {
                 <p>This watch party file is not ready for public playback.</p>
               </div>
             </div>
-          )}
-        </section>
+          }
+        />
 
         <aside className="panel player-side">
           <div className="panel-header">

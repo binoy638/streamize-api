@@ -1,33 +1,70 @@
-import { type FormEvent, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Badge, Button, EmptyState, Field, Input, Modal, Select, StatCard } from "../components/ui";
-import { type Share, shares as initialShares } from "../lib/mock-data";
+import { Badge, Button, EmptyState, Input, LoadingScreen, StatCard } from "../components/ui";
+import { CreateShareModal } from "../components/CreateShareModal";
+import * as api from "../lib/api";
 
-const filters = ["all", "online", "paused", "offline"];
+type ShareFilter = "all" | "active" | "expired";
+
+const FILTERS: ShareFilter[] = ["all", "active", "expired"];
 
 export function SharesPage() {
-  const [shares, setShares] = useState<Share[]>(initialShares);
-  const [filter, setFilter] = useState("all");
+  const [shares, setShares] = useState<api.ShareSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [filter, setFilter] = useState<ShareFilter>("all");
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [revokingId, setRevokingId] = useState("");
+
+  const loadShares = useCallback(async () => {
+    try {
+      const records = await api.listShares();
+      setShares(records);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load shares.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadShares();
+  }, [loadShares]);
+
+  const stats = useMemo(() => {
+    const active = shares.filter((share) => !share.expired).length;
+    return { active, expired: shares.length - active, total: shares.length };
+  }, [shares]);
 
   const visible = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return shares.filter((share) => {
-      const matchesFilter = filter === "all" || share.status === filter;
+      const matchesFilter =
+        filter === "all" || (filter === "active" ? !share.expired : share.expired);
       const matchesQuery = !normalized || [share.title, share.scope, share.url].join(" ").toLowerCase().includes(normalized);
       return matchesFilter && matchesQuery;
     });
   }, [filter, query, shares]);
 
-  function revoke(id: string) {
-    setShares((current) =>
-      current.map((share) => (share.id === id ? { ...share, status: "offline" } : share)),
-    );
+  async function revoke(share: api.ShareSummary) {
+    setRevokingId(share.id);
+    setNotice("");
+    try {
+      await api.revokeShare(share.id);
+      setShares((current) => current.filter((record) => record.id !== share.id));
+      setNotice(`Revoked the share link for "${share.title}".`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to revoke share.");
+    } finally {
+      setRevokingId("");
+    }
   }
 
-  function addShare(share: Share) {
-    setShares((current) => [share, ...current]);
+  if (loading) {
+    return <LoadingScreen label="Loading shares" />;
   }
 
   return (
@@ -35,26 +72,28 @@ export function SharesPage() {
       <div className="screen-header">
         <div>
           <span className="eyebrow">Public sharing</span>
-          <h1>Expiring links with scope, owner, and revoke controls visible.</h1>
-          <p>Share links are treated as operational records with clear expiry and status states.</p>
+          <h1>Expiring links anyone can watch — no account required.</h1>
+          <p>Create, copy, and revoke share links. Expired links stop working immediately.</p>
         </div>
         <div className="header-actions">
-          <Button variant="primary" onClick={() => setOpen(true)}>
+          <Button variant="primary" onClick={() => setCreateOpen(true)}>
             Create share
           </Button>
         </div>
       </div>
 
+      {error ? <div className="alert alert-error is-visible">{error}</div> : null}
+      {notice ? <div className="alert alert-success is-visible">{notice}</div> : null}
+
       <div className="stats-row">
-        <StatCard label="Active shares" value="2" detail="publicly reachable" />
-        <StatCard label="Expired" value="1" detail="hidden by default" />
-        <StatCard label="Most recent" value="24h" detail="Neon Harbor" />
-        <StatCard label="Owners" value="2" detail="admin, mira" />
+        <StatCard label="Active shares" value={String(stats.active)} detail="publicly reachable" />
+        <StatCard label="Expired" value={String(stats.expired)} detail="no longer working" />
+        <StatCard label="Total" value={String(stats.total)} detail="links created" />
       </div>
 
       <div className="toolbar">
         <div className="filters">
-          {filters.map((status) => (
+          {FILTERS.map((status) => (
             <button
               key={status}
               className={`filter-chip ${filter === status ? "active" : ""}`}
@@ -78,7 +117,6 @@ export function SharesPage() {
                 <th>Scope</th>
                 <th>Status</th>
                 <th>Expires</th>
-                <th>Owner</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -91,17 +129,22 @@ export function SharesPage() {
                       <span>{share.url}</span>
                     </div>
                   </td>
-                  <td>{share.scope}</td>
+                  <td>{scopeLabel(share)}</td>
                   <td>
-                    <Badge tone={share.status}>{share.status}</Badge>
+                    <Badge tone={share.expired ? "offline" : "online"}>
+                      {share.expired ? "Expired" : "Active"}
+                    </Badge>
                   </td>
-                  <td>{share.expiresAt}</td>
-                  <td>{share.createdBy}</td>
+                  <td>{formatExpiry(share.expiresAt)}</td>
                   <td>
                     <div className="row-actions">
                       <Button onClick={() => void navigator.clipboard?.writeText(share.url)}>Copy</Button>
-                      <Button variant="danger" onClick={() => revoke(share.id)}>
-                        Revoke
+                      <Button
+                        variant="danger"
+                        disabled={revokingId === share.id}
+                        onClick={() => void revoke(share)}
+                      >
+                        {revokingId === share.id ? "Revoking…" : "Revoke"}
                       </Button>
                     </div>
                   </td>
@@ -110,84 +153,38 @@ export function SharesPage() {
             </tbody>
           </table>
         </div>
-        {visible.length === 0 ? <EmptyState title="No shares">No links match this view.</EmptyState> : null}
+        {visible.length === 0 ? (
+          <EmptyState title="No shares">
+            {shares.length === 0
+              ? "Create a share link to let anyone watch a video without signing in."
+              : "No links match this view."}
+          </EmptyState>
+        ) : null}
       </div>
 
-      <CreateShareModal open={open} onClose={() => setOpen(false)} onCreate={addShare} />
+      <CreateShareModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {
+          setNotice("Share link created and copied to clipboard.");
+          void loadShares();
+        }}
+      />
     </section>
   );
 }
 
-function CreateShareModal({
-  open,
-  onClose,
-  onCreate,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreate: (share: Share) => void;
-}) {
-  const [title, setTitle] = useState("Neon Harbor S02E04");
-  const [scope, setScope] = useState<Share["scope"]>("Single video");
-  const [expiration, setExpiration] = useState("24 hours");
-  const [result, setResult] = useState("");
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    const id = `shr_${Date.now()}`;
-    const url = `https://streamize.local/s/${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
-    onCreate({
-      id,
-      title,
-      scope,
-      url,
-      expiresAt: expiration,
-      status: "online",
-      createdBy: "admin",
-    });
-    setResult(url);
+function scopeLabel(share: api.ShareSummary): string {
+  if (share.scope === "torrent") {
+    return `Full torrent · ${share.fileCount} file${share.fileCount === 1 ? "" : "s"}`;
   }
+  return "Single video";
+}
 
-  return (
-    <Modal
-      title="Create share link"
-      open={open}
-      onClose={onClose}
-      footer={
-        <Button variant="primary" type="submit" form="create-share-form">
-          Generate link
-        </Button>
-      }
-    >
-      <form id="create-share-form" className="contents" onSubmit={submit}>
-        <Field label="Title">
-          <Input value={title} onChange={(event) => setTitle(event.target.value)} />
-        </Field>
-        <Field label="Expiration">
-          <Select value={expiration} onChange={(event) => setExpiration(event.target.value)}>
-            <option>24 hours</option>
-            <option>7 days</option>
-            <option>30 days</option>
-          </Select>
-        </Field>
-        <Field label="Share scope">
-          <Select value={scope} onChange={(event) => setScope(event.target.value as Share["scope"])}>
-            <option>Single video</option>
-            <option>Full torrent</option>
-          </Select>
-        </Field>
-        {result ? (
-          <>
-            <div className="alert alert-success is-visible">Share created.</div>
-            <div className="share-link">
-              <Input readOnly value={result} />
-              <Button type="button" onClick={() => void navigator.clipboard?.writeText(result)}>
-                Copy
-              </Button>
-            </div>
-          </>
-        ) : null}
-      </form>
-    </Modal>
-  );
+function formatExpiry(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }

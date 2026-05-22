@@ -10,6 +10,7 @@ import { LibraryDetailPage } from "./pages/LibraryDetailPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { PlayerPage } from "./pages/PlayerPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SharePage } from "./pages/SharePage";
 import { SharesPage } from "./pages/SharesPage";
 import { SignInPage } from "./pages/SignInPage";
 import { TorrentDetailPage } from "./pages/TorrentDetailPage";
@@ -83,6 +84,7 @@ export function App() {
         <Route path="/" element={<Navigate to="/library" replace />} />
         <Route path="/sign-in" element={<SignInRoute />} />
         <Route path="/watch/:slug" element={<WatchPartyPage />} />
+        <Route path="/s/:slug" element={<SharePage />} />
         <Route
           path="/library"
           element={

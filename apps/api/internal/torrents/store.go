@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/binoy638/streamize-api/apps/api/internal/auth"
 )
@@ -159,6 +160,34 @@ type UpdateVideoProgressParams struct {
 	UserID          string
 	PositionSeconds float64
 	DurationSeconds float64
+}
+
+// Share is a public, expiring link granting login-free access to either a
+// single torrent file or every file in a torrent.
+type Share struct {
+	ID            string `json:"id"`
+	OwnerUserID   string `json:"ownerUserId"`
+	Slug          string `json:"slug"`
+	TorrentID     string `json:"torrentId,omitempty"`
+	TorrentFileID string `json:"torrentFileId,omitempty"`
+	ExpiresAt     string `json:"expiresAt"`
+	CreatedAt     string `json:"createdAt"`
+}
+
+type CreateShareParams struct {
+	OwnerUserID   string
+	TorrentID     string
+	TorrentFileID string
+	ExpiresAt     time.Time
+}
+
+// Expired reports whether the share's expiry has passed.
+func (share Share) Expired(now time.Time) bool {
+	expiresAt, err := time.Parse(time.RFC3339, share.ExpiresAt)
+	if err != nil {
+		return true
+	}
+	return !now.UTC().Before(expiresAt)
 }
 
 func NewStore(db *sql.DB) *Store {
@@ -907,6 +936,105 @@ func (s *Store) UpsertVideoProgressForOwner(ctx context.Context, params UpdateVi
 	return s.FindVideoProgressForOwner(ctx, torrentFileID, userID)
 }
 
+// CreateShare inserts a new public share link. Exactly one of TorrentID or
+// TorrentFileID must be set, matching the table's CHECK constraint.
+func (s *Store) CreateShare(ctx context.Context, params CreateShareParams) (Share, error) {
+	ownerUserID := strings.TrimSpace(params.OwnerUserID)
+	torrentID := strings.TrimSpace(params.TorrentID)
+	torrentFileID := strings.TrimSpace(params.TorrentFileID)
+	if ownerUserID == "" {
+		return Share{}, ErrNotFound
+	}
+	if (torrentID == "") == (torrentFileID == "") {
+		return Share{}, fmt.Errorf("share must target exactly one of a torrent or a file")
+	}
+
+	id, err := auth.NewID("shr")
+	if err != nil {
+		return Share{}, err
+	}
+	slug, err := auth.NewID("s")
+	if err != nil {
+		return Share{}, err
+	}
+
+	expiresAt := params.ExpiresAt.UTC()
+	if expiresAt.IsZero() {
+		expiresAt = time.Now().UTC().Add(24 * time.Hour)
+	}
+
+	var torrentArg, fileArg any
+	if torrentID != "" {
+		torrentArg = torrentID
+	}
+	if torrentFileID != "" {
+		fileArg = torrentFileID
+	}
+
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO shares (id, owner_user_id, slug, torrent_id, torrent_file_id, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, id, ownerUserID, slug, torrentArg, fileArg, expiresAt.Format(time.RFC3339)); err != nil {
+		return Share{}, fmt.Errorf("create share: %w", err)
+	}
+
+	return s.FindShareByID(ctx, id)
+}
+
+func (s *Store) FindShareByID(ctx context.Context, id string) (Share, error) {
+	return scanShare(s.db.QueryRowContext(ctx, `
+		SELECT id, owner_user_id, slug, torrent_id, torrent_file_id, expires_at, created_at
+		FROM shares
+		WHERE id = ?
+	`, strings.TrimSpace(id)))
+}
+
+func (s *Store) FindShareBySlug(ctx context.Context, slug string) (Share, error) {
+	return scanShare(s.db.QueryRowContext(ctx, `
+		SELECT id, owner_user_id, slug, torrent_id, torrent_file_id, expires_at, created_at
+		FROM shares
+		WHERE slug = ?
+	`, strings.TrimSpace(slug)))
+}
+
+func (s *Store) ListSharesForOwner(ctx context.Context, ownerUserID string) ([]Share, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, owner_user_id, slug, torrent_id, torrent_file_id, expires_at, created_at
+		FROM shares
+		WHERE owner_user_id = ?
+		ORDER BY created_at DESC, id DESC
+	`, strings.TrimSpace(ownerUserID))
+	if err != nil {
+		return nil, fmt.Errorf("list shares: %w", err)
+	}
+	defer rows.Close()
+
+	shares := make([]Share, 0)
+	for rows.Next() {
+		share, err := scanShareValues(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan share: %w", err)
+		}
+		shares = append(shares, share)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate shares: %w", err)
+	}
+
+	return shares, nil
+}
+
+func (s *Store) DeleteShare(ctx context.Context, id string, ownerUserID string) error {
+	result, err := s.db.ExecContext(ctx, `
+		DELETE FROM shares
+		WHERE id = ? AND owner_user_id = ?
+	`, strings.TrimSpace(id), strings.TrimSpace(ownerUserID))
+	if err != nil {
+		return fmt.Errorf("delete share: %w", err)
+	}
+	return checkRowsAffected(result)
+}
+
 func (s *Store) MarkTorrentError(ctx context.Context, id string, message string) error {
 	message = strings.TrimSpace(message)
 	if message == "" {
@@ -1115,6 +1243,36 @@ func scanVideoProgress(row rowScanner) (VideoProgress, error) {
 	}
 
 	return progress, nil
+}
+
+func scanShare(row rowScanner) (Share, error) {
+	share, err := scanShareValues(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return Share{}, ErrNotFound
+		}
+		return Share{}, fmt.Errorf("scan share: %w", err)
+	}
+	return share, nil
+}
+
+func scanShareValues(row rowScanner) (Share, error) {
+	var share Share
+	var torrentID, torrentFileID sql.NullString
+	if err := row.Scan(
+		&share.ID,
+		&share.OwnerUserID,
+		&share.Slug,
+		&torrentID,
+		&torrentFileID,
+		&share.ExpiresAt,
+		&share.CreatedAt,
+	); err != nil {
+		return Share{}, err
+	}
+	share.TorrentID = torrentID.String
+	share.TorrentFileID = torrentFileID.String
+	return share, nil
 }
 
 func scanVideoProgressValues(row rowScanner) (VideoProgress, error) {

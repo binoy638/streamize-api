@@ -151,6 +151,10 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 		Playback:     playbackHandler,
 		Hub:          watchPartyHub,
 	}
+	shareHandler := ShareHandler{
+		Store:    torrentStore,
+		Playback: playbackHandler,
+	}
 
 	router.Route("/api", func(api chi.Router) {
 		api.NotFound(notFoundHandler)
@@ -169,6 +173,15 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 		api.Get("/watch-parties/join/{slug}/files/{id}/subtitles/{subtitleID}/track.vtt", watchPartyHandler.ServeSubtitleTrack)
 		api.Get("/watch-parties/join/{slug}/files/{id}/preview/thumbnails.vtt", watchPartyHandler.ServePreviewVTT)
 		api.Get("/watch-parties/join/{slug}/files/{id}/preview/{asset}", watchPartyHandler.ServePreviewAsset)
+
+		api.Get("/shares/view/{slug}", shareHandler.PublicMetadata)
+		api.Get("/shares/view/{slug}/files/{id}/original", shareHandler.ServeOriginalFile)
+		api.Get("/shares/view/{slug}/files/{id}/hls/index.m3u8", shareHandler.ServeHLSPlaylist)
+		api.Get("/shares/view/{slug}/files/{id}/hls/{segment}", shareHandler.ServeHLSSegment)
+		api.Get("/shares/view/{slug}/files/{id}/subtitles", shareHandler.ListSubtitles)
+		api.Get("/shares/view/{slug}/files/{id}/subtitles/{subtitleID}/track.vtt", shareHandler.ServeSubtitleTrack)
+		api.Get("/shares/view/{slug}/files/{id}/preview/thumbnails.vtt", shareHandler.ServePreviewVTT)
+		api.Get("/shares/view/{slug}/files/{id}/preview/{asset}", shareHandler.ServePreviewAsset)
 
 		api.Group(func(protected chi.Router) {
 			protected.Use(RequireUser(cfg, authStore))
@@ -191,6 +204,9 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 			protected.Get("/watch-parties", watchPartyHandler.List)
 			protected.Post("/watch-parties", watchPartyHandler.Create)
 			protected.Post("/watch-parties/{id}/end", watchPartyHandler.End)
+			protected.Get("/shares", shareHandler.List)
+			protected.Post("/shares", shareHandler.Create)
+			protected.Delete("/shares/{id}", shareHandler.Revoke)
 			protected.Get("/files/{id}/original", playbackHandler.ServeOriginalFile)
 			protected.Get("/files/{id}/hls/index.m3u8", playbackHandler.ServeHLSPlaylist)
 			protected.Get("/files/{id}/hls/{segment}", playbackHandler.ServeHLSSegment)

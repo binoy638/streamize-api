@@ -472,3 +472,83 @@ function watchPartyQuery(session: WatchPartySession): string {
   });
   return params.toString();
 }
+
+export type ShareScope = "file" | "torrent";
+
+export type ShareSummary = {
+  id: string;
+  slug: string;
+  scope: ShareScope;
+  title: string;
+  url: string;
+  fileCount: number;
+  expiresAt: string;
+  createdAt: string;
+  expired: boolean;
+};
+
+export type ShareFile = {
+  id: string;
+  name: string;
+  sizeBytes: number;
+  durationSeconds?: number;
+  videoCodec?: string;
+  audioCodec?: string;
+  hlsReady: boolean;
+  directPlayable: boolean;
+  progressPreview: boolean;
+};
+
+export type SharedItem = {
+  slug: string;
+  scope: ShareScope;
+  title: string;
+  expiresAt: string;
+  files: ShareFile[];
+};
+
+export type CreateShareInput = {
+  torrentId?: string;
+  torrentFileId?: string;
+  expiresInHours: number;
+};
+
+export async function listShares(): Promise<ShareSummary[]> {
+  const body = await apiFetch<{ shares: ShareSummary[] }>("/api/shares");
+  return body.shares;
+}
+
+export async function createShare(input: CreateShareInput): Promise<ShareSummary> {
+  const body = await apiFetch<{ share: ShareSummary }>("/api/shares", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return body.share;
+}
+
+export async function revokeShare(id: string): Promise<void> {
+  await apiFetch<void>(`/api/shares/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function getSharedItem(slug: string): Promise<SharedItem> {
+  return apiFetch<SharedItem>(`/api/shares/view/${encodeURIComponent(slug)}`);
+}
+
+export async function listShareSubtitles(slug: string, fileId: string): Promise<Subtitle[]> {
+  const body = await apiFetch<{ subtitles: Subtitle[] }>(
+    `/api/shares/view/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}/subtitles`,
+  );
+  return body.subtitles;
+}
+
+export function shareHLSPlaylistURL(slug: string, fileId: string): string {
+  return `/api/shares/view/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}/hls/index.m3u8`;
+}
+
+export function shareOriginalURL(slug: string, fileId: string): string {
+  return `/api/shares/view/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}/original`;
+}
+
+export function sharePreviewVTTURL(slug: string, fileId: string): string {
+  return `/api/shares/view/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}/preview/thumbnails.vtt`;
+}

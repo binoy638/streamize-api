@@ -1,19 +1,9 @@
-import {
-  type CSSProperties,
-  type FormEvent,
-  type PointerEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Captions, Gauge, Maximize, Minimize, Pause, Play, Volume2, VolumeX } from "lucide-react";
-import type Hls from "hls.js";
 
 import * as api from "../lib/api";
 import { Badge, Button, Field, Input, Modal, Select } from "../components/ui";
+import { VideoPlayer } from "../components/VideoPlayer";
 import { formatBytes } from "../lib/format";
 import { filesForTorrent, findMedia, torrentFiles } from "../lib/mock-data";
 
@@ -31,22 +21,6 @@ type PlayerFile = {
   previewReady: boolean;
 };
 
-type HlsInstance = InstanceType<typeof Hls>;
-
-type ControlMenu = "speed" | "cc" | null;
-
-type PreviewCue = {
-  start: number;
-  end: number;
-  image: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const CONTROLS_HIDE_DELAY_MS = 2800;
 const PROGRESS_SAVE_INTERVAL_MS = 10_000;
 const PROGRESS_SAVE_DELTA_SECONDS = 5;
 const RESUME_SKIP_AT_END_SECONDS = 8;
@@ -54,7 +28,6 @@ const RESUME_SKIP_AT_END_SECONDS = 8;
 export function PlayerPage() {
   const { fileId } = useParams();
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const stageRef = useRef<HTMLElement | null>(null);
   const initialMedia = findMedia(fileId);
   const mockRelated = useMemo(() => {
     const files = filesForTorrent(initialMedia.torrentId);
@@ -63,25 +36,11 @@ export function PlayerPage() {
   const [related, setRelated] = useState<PlayerFile[]>(mockRelated);
   const [selectedFileId, setSelectedFileId] = useState(fileId || related[0]?.id);
   const selectedFile = related.find((file) => file.id === selectedFileId) || related[0];
-  const [playing, setPlaying] = useState(false);
-  const [position, setPosition] = useState(0);
-  const [currentSeconds, setCurrentSeconds] = useState(0);
   const [durationSeconds, setDurationSeconds] = useState(0);
-  const [volume, setVolume] = useState(1);
-  const [muted, setMuted] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [activeTrack, setActiveTrack] = useState(-1);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [menu, setMenu] = useState<ControlMenu>(null);
-  const [controlsVisible, setControlsVisible] = useState(true);
-  const hideControlsTimerRef = useRef<number | null>(null);
-  const pointerOverControlsRef = useRef(false);
   const [usingMock, setUsingMock] = useState(true);
   const [error, setError] = useState("");
   const [subtitles, setSubtitles] = useState<api.Subtitle[]>([]);
   const [savedProgress, setSavedProgress] = useState<api.VideoProgress | null>(null);
-  const [previewCues, setPreviewCues] = useState<PreviewCue[]>([]);
-  const [previewPercent, setPreviewPercent] = useState<number | null>(null);
   const [partyOpen, setPartyOpen] = useState(false);
   const [partyMode, setPartyMode] = useState<api.WatchPartyControlMode>("host_only");
   const [partyDisplayName, setPartyDisplayName] = useState("");
@@ -94,9 +53,7 @@ export function PlayerPage() {
   const hlsSource = selectedFile?.source === "api" && selectedFile.playable ? hlsPlaylistURL(selectedFile.id) : "";
   const directSource = selectedFile?.source === "api" && !hlsSource && selectedFile.directPlayable ? originalFileURL(selectedFile.id) : "";
   const playbackSource = hlsSource || directSource;
-  const previewStyle = selectedFile?.source === "api" && selectedFile.previewReady && previewPercent !== null && durationSeconds > 0
-    ? spritePreviewStyle(previewCues, previewPercent, durationSeconds)
-    : undefined;
+  const previewVTT = selectedFile?.source === "api" && selectedFile.previewReady ? previewVTTURL(selectedFile.id) : undefined;
 
   const loadAPIFile = useCallback(async () => {
     if (!fileId) {
@@ -133,75 +90,6 @@ export function PlayerPage() {
   }, [loadAPIFile]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    setDurationSeconds(0);
-    if (!video || !playbackSource) {
-      return;
-    }
-
-    resumeAppliedRef.current = "";
-    setError("");
-    setPlaying(false);
-    setPosition(0);
-    setCurrentSeconds(0);
-    video.removeAttribute("src");
-    video.load();
-
-    if (directSource) {
-      video.src = directSource;
-      return () => {
-        video.removeAttribute("src");
-        video.load();
-      };
-    }
-
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = hlsSource;
-      return () => {
-        video.removeAttribute("src");
-        video.load();
-      };
-    }
-
-    let canceled = false;
-    let hls: HlsInstance | null = null;
-
-    void import("hls.js")
-      .then(({ default: Hls }) => {
-        if (canceled) {
-          return;
-        }
-        if (!Hls.isSupported()) {
-          setError("This browser cannot play HLS streams.");
-          return;
-        }
-
-        hls = new Hls({
-          xhrSetup: (xhr) => {
-            xhr.withCredentials = true;
-          },
-        });
-        hls.loadSource(hlsSource);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.ERROR, (_, data) => {
-          if (data.fatal) {
-            setError("Playback failed while loading the HLS stream.");
-          }
-        });
-      })
-      .catch(() => {
-        if (!canceled) {
-          setError("Unable to load the HLS player.");
-        }
-      });
-
-    return () => {
-      canceled = true;
-      hls?.destroy();
-    };
-  }, [directSource, hlsSource, playbackSource]);
-
-  useEffect(() => {
     setSavedProgress(null);
     resumeAppliedRef.current = "";
     lastProgressSaveRef.current = { fileId: selectedFile?.id || "", positionSeconds: 0, savedAt: 0 };
@@ -229,77 +117,8 @@ export function PlayerPage() {
     };
   }, [selectedFile?.id, selectedFile?.source, playbackSource]);
 
-  // Keep volume / mute / speed applied to the element, including after a source swap.
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-    video.volume = volume;
-    video.muted = muted;
-    video.playbackRate = playbackRate;
-  }, [volume, muted, playbackRate, playbackSource]);
-
-  // Drive subtitle visibility ourselves since the native controls are hidden.
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-    const tracks = video.textTracks;
-    for (let index = 0; index < tracks.length; index += 1) {
-      tracks[index].mode = index === activeTrack ? "showing" : "disabled";
-    }
-  }, [activeTrack, subtitles, playbackSource]);
-
-  useEffect(() => {
-    const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, []);
-
-  // Reveal the controls and, while playback is running, schedule them to fade back out.
-  const revealControls = useCallback(() => {
-    setControlsVisible(true);
-    if (hideControlsTimerRef.current !== null) {
-      window.clearTimeout(hideControlsTimerRef.current);
-      hideControlsTimerRef.current = null;
-    }
-    if (playing && !menu && !pointerOverControlsRef.current) {
-      hideControlsTimerRef.current = window.setTimeout(() => {
-        setControlsVisible(false);
-      }, CONTROLS_HIDE_DELAY_MS);
-    }
-  }, [playing, menu]);
-
-  // Re-evaluate auto-hide whenever play state or an open menu changes.
-  useEffect(() => {
-    revealControls();
-    return () => {
-      if (hideControlsTimerRef.current !== null) {
-        window.clearTimeout(hideControlsTimerRef.current);
-        hideControlsTimerRef.current = null;
-      }
-    };
-  }, [revealControls]);
-
-  // Close an open control menu when clicking elsewhere.
-  useEffect(() => {
-    if (!menu) {
-      return;
-    }
-    const onPointerDown = (event: globalThis.PointerEvent) => {
-      if (!(event.target as HTMLElement).closest(".ctrl-menu-host")) {
-        setMenu(null);
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [menu]);
-
   useEffect(() => {
     setSubtitles([]);
-    setActiveTrack(-1);
     if (selectedFile?.source !== "api") {
       return;
     }
@@ -322,34 +141,6 @@ export function PlayerPage() {
       canceled = true;
     };
   }, [selectedFile?.id, selectedFile?.source]);
-
-  useEffect(() => {
-    setPreviewCues([]);
-    if (selectedFile?.source !== "api" || !selectedFile.previewReady) {
-      return;
-    }
-
-    let canceled = false;
-    fetch(previewVTTURL(selectedFile.id), {
-      credentials: "include",
-      headers: { Accept: "text/vtt" },
-    })
-      .then((response) => (response.ok ? response.text() : ""))
-      .then((body) => {
-        if (!canceled) {
-          setPreviewCues(parsePreviewVTT(body));
-        }
-      })
-      .catch(() => {
-        if (!canceled) {
-          setPreviewCues([]);
-        }
-      });
-
-    return () => {
-      canceled = true;
-    };
-  }, [selectedFile?.id, selectedFile?.previewReady, selectedFile?.source]);
 
   const persistProgress = useCallback(
     (positionValue: number, durationValue: number, force = false) => {
@@ -412,8 +203,6 @@ export function PlayerPage() {
       }
 
       video.currentTime = duration > 0 ? Math.min(savedSeconds, Math.max(duration - 1, 0)) : savedSeconds;
-      setCurrentSeconds(video.currentTime || 0);
-      setPosition(duration > 0 ? (video.currentTime / duration) * 100 : 0);
       resumeAppliedRef.current = selectedFile.id;
     },
     [savedProgress, selectedFile?.id, selectedFile?.source],
@@ -438,72 +227,6 @@ export function PlayerPage() {
     window.addEventListener("pagehide", onPageHide);
     return () => window.removeEventListener("pagehide", onPageHide);
   }, [persistProgress]);
-
-  async function togglePlayback() {
-    const video = videoRef.current;
-    if (!video || !playbackSource) {
-      return;
-    }
-
-    if (video.paused) {
-      await video.play();
-    } else {
-      video.pause();
-    }
-  }
-
-  function seek(percent: number) {
-    const video = videoRef.current;
-    setPosition(percent);
-    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) {
-      return;
-    }
-
-    video.currentTime = (percent / 100) * video.duration;
-    persistProgress(video.currentTime, video.duration, true);
-  }
-
-  function changeVolume(value: number) {
-    setVolume(value);
-    setMuted(value === 0);
-  }
-
-  function toggleMute() {
-    if (muted && volume === 0) {
-      setVolume(0.5);
-      setMuted(false);
-      return;
-    }
-    setMuted((current) => !current);
-  }
-
-  function changeRate(rate: number) {
-    setPlaybackRate(rate);
-    setMenu(null);
-  }
-
-  function chooseSubtitle(index: number) {
-    setActiveTrack(index);
-    setMenu(null);
-  }
-
-  function toggleFullscreen() {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-    } else {
-      void stageRef.current?.requestFullscreen();
-    }
-  }
-
-  function updatePreviewFromPointer(event: PointerEvent<HTMLInputElement>) {
-    if (!selectedFile?.previewReady) {
-      setPreviewPercent(null);
-      return;
-    }
-    const rect = event.currentTarget.getBoundingClientRect();
-    const nextPercent = ((event.clientX - rect.left) / rect.width) * 100;
-    setPreviewPercent(Math.max(0, Math.min(nextPercent, 100)));
-  }
 
   async function submitWatchParty(event: FormEvent) {
     event.preventDefault();
@@ -539,7 +262,6 @@ export function PlayerPage() {
     }
   }
 
-  const volumePercent = muted ? 0 : volume;
   const sourceLabel = hlsSource ? "HLS stream" : directSource ? "Direct file" : "Not ready";
 
   return (
@@ -568,51 +290,15 @@ export function PlayerPage() {
       ) : null}
 
       <div className="player-layout">
-        <section
-          className={`player-stage${controlsVisible ? "" : " controls-hidden"}`}
-          ref={stageRef}
-          aria-label="Video player"
-          onPointerMove={revealControls}
-        >
-          {playbackSource ? (
-            <video
-              ref={videoRef}
-              className="video-player"
-              playsInline
-              onClick={() => void togglePlayback()}
-              onPlay={() => setPlaying(true)}
-              onPause={(event) => {
-                setPlaying(false);
-                persistProgress(event.currentTarget.currentTime, event.currentTarget.duration, true);
-              }}
-              onEnded={(event) => {
-                setPlaying(false);
-                persistProgress(0, event.currentTarget.duration, true);
-              }}
-              onLoadedMetadata={(event) => {
-                const video = event.currentTarget;
-                setDurationSeconds(normalizeProgressSeconds(video.duration));
-                applySavedProgress(video);
-              }}
-              onTimeUpdate={(event) => {
-                const video = event.currentTarget;
-                const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationSeconds;
-                setCurrentSeconds(video.currentTime || 0);
-                setPosition(duration > 0 ? (video.currentTime / duration) * 100 : 0);
-                persistProgress(video.currentTime, duration);
-              }}
-            >
-              {subtitles.map((subtitle) => (
-                <track
-                  key={subtitle.id}
-                  kind="subtitles"
-                  src={subtitle.url}
-                  srcLang={subtitle.language}
-                  label={subtitle.title || subtitle.language.toUpperCase()}
-                />
-              ))}
-            </video>
-          ) : (
+        <VideoPlayer
+          source={playbackSource}
+          isDirect={Boolean(directSource)}
+          withCredentials
+          subtitles={subtitles}
+          previewVTTURL={previewVTT}
+          previewWithCredentials
+          videoRef={videoRef}
+          fallback={
             <div className="player-frame">
               <div className="player-gradient">
                 <span className="eyebrow">Playback</span>
@@ -620,145 +306,26 @@ export function PlayerPage() {
                 <p>HLS output is not ready and the original file is not directly playable yet.</p>
               </div>
             </div>
-          )}
-
-          {playbackSource ? (
-            <div
-              className={`player-controls${controlsVisible ? "" : " is-hidden"}`}
-              onPointerEnter={() => {
-                pointerOverControlsRef.current = true;
-                revealControls();
-              }}
-              onPointerLeave={() => {
-                pointerOverControlsRef.current = false;
-                revealControls();
-              }}
-            >
-              <span className="scrub-host" onPointerLeave={() => setPreviewPercent(null)}>
-                {previewStyle ? <span className="scrub-preview" style={previewStyle} /> : null}
-                <input
-                  className="range"
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  value={position}
-                  style={{ "--range-fill": `${position}%` } as CSSProperties}
-                  onChange={(event) => seek(Number(event.target.value))}
-                  onPointerMove={updatePreviewFromPointer}
-                  aria-label="Seek"
-                />
-              </span>
-
-              <div className="control-row">
-                <div className="control-cluster">
-                  <button
-                    className="ctrl-btn primary"
-                    type="button"
-                    onClick={() => void togglePlayback()}
-                    aria-label={playing ? "Pause" : "Play"}
-                  >
-                    {playing ? <Pause size={19} /> : <Play size={19} />}
-                  </button>
-                  <div className="volume">
-                    <button
-                      className="ctrl-btn"
-                      type="button"
-                      onClick={toggleMute}
-                      aria-label={volumePercent === 0 ? "Unmute" : "Mute"}
-                    >
-                      {volumePercent === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
-                    </button>
-                    <input
-                      className="range volume-range"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={volumePercent}
-                      style={{ "--range-fill": `${volumePercent * 100}%` } as CSSProperties}
-                      onChange={(event) => changeVolume(Number(event.target.value))}
-                      aria-label="Volume"
-                    />
-                  </div>
-                  <span className="timecode">
-                    {formatClock(currentSeconds)} <i>/</i> {formatClock(durationSeconds)}
-                  </span>
-                </div>
-
-                <div className="control-cluster">
-                  <span className="ctrl-menu-host">
-                    <button
-                      className="ctrl-btn"
-                      type="button"
-                      onClick={() => setMenu(menu === "speed" ? null : "speed")}
-                      aria-label="Playback speed"
-                    >
-                      <Gauge size={17} />
-                      <span className="ctrl-label">{playbackRate}×</span>
-                    </button>
-                    {menu === "speed" ? (
-                      <div className="ctrl-menu">
-                        {PLAYBACK_RATES.map((rate) => (
-                          <button
-                            key={rate}
-                            type="button"
-                            className={rate === playbackRate ? "active" : ""}
-                            onClick={() => changeRate(rate)}
-                          >
-                            {rate}× {rate === 1 ? "(Normal)" : ""}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </span>
-
-                  <span className="ctrl-menu-host">
-                    <button
-                      className="ctrl-btn"
-                      type="button"
-                      onClick={() => setMenu(menu === "cc" ? null : "cc")}
-                      aria-label="Subtitles"
-                      disabled={subtitles.length === 0}
-                    >
-                      <Captions size={18} />
-                    </button>
-                    {menu === "cc" ? (
-                      <div className="ctrl-menu">
-                        <button
-                          type="button"
-                          className={activeTrack === -1 ? "active" : ""}
-                          onClick={() => chooseSubtitle(-1)}
-                        >
-                          Off
-                        </button>
-                        {subtitles.map((subtitle, index) => (
-                          <button
-                            key={subtitle.id}
-                            type="button"
-                            className={activeTrack === index ? "active" : ""}
-                            onClick={() => chooseSubtitle(index)}
-                          >
-                            {subtitle.title || subtitle.language.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </span>
-
-                  <button
-                    className="ctrl-btn"
-                    type="button"
-                    onClick={toggleFullscreen}
-                    aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-                  >
-                    {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </section>
+          }
+          onPause={() => {
+            const video = videoRef.current;
+            if (video) {
+              persistProgress(video.currentTime, video.duration, true);
+            }
+          }}
+          onEnded={() => {
+            const video = videoRef.current;
+            if (video) {
+              persistProgress(0, video.duration, true);
+            }
+          }}
+          onLoadedMetadata={(video) => {
+            setDurationSeconds(normalizeProgressSeconds(video.duration));
+            applySavedProgress(video);
+          }}
+          onTimeUpdate={(currentTime, duration) => persistProgress(currentTime, duration)}
+          onError={(message) => setError(message)}
+        />
 
         <aside className="panel player-side">
           <div className="panel-header">
@@ -822,7 +389,7 @@ export function PlayerPage() {
         </div>
         <div className="player-meta-item">
           <span>Preview</span>
-          <strong>{previewCues.length > 0 ? "Sprites ready" : "Pending"}</strong>
+          <strong>{selectedFile?.previewReady ? "Sprites ready" : "Pending"}</strong>
         </div>
       </div>
 
@@ -933,85 +500,6 @@ function previewVTTURL(fileID: string): string {
   return `/api/files/${encodeURIComponent(fileID)}/preview/thumbnails.vtt`;
 }
 
-function spritePreviewStyle(cues: PreviewCue[], percent: number, durationSeconds: number): CSSProperties | undefined {
-  if (cues.length === 0) {
-    return undefined;
-  }
-
-  const seconds = (percent / 100) * durationSeconds;
-  const cue = cues.find((candidate) => seconds >= candidate.start && seconds < candidate.end) || cues[cues.length - 1];
-  return {
-    backgroundImage: `url(${cue.image})`,
-    backgroundPosition: `-${cue.x}px -${cue.y}px`,
-    height: `${cue.height}px`,
-    left: `${Math.max(0, Math.min(percent, 100))}%`,
-    width: `${cue.width}px`,
-  };
-}
-
-function parsePreviewVTT(body: string): PreviewCue[] {
-  const lines = body.split(/\r?\n/);
-  const cues: PreviewCue[] = [];
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].trim();
-    if (!line.includes("-->")) {
-      continue;
-    }
-
-    const [startText, endText] = line.split("-->").map((part) => part.trim());
-    const start = parseVTTTime(startText);
-    const end = parseVTTTime(endText);
-    if (start === null || end === null || end <= start) {
-      continue;
-    }
-
-    let assetLine = "";
-    for (let assetIndex = index + 1; assetIndex < lines.length; assetIndex += 1) {
-      const candidate = lines[assetIndex].trim();
-      if (!candidate) {
-        break;
-      }
-      assetLine = candidate;
-      break;
-    }
-
-    const [image, fragment = ""] = assetLine.split("#xywh=");
-    const coordinates = fragment.split(",").map((value) => Number(value));
-    if (!image || coordinates.length !== 4 || coordinates.some((value) => !Number.isFinite(value))) {
-      continue;
-    }
-
-    cues.push({
-      start,
-      end,
-      image,
-      x: coordinates[0],
-      y: coordinates[1],
-      width: coordinates[2],
-      height: coordinates[3],
-    });
-  }
-
-  return cues;
-}
-
-function parseVTTTime(value: string): number | null {
-  const parts = value.split(":");
-  if (parts.length !== 3) {
-    return null;
-  }
-
-  const hours = Number(parts[0]);
-  const minutes = Number(parts[1]);
-  const seconds = Number(parts[2]);
-  if (![hours, minutes, seconds].every(Number.isFinite)) {
-    return null;
-  }
-
-  return hours * 3600 + minutes * 60 + seconds;
-}
-
 function codecLabel(file: api.TorrentFile): string {
   const codecs = [file.videoCodec, file.audioCodec].filter(Boolean);
   if (codecs.length > 0) {
@@ -1044,17 +532,4 @@ function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
   return `${hours}:${String(remainingMinutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
-}
-
-function formatClock(totalSeconds: number): string {
-  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
-    return "0:00";
-  }
-
-  const seconds = Math.floor(totalSeconds);
-  const secs = seconds % 60;
-  const mins = Math.floor(seconds / 60) % 60;
-  const hours = Math.floor(seconds / 3600);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return hours > 0 ? `${hours}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
 }

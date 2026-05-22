@@ -4,7 +4,8 @@ import { Layers, Play, Plus, Share2, Trash2 } from "lucide-react";
 
 import * as api from "../lib/api";
 import { DeleteTorrentModal } from "../components/DeleteTorrentModal";
-import { Badge, Button, EmptyState, Field, Input, Modal, Progress, Select, Textarea } from "../components/ui";
+import { Badge, Button, EmptyState, Field, Input, Modal, Progress, Textarea } from "../components/ui";
+import { CreateShareModal } from "../components/CreateShareModal";
 import { formatBytes } from "../lib/format";
 import { mediaItems } from "../lib/mock-data";
 
@@ -66,7 +67,7 @@ export function LibraryPage() {
   const [deletingTorrentId, setDeletingTorrentId] = useState("");
   const [pendingDelete, setPendingDelete] = useState<LibraryItem | null>(null);
   const [magnetOpen, setMagnetOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [shareTargetId, setShareTargetId] = useState<string | null>(null);
 
   const loadLibrary = useCallback(async ({ showLoading = true, fallbackToMock = true } = {}) => {
     if (showLoading) {
@@ -282,9 +283,10 @@ export function LibraryPage() {
                     )}
                     <Button
                       className="w-9 flex-none px-0"
-                      title="Create share link"
+                      title={item.source === "mock" ? "Sign in to share" : "Create share link"}
                       aria-label="Create share link"
-                      onClick={() => setShareOpen(true)}
+                      disabled={item.source === "mock"}
+                      onClick={() => setShareTargetId(item.id)}
                     >
                       <Share2 size={15} />
                     </Button>
@@ -307,7 +309,12 @@ export function LibraryPage() {
       )}
 
       <AddMagnetModal open={magnetOpen} onClose={() => setMagnetOpen(false)} onCreate={addTorrent} />
-      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} />
+      <CreateShareModal
+        open={shareTargetId !== null}
+        presetItemId={shareTargetId ?? undefined}
+        onClose={() => setShareTargetId(null)}
+        onCreated={() => setNotice({ tone: "success", text: "Share link created and copied to clipboard." })}
+      />
       <DeleteTorrentModal
         open={pendingDelete !== null}
         title={pendingDelete?.title || "this torrent"}
@@ -601,54 +608,6 @@ function AddMagnetModal({
           <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Optional" />
         </Field>
       </form>
-    </Modal>
-  );
-}
-
-export function ShareModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [created, setCreated] = useState(false);
-  const link = "https://streamize.local/s/nh-24h";
-
-  async function copyLink() {
-    setCreated(true);
-    try {
-      await navigator.clipboard.writeText(link);
-    } catch {
-      // Clipboard can be unavailable in automated or insecure contexts.
-    }
-  }
-
-  return (
-    <Modal
-      title="Create share link"
-      open={open}
-      onClose={onClose}
-      footer={
-        <Button variant="primary" type="button" onClick={() => setCreated(true)}>
-          Generate link
-        </Button>
-      }
-    >
-      <Field label="Expiration">
-        <Select defaultValue="24h">
-          <option value="24h">24 hours</option>
-          <option value="7d">7 days</option>
-          <option value="30d">30 days</option>
-        </Select>
-      </Field>
-      <Field label="Share scope">
-        <Select defaultValue="video">
-          <option value="video">Single video</option>
-          <option value="torrent">Full torrent</option>
-        </Select>
-      </Field>
-      {created ? <div className="alert alert-success is-visible">Share created.</div> : null}
-      <div className="share-link">
-        <Input readOnly value={link} />
-        <Button type="button" onClick={copyLink}>
-          Copy
-        </Button>
-      </div>
     </Modal>
   );
 }
