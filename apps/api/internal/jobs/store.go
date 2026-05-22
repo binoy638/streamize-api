@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	TypeHLSTranscode    = "hls_transcode"
-	TypeSubtitleExtract = "subtitle_extract"
-	TypeSpriteGenerate  = "sprite_generate"
+	TypeMetadataIdentify = "metadata_identify"
+	TypeHLSTranscode     = "hls_transcode"
+	TypeSubtitleExtract  = "subtitle_extract"
+	TypeSpriteGenerate   = "sprite_generate"
 
 	StatusQueued    = "queued"
 	StatusRunning   = "running"
@@ -69,6 +70,10 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
+func MetadataIdentifyDedupeKey(torrentFileID string) string {
+	return MediaJobDedupeKey(TypeMetadataIdentify, torrentFileID)
+}
+
 func MediaJobDedupeKey(jobType string, torrentFileID string) string {
 	return strings.TrimSpace(jobType) + ":" + strings.TrimSpace(torrentFileID)
 }
@@ -83,6 +88,56 @@ func SubtitleExtractDedupeKey(torrentFileID string) string {
 
 func SpriteGenerateDedupeKey(torrentFileID string) string {
 	return MediaJobDedupeKey(TypeSpriteGenerate, torrentFileID)
+}
+
+func (s *Store) CreateMetadataIdentifyJobIfMissing(ctx context.Context, torrentFileID string) (Job, bool, error) {
+	return s.createMediaFileJobIfMissing(ctx, TypeMetadataIdentify, torrentFileID)
+}
+
+func (s *Store) BackfillMetadataIdentifyJobs(ctx context.Context, limit int) (int, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT tf.id
+		FROM torrent_files tf
+		LEFT JOIN jobs j ON j.dedupe_key = ? || tf.id
+		WHERE tf.metadata_status = ?
+			AND tf.catalog_item_id IS NULL
+			AND j.id IS NULL
+		ORDER BY tf.created_at ASC, tf.id ASC
+		LIMIT ?
+	`, TypeMetadataIdentify+":", "pending", limit)
+	if err != nil {
+		return 0, fmt.Errorf("list metadata backfill candidates: %w", err)
+	}
+	defer rows.Close()
+
+	fileIDs := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, fmt.Errorf("scan metadata backfill candidate: %w", err)
+		}
+		fileIDs = append(fileIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate metadata backfill candidates: %w", err)
+	}
+
+	created := 0
+	for _, fileID := range fileIDs {
+		_, inserted, err := s.CreateMetadataIdentifyJobIfMissing(ctx, fileID)
+		if err != nil {
+			return created, err
+		}
+		if inserted {
+			created++
+		}
+	}
+
+	return created, nil
 }
 
 func (s *Store) CreateHLSTranscodeJobIfMissing(ctx context.Context, torrentFileID string) (Job, bool, error) {
@@ -142,7 +197,7 @@ func (s *Store) createMediaFileJobIfMissing(ctx context.Context, jobType string,
 
 func isMediaFileJobType(jobType string) bool {
 	switch strings.TrimSpace(jobType) {
-	case TypeHLSTranscode, TypeSubtitleExtract, TypeSpriteGenerate:
+	case TypeMetadataIdentify, TypeHLSTranscode, TypeSubtitleExtract, TypeSpriteGenerate:
 		return true
 	default:
 		return false
@@ -175,7 +230,7 @@ func (s *Store) ListJobsForOwner(ctx context.Context, ownerUserID string) ([]Job
 		SELECT j.id, j.type, j.status, j.payload_json, j.dedupe_key, j.attempts, j.max_attempts, j.progress_percent, j.lease_until, j.locked_by, j.last_error, j.available_at, j.started_at, j.finished_at, j.created_at, j.updated_at,
 			tf.torrent_id, tf.id, tf.name
 		FROM jobs j
-		INNER JOIN torrent_files tf ON j.dedupe_key IN (? || tf.id, ? || tf.id, ? || tf.id)
+		INNER JOIN torrent_files tf ON j.dedupe_key IN (? || tf.id, ? || tf.id, ? || tf.id, ? || tf.id)
 		INNER JOIN torrents t ON t.id = tf.torrent_id
 		WHERE t.owner_user_id = ?
 		ORDER BY
@@ -189,7 +244,7 @@ func (s *Store) ListJobsForOwner(ctx context.Context, ownerUserID string) ([]Job
 			j.updated_at DESC,
 			j.created_at DESC,
 			j.id DESC
-	`, TypeHLSTranscode+":", TypeSubtitleExtract+":", TypeSpriteGenerate+":", ownerUserID)
+	`, TypeMetadataIdentify+":", TypeHLSTranscode+":", TypeSubtitleExtract+":", TypeSpriteGenerate+":", ownerUserID)
 	if err != nil {
 		return nil, fmt.Errorf("list jobs for owner: %w", err)
 	}
@@ -215,10 +270,10 @@ func (s *Store) FindJobByIDForOwner(ctx context.Context, id string, ownerUserID 
 		SELECT j.id, j.type, j.status, j.payload_json, j.dedupe_key, j.attempts, j.max_attempts, j.progress_percent, j.lease_until, j.locked_by, j.last_error, j.available_at, j.started_at, j.finished_at, j.created_at, j.updated_at,
 			tf.torrent_id, tf.id, tf.name
 		FROM jobs j
-		INNER JOIN torrent_files tf ON j.dedupe_key IN (? || tf.id, ? || tf.id, ? || tf.id)
+		INNER JOIN torrent_files tf ON j.dedupe_key IN (? || tf.id, ? || tf.id, ? || tf.id, ? || tf.id)
 		INNER JOIN torrents t ON t.id = tf.torrent_id
 		WHERE j.id = ? AND t.owner_user_id = ?
-	`, TypeHLSTranscode+":", TypeSubtitleExtract+":", TypeSpriteGenerate+":", strings.TrimSpace(id), strings.TrimSpace(ownerUserID)))
+	`, TypeMetadataIdentify+":", TypeHLSTranscode+":", TypeSubtitleExtract+":", TypeSpriteGenerate+":", strings.TrimSpace(id), strings.TrimSpace(ownerUserID)))
 }
 
 func (s *Store) ClaimNext(ctx context.Context, workerID string, leaseDuration time.Duration) (Job, bool, error) {
@@ -240,22 +295,23 @@ func (s *Store) ClaimNext(ctx context.Context, workerID string, leaseDuration ti
 	if err := tx.QueryRowContext(ctx, `
 		SELECT id
 		FROM jobs
-		WHERE type IN (?, ?, ?)
+		WHERE type IN (?, ?, ?, ?)
 			AND status = ?
 			AND attempts < max_attempts
 			AND available_at <= CURRENT_TIMESTAMP
 			AND (lease_until IS NULL OR lease_until <= CURRENT_TIMESTAMP)
 		ORDER BY
 			CASE type
-				WHEN 'hls_transcode' THEN 0
-				WHEN 'subtitle_extract' THEN 1
-				WHEN 'sprite_generate' THEN 2
-				ELSE 3
+				WHEN 'metadata_identify' THEN 0
+				WHEN 'hls_transcode' THEN 1
+				WHEN 'subtitle_extract' THEN 2
+				WHEN 'sprite_generate' THEN 3
+				ELSE 4
 			END,
 			created_at ASC,
 			id ASC
 		LIMIT 1
-	`, TypeHLSTranscode, TypeSubtitleExtract, TypeSpriteGenerate, StatusQueued).Scan(&id); err != nil {
+	`, TypeMetadataIdentify, TypeHLSTranscode, TypeSubtitleExtract, TypeSpriteGenerate, StatusQueued).Scan(&id); err != nil {
 		if err == sql.ErrNoRows {
 			return Job{}, false, nil
 		}
@@ -361,6 +417,29 @@ func (s *Store) Fail(ctx context.Context, id string, message string, retryDelay 
 	`, StatusFailed, StatusQueued, message, fmt.Sprintf("+%d seconds", delaySeconds), strings.TrimSpace(id))
 	if err != nil {
 		return fmt.Errorf("fail job: %w", err)
+	}
+
+	return checkRowsAffected(result)
+}
+
+func (s *Store) FailPermanent(ctx context.Context, id string, message string) error {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = "job failed"
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE jobs
+		SET status = ?,
+			lease_until = NULL,
+			locked_by = NULL,
+			last_error = ?,
+			finished_at = CURRENT_TIMESTAMP,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, StatusFailed, message, strings.TrimSpace(id))
+	if err != nil {
+		return fmt.Errorf("fail job permanently: %w", err)
 	}
 
 	return checkRowsAffected(result)

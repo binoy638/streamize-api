@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/binoy638/streamize-api/apps/api/internal/auth"
+	"github.com/binoy638/streamize-api/apps/api/internal/catalog"
 	"github.com/binoy638/streamize-api/apps/api/internal/config"
 	"github.com/binoy638/streamize-api/apps/api/internal/database"
 	"github.com/binoy638/streamize-api/apps/api/internal/httpserver"
 	"github.com/binoy638/streamize-api/apps/api/internal/jobs"
+	"github.com/binoy638/streamize-api/apps/api/internal/metadata"
 	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
 	"github.com/binoy638/streamize-api/apps/api/internal/transcoding"
 )
@@ -62,10 +64,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	jobStore := jobs.NewStore(db)
+	if created, err := jobStore.BackfillMetadataIdentifyJobs(ctx, 1000); err != nil {
+		logger.Warn("failed to queue metadata backfill jobs", "error", err)
+	} else if created > 0 {
+		logger.Info("metadata backfill jobs queued", "count", created)
+	}
+
 	if cfg.WorkerEnabled {
 		worker := transcoding.Worker{
-			Jobs:          jobs.NewStore(db),
+			Jobs:          jobStore,
 			Torrents:      torrents.NewStore(db),
+			Catalog:       catalog.NewStore(db),
+			Metadata:      metadata.Resolver{TMDBAPIKey: cfg.TMDBAPIKey, Language: cfg.MetadataLanguage},
 			Prober:        transcoding.FFprobeProber{Binary: cfg.FFprobePath},
 			Transcoder:    transcoding.FFmpegTranscoder{Binary: cfg.FFmpegPath},
 			Assets:        transcoding.FFmpegAssetProcessor{Binary: cfg.FFmpegPath},

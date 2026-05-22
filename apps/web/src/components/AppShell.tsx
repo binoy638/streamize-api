@@ -50,6 +50,13 @@ const pageCopy: Record<string, { title: string; subtitle: string; search: string
 };
 
 function pageFromPath(pathname: string) {
+  if (pathname.startsWith("/library/")) {
+    return {
+      title: "Library title",
+      subtitle: "Metadata and files",
+      search: "Search episodes and files",
+    };
+  }
   if (pathname.startsWith("/torrents/")) {
     return {
       title: "Torrent detail",

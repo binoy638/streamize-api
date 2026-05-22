@@ -44,6 +44,8 @@ type Config struct {
 	WorkerPollInterval  time.Duration
 	FFmpegPath          string
 	FFprobePath         string
+	TMDBAPIKey          string
+	MetadataLanguage    string
 }
 
 func Load() (Config, error) {
@@ -84,6 +86,8 @@ func Load() (Config, error) {
 		WorkerPollInterval:  envDuration("STREAMIZE_WORKER_POLL_INTERVAL", 5*time.Second),
 		FFmpegPath:          envString("STREAMIZE_FFMPEG_PATH", "ffmpeg"),
 		FFprobePath:         envString("STREAMIZE_FFPROBE_PATH", "ffprobe"),
+		TMDBAPIKey:          envString("STREAMIZE_TMDB_API_KEY", ""),
+		MetadataLanguage:    envString("STREAMIZE_METADATA_LANGUAGE", "en-US"),
 	}
 
 	if cfg.Environment == "" {
@@ -127,6 +131,9 @@ func Load() (Config, error) {
 	}
 	if cfg.FFprobePath == "" {
 		return Config{}, errors.New("STREAMIZE_FFPROBE_PATH cannot be empty")
+	}
+	if cfg.MetadataLanguage == "" {
+		return Config{}, errors.New("STREAMIZE_METADATA_LANGUAGE cannot be empty")
 	}
 
 	return cfg, nil

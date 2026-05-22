@@ -4,10 +4,11 @@ Streamize is moving from a single TypeScript API process to a Go monorepo design
 
 ## Runtime Shape
 
-- Go API owns authentication, users, library metadata, media access, background jobs, and UI serving.
+- Go API owns authentication, users, torrent ingestion, catalog metadata, media access, background jobs, and UI serving.
 - SQLite stores app state and acts as the durable job queue.
 - qBittorrent owns torrent protocol work and downloads into the shared media volume.
 - ffmpeg is used by Go workers for inspection, HLS output, subtitles, and previews.
+- TMDB and AniList are used by metadata jobs to identify downloaded movies, TV episodes, and anime releases.
 - WebSockets will carry live status updates for downloads, jobs, and processing.
 
 ## Storage
@@ -28,6 +29,7 @@ The initial schema is intentionally broad enough for the planned backend milesto
 
 - users and sessions
 - torrents and torrent files
+- catalog items and catalog episodes
 - subtitles and video progress
 - expiring shares
 - durable jobs

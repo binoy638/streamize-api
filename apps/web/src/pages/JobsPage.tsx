@@ -17,6 +17,7 @@ type JobRow = {
   id: string;
   source: "api" | "mock";
   type: string;
+  typeTone: string;
   target: string;
   status: api.JobStatus | MockJob["status"];
   progress: number;
@@ -222,7 +223,7 @@ export function JobsPage() {
                 <tr key={job.id}>
                   <td>
                     <div className="table-title">
-                      <strong>{job.type}</strong>
+                      <Badge tone={`job-type ${job.typeTone}`}>{job.type}</Badge>
                       <span>{job.target}</span>
                     </div>
                   </td>
@@ -261,15 +262,17 @@ export function JobsPage() {
 
 function apiJobToRow(job: api.Job): JobRow {
   const target = job.target || job.torrentFileId || "Unattached job";
-  const worker = job.lockedBy || (job.status === "running" ? "claimed" : "unclaimed");
+  const worker = workerLabel(job.lockedBy, job.status);
   const progress = progressForAPIJob(job);
   const attempts = `${job.attempts}/${job.maxAttempts}`;
   const type = jobTypeLabel(job.type);
+  const typeTone = jobTypeTone(job.type);
 
   return {
     id: job.id,
     source: "api",
     type,
+    typeTone,
     target,
     status: job.status,
     progress,
@@ -284,10 +287,14 @@ function apiJobToRow(job: api.Job): JobRow {
 }
 
 function mockJobToRow(job: MockJob): JobRow {
+  const type = jobTypeLabel(job.type);
+  const typeTone = jobTypeTone(job.type);
+
   return {
     id: job.id,
     source: "mock",
-    type: job.type,
+    type,
+    typeTone,
     target: job.target,
     status: job.status,
     progress: job.progress,
@@ -297,7 +304,7 @@ function mockJobToRow(job: MockJob): JobRow {
     finishedAt: job.status === "succeeded" || job.status === "failed" || job.status === "canceled" ? job.updatedAt : "Not finished",
     updatedAt: job.updatedAt,
     error: job.error,
-    searchText: buildSearchText(job.type, job.target, job.status, job.worker, job.error),
+    searchText: buildSearchText(type, job.type, job.target, job.status, job.worker, job.error),
   };
 }
 
@@ -329,14 +336,60 @@ function buildSearchText(...values: Array<string | undefined>) {
 
 function jobTypeLabel(type: string): string {
   switch (type) {
+    case "metadata_identify":
+      return "Metadata identify";
     case "hls_transcode":
+    case "hls-generate":
       return "HLS transcode";
     case "subtitle_extract":
+    case "subtitle-extract":
       return "Subtitle extraction";
     case "sprite_generate":
+    case "thumbnail-sprite":
       return "Sprite generation";
+    case "ffprobe":
+      return "Media probe";
     default:
       return type.replace(/[_-]/g, " ");
+  }
+}
+
+function jobTypeTone(type: string): string {
+  switch (type) {
+    case "metadata_identify":
+      return "job-metadata";
+    case "hls_transcode":
+    case "hls-generate":
+      return "job-hls";
+    case "subtitle_extract":
+    case "subtitle-extract":
+      return "job-subtitle";
+    case "sprite_generate":
+    case "thumbnail-sprite":
+      return "job-sprite";
+    case "ffprobe":
+      return "job-probe";
+    default:
+      return "job-other";
+  }
+}
+
+function workerLabel(lockedBy: string | undefined, status: api.JobStatus): string {
+  if (lockedBy) {
+    return lockedBy;
+  }
+
+  switch (status) {
+    case "running":
+      return "claimed";
+    case "queued":
+      return "unclaimed";
+    case "succeeded":
+      return "completed";
+    case "failed":
+      return "failed";
+    case "canceled":
+      return "canceled";
   }
 }
 

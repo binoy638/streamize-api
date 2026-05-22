@@ -12,13 +12,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/binoy638/streamize-api/apps/api/internal/catalog"
 	"github.com/binoy638/streamize-api/apps/api/internal/jobs"
+	"github.com/binoy638/streamize-api/apps/api/internal/metadata"
 	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
 )
 
 type Worker struct {
 	Jobs          *jobs.Store
 	Torrents      *torrents.Store
+	Catalog       *catalog.Store
+	Metadata      metadata.Resolver
 	Prober        Prober
 	Transcoder    Transcoder
 	Assets        AssetProcessor
@@ -101,6 +105,8 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 	go w.renewLeaseUntilDone(heartbeatCtx, job.ID)
 
 	switch job.Type {
+	case jobs.TypeMetadataIdentify:
+		return w.processMetadataIdentifyJob(ctx, job)
 	case jobs.TypeHLSTranscode:
 		return w.processHLSTranscodeJob(ctx, job)
 	case jobs.TypeSubtitleExtract:
@@ -114,6 +120,114 @@ func (w Worker) processJob(ctx context.Context, job jobs.Job) error {
 		}
 		return fmt.Errorf("%s: %s", message, job.Type)
 	}
+}
+
+func (w Worker) processMetadataIdentifyJob(ctx context.Context, job jobs.Job) error {
+	payload, err := decodeMediaFilePayload(job)
+	if err != nil {
+		if failErr := w.Jobs.FailPermanent(ctx, job.ID, "invalid metadata identify payload"); failErr != nil {
+			return failErr
+		}
+		return err
+	}
+	if w.Catalog == nil {
+		message := "catalog store is not configured"
+		if failErr := w.Jobs.FailPermanent(ctx, job.ID, message); failErr != nil {
+			return failErr
+		}
+		return fmt.Errorf("%s", message)
+	}
+
+	file, err := w.Torrents.FindTorrentFileByID(ctx, payload.TorrentFileID)
+	if err != nil {
+		if failErr := w.Jobs.FailPermanent(ctx, job.ID, err.Error()); failErr != nil {
+			return failErr
+		}
+		return err
+	}
+
+	match, err := w.Metadata.Resolve(ctx, file.Name)
+	if err != nil {
+		if errors.Is(err, metadata.ErrNoMatch) {
+			if markErr := w.Catalog.MarkFileUnmatched(ctx, file.ID); markErr != nil {
+				return markErr
+			}
+			return w.Jobs.Complete(ctx, job.ID)
+		}
+		if errors.Is(err, metadata.ErrProviderNotConfigured) {
+			if markErr := w.Catalog.MarkFileFailed(ctx, file.ID, err.Error()); markErr != nil {
+				return markErr
+			}
+			return w.Jobs.FailPermanent(ctx, job.ID, err.Error())
+		}
+		if markErr := w.Catalog.MarkFileFailed(ctx, file.ID, err.Error()); markErr != nil {
+			return markErr
+		}
+		if failErr := w.Jobs.Fail(ctx, job.ID, err.Error(), w.retryDelay()); failErr != nil {
+			return failErr
+		}
+		return err
+	}
+
+	item, err := w.Catalog.UpsertItem(ctx, catalog.Item{
+		OwnerUserID:    file.OwnerUserID,
+		MediaType:      catalogMediaType(match.MediaType),
+		Provider:       match.Provider,
+		ProviderID:     match.ProviderID,
+		Title:          match.Title,
+		OriginalTitle:  match.OriginalTitle,
+		Overview:       match.Overview,
+		ReleaseYear:    match.ReleaseYear,
+		PosterURL:      match.PosterURL,
+		BackdropURL:    match.BackdropURL,
+		MetadataStatus: catalog.MetadataStatusMatched,
+	})
+	if err != nil {
+		return err
+	}
+
+	var episodeID string
+	if match.Episode != nil {
+		episode, err := w.Catalog.UpsertEpisode(ctx, catalog.Episode{
+			CatalogItemID:  item.ID,
+			Provider:       match.Episode.Provider,
+			ProviderID:     match.Episode.ProviderID,
+			SeasonNumber:   match.Episode.SeasonNumber,
+			EpisodeNumber:  match.Episode.EpisodeNumber,
+			AbsoluteNumber: match.Episode.AbsoluteNumber,
+			Title:          match.Episode.Title,
+			Overview:       match.Episode.Overview,
+			AirDate:        match.Episode.AirDate,
+			StillURL:       match.Episode.StillURL,
+		})
+		if err != nil {
+			return err
+		}
+		episodeID = episode.ID
+	}
+
+	if err := w.Catalog.LinkFile(ctx, catalog.FileLinkParams{
+		TorrentFileID:    file.ID,
+		CatalogItemID:    item.ID,
+		CatalogEpisodeID: episodeID,
+		Status:           catalog.MetadataStatusMatched,
+		Confidence:       match.Confidence,
+		Provider:         match.Provider,
+	}); err != nil {
+		return err
+	}
+
+	if err := w.Jobs.Complete(ctx, job.ID); err != nil {
+		return err
+	}
+	w.info(ctx, "metadata identify completed",
+		slog.String("job_id", job.ID),
+		slog.String("torrent_file_id", file.ID),
+		slog.String("catalog_item_id", item.ID),
+		slog.String("provider", match.Provider),
+		slog.Float64("confidence", match.Confidence),
+	)
+	return nil
 }
 
 func (w Worker) processHLSTranscodeJob(ctx context.Context, job jobs.Job) error {
@@ -591,6 +705,19 @@ func (w Worker) retryDelay() time.Duration {
 	}
 
 	return 30 * time.Second
+}
+
+func catalogMediaType(value string) string {
+	switch strings.TrimSpace(value) {
+	case metadata.MediaTypeMovie:
+		return catalog.MediaTypeMovie
+	case metadata.MediaTypeTV:
+		return catalog.MediaTypeTV
+	case metadata.MediaTypeAnime:
+		return catalog.MediaTypeAnime
+	default:
+		return catalog.MediaTypeUnknown
+	}
 }
 
 func (w Worker) info(ctx context.Context, message string, attrs ...slog.Attr) {

@@ -13,8 +13,10 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/binoy638/streamize-api/apps/api/internal/auth"
+	"github.com/binoy638/streamize-api/apps/api/internal/catalog"
 	"github.com/binoy638/streamize-api/apps/api/internal/config"
 	"github.com/binoy638/streamize-api/apps/api/internal/jobs"
+	"github.com/binoy638/streamize-api/apps/api/internal/metadata"
 	"github.com/binoy638/streamize-api/apps/api/internal/qbittorrent"
 	"github.com/binoy638/streamize-api/apps/api/internal/torrents"
 	"github.com/binoy638/streamize-api/apps/api/internal/watchparty"
@@ -95,6 +97,7 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 	authStore := auth.NewStore(db)
 	torrentStore := torrents.NewStore(db)
 	jobStore := jobs.NewStore(db)
+	catalogStore := catalog.NewStore(db)
 	watchPartyStore := watchparty.NewStore(db)
 	watchPartyHub := watchparty.NewHub(watchPartyStore, logger)
 	authHandler := AuthHandler{
@@ -126,6 +129,12 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 	jobHandler := JobHandler{
 		Store:        jobStore,
 		TorrentStore: torrentStore,
+	}
+	libraryHandler := LibraryHandler{
+		Store:        catalogStore,
+		TorrentStore: torrentStore,
+		JobStore:     jobStore,
+		Metadata:     metadata.Resolver{TMDBAPIKey: cfg.TMDBAPIKey, Language: cfg.MetadataLanguage},
 	}
 	playbackHandler := PlaybackHandler{
 		Store:         torrentStore,
@@ -168,7 +177,11 @@ func NewRouter(cfg config.Config, db *sql.DB, logger *slog.Logger, optionFns ...
 			protected.Post("/torrents", torrentHandler.CreateTorrent)
 			protected.Get("/torrents/{id}/files", torrentHandler.ListTorrentFiles)
 			protected.Delete("/torrents/{id}", torrentHandler.DeleteTorrent)
+			protected.Get("/library", libraryHandler.ListLibrary)
+			protected.Get("/metadata/search", libraryHandler.SearchMetadata)
 			protected.Get("/files", torrentHandler.ListFiles)
+			protected.Post("/files/{id}/metadata-refresh", libraryHandler.RefreshFileMetadata)
+			protected.Post("/files/{id}/metadata-match", libraryHandler.ManualMatchFile)
 			protected.Get("/jobs", jobHandler.ListJobs)
 			protected.Post("/jobs/{id}/retry", jobHandler.RetryJob)
 			protected.Post("/jobs/{id}/cancel", jobHandler.CancelJob)

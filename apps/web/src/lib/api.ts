@@ -21,6 +21,8 @@ export type TorrentFileStatus = "downloading" | "queued" | "processing" | "done"
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
 export type WatchPartyControlMode = "host_only" | "everyone";
 export type WatchPartyStatus = "active" | "ended";
+export type CatalogMediaType = "movie" | "tv" | "anime" | "unknown";
+export type MetadataStatus = "pending" | "matched" | "manual" | "unmatched" | "failed";
 
 export type Torrent = {
   id: string;
@@ -69,6 +71,41 @@ export type TorrentFile = {
   errorMessage?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type CatalogEpisode = {
+  id: string;
+  catalogItemId: string;
+  provider?: string;
+  providerId?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
+  absoluteNumber?: number;
+  title: string;
+  overview?: string;
+  airDate?: string;
+  stillUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LibraryFile = TorrentFile & {
+  episode?: CatalogEpisode;
+};
+
+export type LibraryCatalogItem = {
+  id: string;
+  mediaType: CatalogMediaType;
+  title: string;
+  originalTitle?: string;
+  overview?: string;
+  releaseYear?: number;
+  posterUrl?: string;
+  backdropUrl?: string;
+  metadataStatus: MetadataStatus;
+  provider?: string;
+  providerId?: string;
+  files: LibraryFile[];
 };
 
 export type Subtitle = {
@@ -289,6 +326,18 @@ export async function listTorrentFiles(torrentId: string): Promise<TorrentFile[]
 export async function listAllFiles(): Promise<TorrentFile[]> {
   const body = await apiFetch<{ files: TorrentFile[] }>("/api/files");
   return body.files;
+}
+
+export async function listLibrary(): Promise<LibraryCatalogItem[]> {
+  const body = await apiFetch<{ items: LibraryCatalogItem[] }>("/api/library");
+  return body.items;
+}
+
+export async function refreshFileMetadata(id: string): Promise<Job> {
+  const body = await apiFetch<{ job: Job }>(`/api/files/${encodeURIComponent(id)}/metadata-refresh`, {
+    method: "POST",
+  });
+  return body.job;
 }
 
 export async function listSubtitles(fileId: string): Promise<Subtitle[]> {

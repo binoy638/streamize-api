@@ -76,6 +76,9 @@ func (h TorrentHandler) ingestTorrentFiles(ctx context.Context, record torrents.
 		if inserted {
 			created++
 		}
+		if err := h.ensureMetadataIdentifyJob(ctx, file); err != nil {
+			return err
+		}
 
 		// Track per-file download progress.
 		downloadPercent := qbtFile.Progress * 100
@@ -112,6 +115,26 @@ func (h TorrentHandler) ingestTorrentFiles(ctx context.Context, record torrents.
 			slog.String("torrent_id", record.ID),
 			slog.String("torrent_status", record.Status),
 			slog.Int("qbittorrent_file_count", len(qbtFiles)),
+		)
+	}
+
+	return nil
+}
+
+func (h TorrentHandler) ensureMetadataIdentifyJob(ctx context.Context, file torrents.TorrentFile) error {
+	if h.JobStore == nil {
+		return nil
+	}
+
+	job, inserted, err := h.JobStore.CreateMetadataIdentifyJobIfMissing(ctx, file.ID)
+	if err != nil {
+		return err
+	}
+	if inserted {
+		h.info(ctx, "metadata identify job queued",
+			slog.String("torrent_file_id", file.ID),
+			slog.String("job_id", job.ID),
+			slog.String("job_type", jobs.TypeMetadataIdentify),
 		)
 	}
 

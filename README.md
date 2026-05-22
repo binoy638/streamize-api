@@ -9,7 +9,7 @@ The current TypeScript API has been preserved under `legacy/api` while the new i
 ```text
 apps/
   api/   Go API, workers, SQLite schema, and future static UI serving
-  web/   Future React + Vite UI
+  web/   React + Vite UI
 deploy/ Docker Compose and environment examples
 docs/   Architecture and implementation notes
 legacy/ Previous TypeScript API kept for reference during the rewrite
@@ -33,6 +33,11 @@ GET /api/torrents
 POST /api/torrents
 GET /api/torrents/{id}/files
 DELETE /api/torrents/{id}
+GET /api/library
+GET /api/metadata/search?query=...
+GET /api/files
+POST /api/files/{id}/metadata-refresh
+POST /api/files/{id}/metadata-match
 GET /api/jobs
 POST /api/jobs/{id}/retry
 POST /api/jobs/{id}/cancel
@@ -50,6 +55,21 @@ POST /api/admin/users
 In development, the bootstrap admin defaults to `admin` / `adminadmin`. Override it with `STREAMIZE_ADMIN_USERNAME` and `STREAMIZE_ADMIN_PASSWORD`.
 
 Media workers use `ffmpeg` and `ffprobe` by default. Override them with `STREAMIZE_FFMPEG_PATH` and `STREAMIZE_FFPROBE_PATH` if the binaries live outside `PATH`.
+
+## Library Metadata
+
+Torrent files are ingested into SQLite first, then background jobs enrich them into a catalog-style library. The metadata worker:
+
+- creates `metadata_identify` jobs for newly ingested video files;
+- backfills pending metadata jobs for existing downloaded files on API startup;
+- parses TV, movie, and anime-style release names from torrent file paths;
+- uses TMDB for movie/TV lookup when `STREAMIZE_TMDB_API_KEY` is set;
+- falls back to AniList for anime-like releases when TMDB does not produce a confident match;
+- groups matched files under catalog items and episodes for the Library UI.
+
+`STREAMIZE_METADATA_LANGUAGE` defaults to `en-US`. If `STREAMIZE_TMDB_API_KEY` is empty, metadata jobs fail gracefully and can be retried from the UI after the key is configured.
+
+See [docs/metadata-library.md](docs/metadata-library.md) for the schema, job flow, API routes, and operational notes.
 
 ## Web Development
 

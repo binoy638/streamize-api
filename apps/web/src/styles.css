@@ -356,8 +356,8 @@
   .textarea:focus,
   .select:focus,
   .search input:focus {
-    @apply border-[var(--accent)];
-    box-shadow: 0 0 0 3px var(--accent-soft);
+    @apply border-[var(--border-strong)];
+    box-shadow: 0 0 0 3px oklch(100% 0 0 / 0.08);
   }
 
   .topbar-actions,
@@ -491,7 +491,7 @@
   }
 
   .inline-search:focus-within::before {
-    background: var(--accent);
+    background: var(--muted);
   }
 
   .inline-search .input {
@@ -576,6 +576,10 @@
     @apply absolute left-0 top-0 z-0 block max-w-none;
     opacity: 0;
     transition: opacity 0.25s ease, transform 0.4s ease;
+  }
+
+  .poster-art {
+    @apply absolute inset-0 z-0 h-full w-full object-cover;
   }
 
   .media-card:hover .poster-thumb {
@@ -691,12 +695,51 @@
     border-color: oklch(84% 0.135 92 / 0.36);
   }
 
+  .badge.job-type {
+    @apply rounded-md tracking-[0.06em];
+  }
+
+  .badge.job-hls {
+    color: oklch(80% 0.15 62);
+    background: oklch(80% 0.15 62 / 0.14);
+    border-color: oklch(80% 0.15 62 / 0.38);
+  }
+
+  .badge.job-metadata {
+    color: oklch(78% 0.07 250);
+    background: oklch(78% 0.07 250 / 0.14);
+    border-color: oklch(78% 0.07 250 / 0.36);
+  }
+
+  .badge.job-subtitle {
+    color: oklch(75% 0.13 305);
+    background: oklch(75% 0.13 305 / 0.14);
+    border-color: oklch(75% 0.13 305 / 0.36);
+  }
+
+  .badge.job-sprite {
+    color: oklch(78% 0.11 188);
+    background: oklch(78% 0.11 188 / 0.14);
+    border-color: oklch(78% 0.11 188 / 0.38);
+  }
+
+  .badge.job-probe,
+  .badge.job-other {
+    color: oklch(78% 0.055 248);
+    background: oklch(78% 0.055 248 / 0.13);
+    border-color: oklch(78% 0.055 248 / 0.34);
+  }
+
   /* status badge overlaid on a poster — dark glass so any grade stays legible */
   .poster > .badge {
     @apply absolute left-3 top-3 z-[2];
     background: oklch(8% 0.006 58 / 0.82);
     border-color: oklch(100% 0 0 / 0.1);
     backdrop-filter: blur(4px);
+  }
+
+  .poster > .badge + .badge {
+    @apply top-[42px];
   }
 
   /* no play affordance on items that aren't watchable yet */
@@ -849,11 +892,12 @@
   }
 
   .data-table tbody tr {
-    transition: background 0.14s ease;
+    transition: background 0.14s ease, box-shadow 0.14s ease;
   }
 
   .data-table tbody tr:hover {
-    background: oklch(55% 0.225 27 / 0.08);
+    background: oklch(17.5% 0 0);
+    box-shadow: inset 3px 0 0 oklch(48% 0 0 / 0.18);
   }
 
   .table-title {
@@ -987,16 +1031,34 @@
 
   /* torrent detail */
   .detail-hero {
-    @apply mb-[20px] grid grid-cols-[260px_minmax(0,1fr)] items-stretch gap-5;
+    @apply mb-[20px] grid items-stretch gap-5;
+    grid-template-columns: minmax(260px, 384px) minmax(0, 1fr);
   }
 
   .detail-poster {
-    @apply min-h-[260px] overflow-hidden rounded-[var(--radius)] border border-[var(--border)];
+    @apply h-full min-h-[340px] w-full overflow-hidden rounded-[var(--radius)] border border-[var(--border)];
+    aspect-ratio: auto;
     box-shadow: var(--shadow-card);
   }
 
   .detail-copy {
-    @apply grid min-w-0 content-center gap-3;
+    @apply grid min-w-0 gap-3;
+  }
+
+  .detail-kicker {
+    @apply flex flex-wrap items-center justify-between gap-3;
+  }
+
+  .detail-copy h1 {
+    @apply m-0 max-w-none font-display font-extrabold tracking-normal;
+    font-size: 50px;
+    line-height: 1;
+    overflow-wrap: anywhere;
+  }
+
+  .detail-copy p {
+    @apply max-w-[760px] text-[var(--muted)];
+    overflow-wrap: anywhere;
   }
 
   .overview-grid {
@@ -1538,6 +1600,15 @@
     @apply grid grid-cols-1;
   }
 
+  .detail-poster {
+    @apply min-h-[220px];
+    aspect-ratio: 16 / 9;
+  }
+
+  .detail-copy h1 {
+    font-size: 40px;
+  }
+
   .layout-grid.equal {
     @apply grid-cols-1;
   }
@@ -1571,5 +1642,13 @@
 
   .poster {
     @apply min-h-[145px];
+  }
+
+  .detail-poster {
+    @apply min-h-[180px];
+  }
+
+  .detail-copy h1 {
+    font-size: 32px;
   }
 }

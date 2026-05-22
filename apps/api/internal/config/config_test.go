@@ -20,6 +20,8 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("STREAMIZE_WORKER_POLL_INTERVAL", "")
 	t.Setenv("STREAMIZE_FFMPEG_PATH", "")
 	t.Setenv("STREAMIZE_FFPROBE_PATH", "")
+	t.Setenv("STREAMIZE_TMDB_API_KEY", "")
+	t.Setenv("STREAMIZE_METADATA_LANGUAGE", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -64,6 +66,12 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.FFprobePath != "ffprobe" {
 		t.Fatalf("expected default ffprobe path, got %q", cfg.FFprobePath)
+	}
+	if cfg.TMDBAPIKey != "" {
+		t.Fatalf("expected empty default TMDB API key, got %q", cfg.TMDBAPIKey)
+	}
+	if cfg.MetadataLanguage != "en-US" {
+		t.Fatalf("expected default metadata language en-US, got %q", cfg.MetadataLanguage)
 	}
 }
 

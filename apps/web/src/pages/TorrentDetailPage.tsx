@@ -1,7 +1,9 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Trash2 } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import * as api from "../lib/api";
+import { DeleteTorrentModal } from "../components/DeleteTorrentModal";
 import { Badge, Button, EmptyState, Progress, StatCard } from "../components/ui";
 import { formatBytes, formatDate } from "../lib/format";
 import {
@@ -14,7 +16,7 @@ import {
   type TorrentFile as MockTorrentFile,
 } from "../lib/mock-data";
 
-const tabs = ["overview", "files", "jobs", "subtitles", "shares"];
+const tabs = ["files", "jobs", "subtitles", "shares", "overview"];
 const pollableStatuses = new Set(["added", "queued", "downloading", "processing"]);
 const pollableFileStatuses = new Set(["downloading", "queued", "processing"]);
 const pollableJobStatuses = new Set(["queued", "running"]);
@@ -59,16 +61,20 @@ type JobRow = {
 
 export function TorrentDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const mockTorrent = useMemo(() => findTorrent(id), [id]);
   const mockFiles = useMemo(() => filesForTorrent(mockTorrent.id).map(mockFileToRow), [mockTorrent.id]);
   const mockDetailJobs = useMemo(() => mockJobs.slice(0, 4).map(mockJobToDetailRow), []);
   const [torrent, setTorrent] = useState<TorrentDetail>(() => mockTorrentToDetail(mockTorrent));
   const [files, setFiles] = useState<FileRow[]>(() => mockFiles);
   const [detailJobs, setDetailJobs] = useState<JobRow[]>(() => mockDetailJobs);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("files");
   const [loading, setLoading] = useState(true);
   const [usingMock, setUsingMock] = useState(true);
   const [error, setError] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const loadDetail = useCallback(
     async ({ showLoading = true, fallbackToMock = true }: { showLoading?: boolean; fallbackToMock?: boolean } = {}) => {
@@ -134,18 +140,45 @@ export function TorrentDetailPage() {
     return `${failed} failed, ${running} running`;
   }, [detailJobs]);
 
+  async function deleteCurrentTorrent(options: Required<api.DeleteTorrentOptions>) {
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      if (!usingMock) {
+        await api.deleteTorrent(torrent.id, options);
+      }
+      navigate("/torrents");
+    } catch (err) {
+      setDeleteOpen(false);
+      setDeleteError(err instanceof Error ? err.message : "Unable to delete torrent.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   return (
     <section className="content">
       {usingMock && error ? (
         <div className="alert alert-warn is-visible">Using prototype torrent detail because the API detail could not load: {error}</div>
       ) : null}
+      {deleteError ? <div className="alert alert-error is-visible">{deleteError}</div> : null}
 
       <div className="detail-hero">
         <div className="poster detail-poster" style={{ "--poster-hue": torrent.posterHue } as CSSProperties}>
           <span className="poster-label">{torrent.name.slice(0, 18)}</span>
         </div>
         <div className="detail-copy">
-          <span className="eyebrow">Torrent detail</span>
+          <div className="detail-kicker">
+            <span className="eyebrow">Torrent detail</span>
+            <Button
+              variant="danger"
+              disabled={loading || deleteBusy}
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 size={15} />
+              {deleteBusy ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
           <h1>{torrent.name}</h1>
           <p>
             Files, processing jobs, subtitles, and shares stay attached to the torrent record so
@@ -289,6 +322,18 @@ export function TorrentDetailPage() {
           </div>
         ) : null}
       </div>
+
+      <DeleteTorrentModal
+        open={deleteOpen}
+        title={torrent.name || "this torrent"}
+        busy={deleteBusy}
+        onClose={() => {
+          if (!deleteBusy) {
+            setDeleteOpen(false);
+          }
+        }}
+        onConfirm={deleteCurrentTorrent}
+      />
     </section>
   );
 }

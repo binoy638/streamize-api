@@ -52,6 +52,58 @@ func TestCreateHLSTranscodeJobIfMissingIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestBackfillMetadataIdentifyJobsQueuesPendingFiles(t *testing.T) {
+	ctx := context.Background()
+	store, db := newTestStoreAndDB(t)
+	authStore := auth.NewStore(db)
+	torrentStore := torrents.NewStore(db)
+
+	owner, err := authStore.CreateUser(ctx, auth.CreateUserParams{
+		Username: "owner",
+		Password: "owner-password",
+		Role:     auth.RoleUser,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser returned error: %v", err)
+	}
+
+	torrent := createTorrentRecordForJobsTest(t, ctx, torrentStore, owner.ID, "Backfill Show")
+	pendingFile := createTorrentFileForJobsTest(t, ctx, torrentStore, torrent.ID, "Backfill.Show.S01E01.mkv")
+	failedFile := createTorrentFileForJobsTest(t, ctx, torrentStore, torrent.ID, "Backfill.Show.S01E02.mkv")
+	prequeuedFile := createTorrentFileForJobsTest(t, ctx, torrentStore, torrent.ID, "Backfill.Show.S01E03.mkv")
+
+	if _, err := db.ExecContext(ctx, `UPDATE torrent_files SET metadata_status = 'failed' WHERE id = ?`, failedFile.ID); err != nil {
+		t.Fatalf("mark failed metadata returned error: %v", err)
+	}
+	if _, _, err := store.CreateMetadataIdentifyJobIfMissing(ctx, prequeuedFile.ID); err != nil {
+		t.Fatalf("CreateMetadataIdentifyJobIfMissing prequeued returned error: %v", err)
+	}
+
+	created, err := store.BackfillMetadataIdentifyJobs(ctx, 100)
+	if err != nil {
+		t.Fatalf("BackfillMetadataIdentifyJobs returned error: %v", err)
+	}
+	if created != 1 {
+		t.Fatalf("expected one backfill job, got %d", created)
+	}
+
+	job, err := store.FindJobByDedupeKey(ctx, MetadataIdentifyDedupeKey(pendingFile.ID))
+	if err != nil {
+		t.Fatalf("FindJobByDedupeKey returned error: %v", err)
+	}
+	if job.Type != TypeMetadataIdentify || job.Status != StatusQueued {
+		t.Fatalf("unexpected metadata job: %+v", job)
+	}
+
+	created, err = store.BackfillMetadataIdentifyJobs(ctx, 100)
+	if err != nil {
+		t.Fatalf("second BackfillMetadataIdentifyJobs returned error: %v", err)
+	}
+	if created != 0 {
+		t.Fatalf("expected no duplicate backfill jobs, got %d", created)
+	}
+}
+
 func TestClaimNextCompleteAndFail(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)
@@ -374,4 +426,21 @@ func createTorrentRecordForJobsTest(t *testing.T, ctx context.Context, store *to
 	}
 
 	return record
+}
+
+func createTorrentFileForJobsTest(t *testing.T, ctx context.Context, store *torrents.Store, torrentID string, name string) torrents.TorrentFile {
+	t.Helper()
+
+	file, _, err := store.CreateTorrentFileIfMissing(ctx, torrents.CreateTorrentFileParams{
+		TorrentID:    torrentID,
+		Name:         name,
+		Ext:          filepath.Ext(name),
+		OriginalPath: "/media/originals/" + name,
+		SizeBytes:    1024,
+	})
+	if err != nil {
+		t.Fatalf("CreateTorrentFileIfMissing returned error: %v", err)
+	}
+
+	return file
 }

@@ -6,6 +6,7 @@ import { AppShell } from "./components/AppShell";
 import { LoadingScreen } from "./components/ui";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { JobsPage } from "./pages/JobsPage";
+import { LibraryDetailPage } from "./pages/LibraryDetailPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { PlayerPage } from "./pages/PlayerPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -87,6 +88,14 @@ export function App() {
           element={
             <ShellRoute>
               <LibraryPage />
+            </ShellRoute>
+          }
+        />
+        <Route
+          path="/library/:id"
+          element={
+            <ShellRoute>
+              <LibraryDetailPage />
             </ShellRoute>
           }
         />

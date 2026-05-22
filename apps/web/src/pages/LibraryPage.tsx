@@ -1,6 +1,6 @@
 import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Play, Plus, Share2, Trash2 } from "lucide-react";
+import { Layers, Play, Plus, Share2, Trash2 } from "lucide-react";
 
 import * as api from "../lib/api";
 import { DeleteTorrentModal } from "../components/DeleteTorrentModal";
@@ -17,6 +17,7 @@ type LibraryItem = {
   id: string;
   source: "api" | "mock";
   torrentId: string;
+  target: string;
   title: string;
   duration: string;
   meta: string[];
@@ -27,7 +28,11 @@ type LibraryItem = {
   pollable: boolean;
   posterHue: number;
   playable: boolean;
+  fileCount: number;
+  mediaType: api.CatalogMediaType | "mock";
+  metadataStatus: api.MetadataStatus | "mock";
   thumbnailUrl?: string;
+  posterUrl?: string;
   searchText: string;
 };
 
@@ -60,11 +65,10 @@ export function LibraryPage() {
     }
 
     try {
-      const [records, allFiles] = await Promise.all([api.listTorrents(), api.listAllFiles()]);
-      const torrentMap = new Map(records.map((t) => [t.id, t]));
+      const [records, libraryItems] = await Promise.all([api.listTorrents(), api.listLibrary()]);
 
       setTorrents(records);
-      setItems(allFiles.map((file) => apiFileToLibraryItem(file, torrentMap.get(file.torrentId) ?? null)));
+      setItems(libraryItems.map(apiCatalogItemToLibraryItem));
       setUsingMock(false);
       setError("");
     } catch (err) {
@@ -207,13 +211,13 @@ export function LibraryPage() {
       ) : (
         <div className="media-grid">
           {visibleItems.map((item) => {
-            const target = item.playable ? `/player/${item.id}` : `/torrents/${item.torrentId}`;
+            const cardTarget = item.target || (item.torrentId ? `/torrents/${item.torrentId}` : "/library");
             const deleting = !!item.torrentId && deletingTorrentId === item.torrentId;
             return (
               <article className="media-card" key={item.id}>
                 <Link
                   className="poster-link"
-                  to={target}
+                  to={cardTarget}
                   aria-label={item.playable ? `Play ${item.title}` : `Open ${item.title}`}
                 >
                   <div
@@ -221,9 +225,13 @@ export function LibraryPage() {
                     style={{ "--poster-hue": item.posterHue } as CSSProperties}
                   >
                     <Badge tone={item.status}>{statusLabel(item.status)}</Badge>
+                    {item.metadataStatus === "unmatched" || item.metadataStatus === "failed" ? (
+                      <Badge tone="warn">metadata {item.metadataStatus}</Badge>
+                    ) : null}
+                    {item.posterUrl ? <img src={item.posterUrl} alt="" aria-hidden className="poster-art" /> : null}
                     {item.thumbnailUrl ? <SpriteThumbnail src={item.thumbnailUrl} /> : null}
                     <span className="duration">{item.duration}</span>
-                    {item.thumbnailUrl ? null : (
+                    {item.posterUrl || item.thumbnailUrl ? null : (
                       <span className="poster-label">{item.title.split(":")[0]}</span>
                     )}
                   </div>
@@ -243,11 +251,12 @@ export function LibraryPage() {
                   </div>
                   <div className="media-actions">
                     {item.playable ? (
-                      <Link className="btn btn-primary flex-1" to={target}>
-                        <Play size={15} /> Watch
+                      <Link className="btn btn-primary flex-1" to={cardTarget}>
+                        {item.fileCount > 1 ? <Layers size={15} /> : <Play size={15} />}
+                        {item.fileCount > 1 ? "Open" : "Watch"}
                       </Link>
                     ) : (
-                      <Link className="btn flex-1" to={target}>
+                      <Link className="btn flex-1" to={cardTarget}>
                         Details
                       </Link>
                     )}
@@ -294,38 +303,60 @@ export function LibraryPage() {
   );
 }
 
-function apiFileToLibraryItem(file: api.TorrentFile, torrent: api.Torrent | null): LibraryItem {
-  const playable = Boolean(file.hlsPath) || file.directPlayable;
-  const failed = file.status === "error" || torrent?.status === "error";
+function apiCatalogItemToLibraryItem(item: api.LibraryCatalogItem): LibraryItem {
+  const files = item.files;
+  const primary = files.find((file) => Boolean(file.hlsPath) || file.directPlayable) || files[0];
+  const playable = files.some((file) => Boolean(file.hlsPath) || file.directPlayable);
+  const failed = files.length > 0 && files.every((file) => file.status === "error");
   const status: LibraryStatus = failed ? "failed" : playable ? "ready" : "processing";
-  const torrentProgress = torrent?.progressPercent ?? 0;
-  const downloadProgress = file.status === "downloading" ? (file.downloadPercent || torrentProgress) : 0;
-  const progress = playable ? 100 : clampPercent(file.transcodingPercent || downloadProgress || torrentProgress || 0);
-  const transferLabel = file.processingMode ? file.processingMode.replace(/_/g, " ") : (torrent?.status ?? file.status);
+  const progress = playable ? 100 : aggregateProgress(files);
+  const transferLabel = primary?.processingMode ? primary.processingMode.replace(/_/g, " ") : (primary?.status ?? item.metadataStatus);
+  const sizeBytes = files.reduce((total, file) => total + (file.sizeBytes || 0), 0);
+  const fileCount = files.length;
+  const episodeCount = files.filter((file) => file.episode).length;
+  const typeLabel = item.mediaType === "unknown" ? item.metadataStatus : item.mediaType;
   const meta = [
-    file.sizeBytes > 0 ? formatBytes(file.sizeBytes) : "Pending",
-    codecLabel(file),
+    sizeBytes > 0 ? formatBytes(sizeBytes) : "Pending",
+    fileCount === 1 ? "1 file" : `${fileCount} files`,
+    episodeCount > 0 ? `${episodeCount} episodes` : typeLabel,
     transferLabel,
   ];
-  const tags = [status, "recent", file.status, torrent?.status].filter(Boolean) as string[];
+  const tags = [status, item.mediaType, item.metadataStatus, primary?.status].filter(Boolean) as string[];
+  const target = fileCount === 1 && playable && primary ? `/player/${primary.id}` : `/library/${encodeURIComponent(item.id)}`;
 
   return {
-    id: file.id,
+    id: item.id,
     source: "api",
-    torrentId: file.torrentId,
-    title: file.name,
-    duration: formatDuration(file.durationSeconds || 0),
+    torrentId: primary?.torrentId || "",
+    target,
+    title: item.title,
+    duration: primary ? formatDuration(primary.durationSeconds || 0) : "Pending",
     meta,
     status,
     tags,
     progress,
-    sizeBytes: file.sizeBytes,
-    pollable: pollableFileStatuses.has(file.status),
-    posterHue: hueFromID(file.id),
+    sizeBytes,
+    pollable: files.some((file) => pollableFileStatuses.has(file.status)),
+    posterHue: hueFromID(item.id),
     playable,
-    thumbnailUrl: previewSpriteURL(file),
-    searchText: [file.name, torrent?.name ?? "", file.status, torrent?.status ?? "", ...meta].join(" ").toLowerCase(),
+    fileCount,
+    mediaType: item.mediaType,
+    metadataStatus: item.metadataStatus,
+    thumbnailUrl: primary ? previewSpriteURL(primary) : undefined,
+    posterUrl: item.posterUrl,
+    searchText: [item.title, item.originalTitle ?? "", item.mediaType, item.metadataStatus, ...files.map((file) => file.name), ...meta].join(" ").toLowerCase(),
   };
+}
+
+function aggregateProgress(files: api.LibraryFile[]): number {
+  if (files.length === 0) {
+    return 0;
+  }
+  const total = files.reduce((sum, file) => {
+    const progress = file.status === "done" ? 100 : file.transcodingPercent || file.downloadPercent || 0;
+    return sum + clampPercent(progress);
+  }, 0);
+  return clampPercent(total / files.length);
 }
 
 // previewSpriteURL builds the URL of the generated thumbnail sprite sheet, or
@@ -373,6 +404,7 @@ function mockMediaToLibraryItem(item: (typeof mediaItems)[number]): LibraryItem 
     id: item.id,
     source: "mock",
     torrentId: item.torrentId,
+    target: status === "ready" ? `/player/${item.id}` : `/torrents/${item.torrentId}`,
     title: item.title,
     duration: item.duration,
     meta: item.meta,
@@ -383,6 +415,9 @@ function mockMediaToLibraryItem(item: (typeof mediaItems)[number]): LibraryItem 
     pollable: status === "processing",
     posterHue: item.posterHue,
     playable: status === "ready",
+    fileCount: 1,
+    mediaType: "mock",
+    metadataStatus: "mock",
     searchText: [item.title, item.status, ...item.meta].join(" ").toLowerCase(),
   };
 }
