@@ -1,10 +1,19 @@
-import { type CSSProperties, type FormEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type FormEvent,
+  type PointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link, useParams } from "react-router-dom";
-import { Maximize2, Pause, Play, Volume2 } from "lucide-react";
+import { Captions, Gauge, Maximize, Minimize, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import type Hls from "hls.js";
 
 import * as api from "../lib/api";
-import { Badge, Button, Field, Input, Modal, Progress, Select, StatCard } from "../components/ui";
+import { Badge, Button, Field, Input, Modal, Select } from "../components/ui";
 import { formatBytes } from "../lib/format";
 import { filesForTorrent, findMedia, torrentFiles } from "../lib/mock-data";
 
@@ -24,6 +33,8 @@ type PlayerFile = {
 
 type HlsInstance = InstanceType<typeof Hls>;
 
+type ControlMenu = "speed" | "cc" | null;
+
 type PreviewCue = {
   start: number;
   end: number;
@@ -34,9 +45,12 @@ type PreviewCue = {
   height: number;
 };
 
+const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
 export function PlayerPage() {
   const { fileId } = useParams();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const stageRef = useRef<HTMLElement | null>(null);
   const initialMedia = findMedia(fileId);
   const mockRelated = useMemo(() => {
     const files = filesForTorrent(initialMedia.torrentId);
@@ -47,7 +61,14 @@ export function PlayerPage() {
   const selectedFile = related.find((file) => file.id === selectedFileId) || related[0];
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
+  const [currentSeconds, setCurrentSeconds] = useState(0);
   const [durationSeconds, setDurationSeconds] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [activeTrack, setActiveTrack] = useState(-1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [menu, setMenu] = useState<ControlMenu>(null);
   const [usingMock, setUsingMock] = useState(true);
   const [error, setError] = useState("");
   const [subtitles, setSubtitles] = useState<api.Subtitle[]>([]);
@@ -111,6 +132,7 @@ export function PlayerPage() {
     setError("");
     setPlaying(false);
     setPosition(0);
+    setCurrentSeconds(0);
     video.removeAttribute("src");
     video.load();
 
@@ -168,8 +190,52 @@ export function PlayerPage() {
     };
   }, [directSource, hlsSource, playbackSource]);
 
+  // Keep volume / mute / speed applied to the element, including after a source swap.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+    video.volume = volume;
+    video.muted = muted;
+    video.playbackRate = playbackRate;
+  }, [volume, muted, playbackRate, playbackSource]);
+
+  // Drive subtitle visibility ourselves since the native controls are hidden.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+    const tracks = video.textTracks;
+    for (let index = 0; index < tracks.length; index += 1) {
+      tracks[index].mode = index === activeTrack ? "showing" : "disabled";
+    }
+  }, [activeTrack, subtitles, playbackSource]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  // Close an open control menu when clicking elsewhere.
+  useEffect(() => {
+    if (!menu) {
+      return;
+    }
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      if (!(event.target as HTMLElement).closest(".ctrl-menu-host")) {
+        setMenu(null);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [menu]);
+
   useEffect(() => {
     setSubtitles([]);
+    setActiveTrack(-1);
     if (selectedFile?.source !== "api") {
       return;
     }
@@ -244,6 +310,38 @@ export function PlayerPage() {
     video.currentTime = (percent / 100) * video.duration;
   }
 
+  function changeVolume(value: number) {
+    setVolume(value);
+    setMuted(value === 0);
+  }
+
+  function toggleMute() {
+    if (muted && volume === 0) {
+      setVolume(0.5);
+      setMuted(false);
+      return;
+    }
+    setMuted((current) => !current);
+  }
+
+  function changeRate(rate: number) {
+    setPlaybackRate(rate);
+    setMenu(null);
+  }
+
+  function chooseSubtitle(index: number) {
+    setActiveTrack(index);
+    setMenu(null);
+  }
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void stageRef.current?.requestFullscreen();
+    }
+  }
+
   function updatePreviewFromPointer(event: PointerEvent<HTMLInputElement>) {
     if (!selectedFile?.previewReady) {
       setPreviewPercent(null);
@@ -288,6 +386,9 @@ export function PlayerPage() {
     }
   }
 
+  const volumePercent = muted ? 0 : volume;
+  const sourceLabel = hlsSource ? "HLS stream" : directSource ? "Direct file" : "Not ready";
+
   return (
     <section className="content player-content">
       {usingMock && error ? (
@@ -314,20 +415,21 @@ export function PlayerPage() {
       ) : null}
 
       <div className="player-layout">
-        <section className={`player-stage ${playing ? "is-playing" : ""}`} aria-label="Video player">
+        <section className="player-stage" ref={stageRef} aria-label="Video player">
           {playbackSource ? (
             <video
               ref={videoRef}
               className="video-player"
-              controls
               playsInline
+              onClick={() => void togglePlayback()}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
               onLoadedMetadata={(event) => setDurationSeconds(event.currentTarget.duration || 0)}
               onTimeUpdate={(event) => {
                 const video = event.currentTarget;
                 const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationSeconds;
-                setPosition(duration > 0 ? Math.round((video.currentTime / duration) * 100) : 0);
+                setCurrentSeconds(video.currentTime || 0);
+                setPosition(duration > 0 ? (video.currentTime / duration) * 100 : 0);
               }}
             >
               {subtitles.map((subtitle) => (
@@ -349,39 +451,142 @@ export function PlayerPage() {
               </div>
             </div>
           )}
-          <div className="player-controls">
-            <Button variant="primary" onClick={() => void togglePlayback()} aria-pressed={playing} disabled={!playbackSource}>
-              {playing ? <Pause size={16} /> : <Play size={16} />} {playing ? "Pause" : "Play"}
-            </Button>
-            <span className="scrub-host" onPointerLeave={() => setPreviewPercent(null)}>
-              {previewStyle ? <span className="scrub-preview" style={previewStyle} /> : null}
-              <input
-                className="range"
-                type="range"
-                min="0"
-                max="100"
-                value={position}
-                onChange={(event) => seek(Number(event.target.value))}
-                onPointerMove={updatePreviewFromPointer}
-                aria-label="Playback position"
-                disabled={!playbackSource}
-              />
-            </span>
-            <span className="mono">{position}%</span>
-            <Button>
-              <Volume2 size={16} /> Audio
-            </Button>
-            <Button>
-              <Maximize2 size={16} /> Fullscreen
-            </Button>
-          </div>
+
+          {playbackSource ? (
+            <div className="player-controls">
+              <span className="scrub-host" onPointerLeave={() => setPreviewPercent(null)}>
+                {previewStyle ? <span className="scrub-preview" style={previewStyle} /> : null}
+                <input
+                  className="range"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={position}
+                  style={{ "--range-fill": `${position}%` } as CSSProperties}
+                  onChange={(event) => seek(Number(event.target.value))}
+                  onPointerMove={updatePreviewFromPointer}
+                  aria-label="Seek"
+                />
+              </span>
+
+              <div className="control-row">
+                <div className="control-cluster">
+                  <button
+                    className="ctrl-btn primary"
+                    type="button"
+                    onClick={() => void togglePlayback()}
+                    aria-label={playing ? "Pause" : "Play"}
+                  >
+                    {playing ? <Pause size={19} /> : <Play size={19} />}
+                  </button>
+                  <div className="volume">
+                    <button
+                      className="ctrl-btn"
+                      type="button"
+                      onClick={toggleMute}
+                      aria-label={volumePercent === 0 ? "Unmute" : "Mute"}
+                    >
+                      {volumePercent === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                    </button>
+                    <input
+                      className="range volume-range"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={volumePercent}
+                      style={{ "--range-fill": `${volumePercent * 100}%` } as CSSProperties}
+                      onChange={(event) => changeVolume(Number(event.target.value))}
+                      aria-label="Volume"
+                    />
+                  </div>
+                  <span className="timecode">
+                    {formatClock(currentSeconds)} <i>/</i> {formatClock(durationSeconds)}
+                  </span>
+                </div>
+
+                <div className="control-cluster">
+                  <span className="ctrl-menu-host">
+                    <button
+                      className="ctrl-btn"
+                      type="button"
+                      onClick={() => setMenu(menu === "speed" ? null : "speed")}
+                      aria-label="Playback speed"
+                    >
+                      <Gauge size={17} />
+                      <span className="ctrl-label">{playbackRate}×</span>
+                    </button>
+                    {menu === "speed" ? (
+                      <div className="ctrl-menu">
+                        {PLAYBACK_RATES.map((rate) => (
+                          <button
+                            key={rate}
+                            type="button"
+                            className={rate === playbackRate ? "active" : ""}
+                            onClick={() => changeRate(rate)}
+                          >
+                            {rate}× {rate === 1 ? "(Normal)" : ""}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </span>
+
+                  <span className="ctrl-menu-host">
+                    <button
+                      className="ctrl-btn"
+                      type="button"
+                      onClick={() => setMenu(menu === "cc" ? null : "cc")}
+                      aria-label="Subtitles"
+                      disabled={subtitles.length === 0}
+                    >
+                      <Captions size={18} />
+                    </button>
+                    {menu === "cc" ? (
+                      <div className="ctrl-menu">
+                        <button
+                          type="button"
+                          className={activeTrack === -1 ? "active" : ""}
+                          onClick={() => chooseSubtitle(-1)}
+                        >
+                          Off
+                        </button>
+                        {subtitles.map((subtitle, index) => (
+                          <button
+                            key={subtitle.id}
+                            type="button"
+                            className={activeTrack === index ? "active" : ""}
+                            onClick={() => chooseSubtitle(index)}
+                          >
+                            {subtitle.title || subtitle.language.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </span>
+
+                  <button
+                    className="ctrl-btn"
+                    type="button"
+                    onClick={toggleFullscreen}
+                    aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  >
+                    {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <aside className="panel player-side">
           <div className="panel-header">
             <div>
-              <div className="panel-title">Supported video files</div>
-              <p className="muted">Switching files updates metadata and status without leaving playback.</p>
+              <div className="panel-title">Files</div>
+              <p className="muted">
+                {related.length} file{related.length === 1 ? "" : "s"} in this torrent
+              </p>
             </div>
           </div>
           <div className="file-list">
@@ -401,42 +606,43 @@ export function PlayerPage() {
               </button>
             ))}
           </div>
-          <div className="component-row">
-            <Link className="btn btn-ghost" to={`/torrents/${selectedFile?.torrentId || initialMedia.torrentId}`}>
+          <div className="player-side-actions">
+            <Link className="btn flex-1" to={`/torrents/${selectedFile?.torrentId || initialMedia.torrentId}`}>
               Torrent detail
             </Link>
-            <Button onClick={() => setPartyOpen(true)}>Watch party</Button>
+            <Button variant="primary" className="flex-1" onClick={() => setPartyOpen(true)}>
+              Watch party
+            </Button>
           </div>
         </aside>
       </div>
 
-      <div className="stats-row">
-        <StatCard label="Pieces" value="98%" detail="availability" />
-        <StatCard label="Peers" value="18" detail="healthy swarm" />
-        <StatCard label="Duration" value={formatDuration(durationSeconds)} detail={hlsSource ? (selectedFile?.status === "processing" ? "live HLS" : "local HLS") : directSource ? "direct preview" : "pending"} />
-        <StatCard label="Subtitles" value={String(subtitles.length || selectedFile?.subtitles || 0)} detail="tracks detected" />
-      </div>
-
-      <div className="panel">
-        <div className="playback-health">
-          <div className="playback-health-item">
-            <div className="playback-health-copy">
-              <Badge tone={directSource ? "online" : hlsSource ? "ready" : "paused"}>
-                {directSource ? "Direct preview" : hlsSource ? (selectedFile?.status === "processing" ? "Live HLS" : "HLS") : "Pending"}
-              </Badge>
-              <strong>{selectedFile?.codec || "H.264 / AAC"}</strong>
-              <p className="muted">{previewCues.length > 0 ? "Preview sprites ready." : "Preview sprites pending."}</p>
-            </div>
-            <Progress value={playbackSource ? 100 : 0} />
-          </div>
-          <div className="playback-health-item">
-            <div className="playback-health-copy">
-              <Badge tone={subtitles.length > 0 ? "ready" : "paused"}>Subtitles</Badge>
-              <strong>{subtitles.length > 0 ? subtitles.map((subtitle) => subtitle.language.toUpperCase()).join(", ") : "No tracks yet"}</strong>
-              <p className="muted">Detected tracks appear in the native player controls.</p>
-            </div>
-            <Button>Manage</Button>
-          </div>
+      <div className="player-meta">
+        <div className="player-meta-item">
+          <span>Source</span>
+          <strong>{sourceLabel}</strong>
+        </div>
+        <div className="player-meta-item">
+          <span>Duration</span>
+          <strong>{formatDuration(durationSeconds)}</strong>
+        </div>
+        <div className="player-meta-item">
+          <span>Codec</span>
+          <strong>{selectedFile?.codec || "—"}</strong>
+        </div>
+        <div className="player-meta-item">
+          <span>Subtitles</span>
+          <strong>
+            {subtitles.length > 0 ? `${subtitles.length} track${subtitles.length === 1 ? "" : "s"}` : "None"}
+          </strong>
+        </div>
+        <div className="player-meta-item">
+          <span>Size</span>
+          <strong>{selectedFile?.size || "—"}</strong>
+        </div>
+        <div className="player-meta-item">
+          <span>Preview</span>
+          <strong>{previewCues.length > 0 ? "Sprites ready" : "Pending"}</strong>
         </div>
       </div>
 
@@ -654,4 +860,17 @@ function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
   return `${hours}:${String(remainingMinutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function formatClock(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+    return "0:00";
+  }
+
+  const seconds = Math.floor(totalSeconds);
+  const secs = seconds % 60;
+  const mins = Math.floor(seconds / 60) % 60;
+  const hours = Math.floor(seconds / 3600);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return hours > 0 ? `${hours}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
 }

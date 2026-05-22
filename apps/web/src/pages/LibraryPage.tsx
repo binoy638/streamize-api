@@ -1,19 +1,12 @@
 import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Play, Plus, Share2, Trash2 } from "lucide-react";
 
 import * as api from "../lib/api";
 import { DeleteTorrentModal } from "../components/DeleteTorrentModal";
-import { Badge, Button, EmptyState, Field, Input, Modal, Progress, Select, StatCard, Textarea } from "../components/ui";
+import { Badge, Button, EmptyState, Field, Input, Modal, Progress, Select, Textarea } from "../components/ui";
 import { formatBytes } from "../lib/format";
 import { mediaItems } from "../lib/mock-data";
-
-const filters = [
-  { label: "All", value: "all" },
-  { label: "Ready", value: "ready" },
-  { label: "Processing", value: "processing" },
-  { label: "Failed", value: "failed" },
-  { label: "Recently added", value: "recent" },
-];
 
 const pollableTorrentStatuses = new Set<api.TorrentStatus>(["added", "queued", "downloading", "processing"]);
 const pollableFileStatuses = new Set<api.TorrentFileStatus>(["queued", "downloading", "processing"]);
@@ -51,7 +44,6 @@ type Notice = {
 export function LibraryPage() {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [torrents, setTorrents] = useState<api.Torrent[]>([]);
-  const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [usingMock, setUsingMock] = useState(false);
@@ -111,31 +103,19 @@ export function LibraryPage() {
     return () => window.clearInterval(intervalID);
   }, [items, loadLibrary, torrents, usingMock]);
 
+  // The library only surfaces videos that are ready to play; in-progress and
+  // failed files are reachable from the Torrents tab instead.
   const visibleItems = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return items.filter((item) => {
-      const matchesFilter = filter === "all" || item.tags.includes(filter);
-      const matchesQuery = !normalized || item.searchText.includes(normalized);
-      return matchesFilter && matchesQuery;
+      if (item.status !== "ready") {
+        return false;
+      }
+      return !normalized || item.searchText.includes(normalized);
     });
-  }, [filter, items, query]);
-
-  const stats = useMemo(() => {
-    const ready = items.filter((item) => item.status === "ready").length;
-    const processing = items.filter((item) => item.status === "processing").length;
-    const failed = items.filter((item) => item.status === "failed").length;
-    const storage = items.filter((item) => item.source === "api").reduce((total, item) => total + item.sizeBytes, 0);
-
-    return {
-      ready,
-      processing,
-      failed,
-      storage: storage > 0 ? formatBytes(storage) : usingMock ? "7.8 TB" : "0 B",
-    };
-  }, [items, usingMock]);
+  }, [items, query]);
 
   async function addTorrent(input: api.CreateTorrentInput) {
-    setFilter("all");
     setQuery("");
     if (usingMock) {
       const local = mockMediaToLibraryItem({
@@ -154,7 +134,7 @@ export function LibraryPage() {
 
     await api.createTorrent(input);
     await loadLibrary({ showLoading: false, fallbackToMock: false });
-    setNotice({ tone: "success", text: "Magnet added and library refresh started." });
+    setNotice({ tone: "success", text: "Magnet added — track download progress in the Torrents tab." });
   }
 
   async function deleteLibraryItem(item: LibraryItem, options: Required<api.DeleteTorrentOptions>) {
@@ -189,138 +169,113 @@ export function LibraryPage() {
       <div className="screen-header">
         <div>
           <span className="eyebrow">Media Library</span>
-          <h1>Ready to watch, still processing, or failed at a glance.</h1>
-          <p>Library cards are backed by torrent file records and expose playback readiness plus cleanup actions.</p>
+          <h1>Everything that's ready to watch.</h1>
+          <p>Finished videos with HLS output or direct playback. Downloads still in progress live in the Torrents tab.</p>
         </div>
         <div className="header-actions">
           <Button variant="primary" onClick={() => setMagnetOpen(true)}>
-            Add Magnet
+            <Plus size={16} /> Add magnet
           </Button>
-          <Select aria-label="View mode" defaultValue="grid">
-            <option value="grid">Grid view</option>
-            <option value="list">Compact list</option>
-          </Select>
         </div>
       </div>
 
       {error ? <div className="alert alert-warn is-visible">Using prototype media because the API did not respond: {error}</div> : null}
       {notice ? <div className={`alert alert-${notice.tone} is-visible`}>{notice.text}</div> : null}
 
-      <div className="stats-row">
-        <StatCard label="Ready videos" value={String(stats.ready)} detail={usingMock ? "prototype library" : "playable now"} />
-        <StatCard label="Processing" value={String(stats.processing)} detail="HLS, subtitles, sprites" />
-        <StatCard label="Failed" value={String(stats.failed)} detail="needs retry" />
-        <StatCard label="Storage" value={stats.storage} detail={usingMock ? "sample data" : "original media listed"} />
+      <div className="toolbar">
+        <span className="toolbar-count mr-auto">
+          {visibleItems.length} {visibleItems.length === 1 ? "video" : "videos"}
+        </span>
+        <label className="inline-search">
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search the library"
+            aria-label="Search the library"
+          />
+        </label>
       </div>
 
-      <div className="filters">
-        {filters.map((item) => (
-          <button
-            key={item.value}
-            className={`filter-chip ${filter === item.value ? "active" : ""}`}
-            onClick={() => setFilter(item.value)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      <label className="inline-search">
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Filter visible media"
-          aria-label="Filter visible media"
-        />
-      </label>
-
-      <div className="layout-grid">
+      {visibleItems.length === 0 ? (
+        <EmptyState title="Nothing ready to watch yet">
+          {loading
+            ? "Loading your library."
+            : query
+              ? "No ready videos match your search."
+              : "Videos appear here once they finish processing. Check the Torrents tab for downloads in progress."}
+        </EmptyState>
+      ) : (
         <div className="media-grid">
-          {visibleItems.map((item) => (
-            <article className="media-card" key={item.id}>
-              <div className="poster" style={{ "--poster-hue": item.posterHue } as CSSProperties}>
-                {item.thumbnailUrl ? <SpriteThumbnail src={item.thumbnailUrl} /> : null}
-                <span className="duration">{item.duration}</span>
-                {item.thumbnailUrl ? null : <span className="poster-label">{item.title.split(":")[0]}</span>}
-              </div>
-              <div className="media-body">
-                <div className="media-title" title={item.title}>
-                  {item.title}
-                </div>
-                <div className="media-meta">
-                  {item.meta.map((meta) => (
-                    <span key={meta}>{meta}</span>
-                  ))}
-                </div>
-                <div className="progress-row">
-                  <Progress value={item.progress} />
-                  <span>{item.progress === 100 ? "Ready" : `${item.progress}%`}</span>
-                </div>
-                <div className="component-row">
-                  <Badge tone={item.status}>{statusLabel(item.status)}</Badge>
-                  {item.playable ? (
-                    <Link className="btn btn-ghost" to={`/player/${item.id}`}>
-                      Watch
-                    </Link>
-                  ) : (
-                    <Link className="btn btn-ghost" to={`/torrents/${item.torrentId}`}>
-                      Details
-                    </Link>
-                  )}
-                  <Button onClick={() => setShareOpen(true)}>Share</Button>
-                  <Button
-                    variant="danger"
-                    disabled={!item.torrentId || (!!item.torrentId && deletingTorrentId === item.torrentId)}
-                    onClick={() => setPendingDelete(item)}
+          {visibleItems.map((item) => {
+            const target = item.playable ? `/player/${item.id}` : `/torrents/${item.torrentId}`;
+            const deleting = !!item.torrentId && deletingTorrentId === item.torrentId;
+            return (
+              <article className="media-card" key={item.id}>
+                <Link
+                  className="poster-link"
+                  to={target}
+                  aria-label={item.playable ? `Play ${item.title}` : `Open ${item.title}`}
+                >
+                  <div
+                    className={item.playable ? "poster" : "poster poster-static"}
+                    style={{ "--poster-hue": item.posterHue } as CSSProperties}
                   >
-                    {!item.torrentId ? "No torrent" : deletingTorrentId === item.torrentId ? "Deleting..." : "Delete torrent"}
-                  </Button>
+                    <Badge tone={item.status}>{statusLabel(item.status)}</Badge>
+                    {item.thumbnailUrl ? <SpriteThumbnail src={item.thumbnailUrl} /> : null}
+                    <span className="duration">{item.duration}</span>
+                    {item.thumbnailUrl ? null : (
+                      <span className="poster-label">{item.title.split(":")[0]}</span>
+                    )}
+                  </div>
+                </Link>
+                <div className="media-body">
+                  <div className="media-title" title={item.title}>
+                    {item.title}
+                  </div>
+                  <div className="media-meta">
+                    {item.meta.map((meta) => (
+                      <span key={meta}>{meta}</span>
+                    ))}
+                  </div>
+                  <div className="progress-row">
+                    <Progress value={item.progress} />
+                    <span>{item.progress === 100 ? "Ready" : `${item.progress}%`}</span>
+                  </div>
+                  <div className="media-actions">
+                    {item.playable ? (
+                      <Link className="btn btn-primary flex-1" to={target}>
+                        <Play size={15} /> Watch
+                      </Link>
+                    ) : (
+                      <Link className="btn flex-1" to={target}>
+                        Details
+                      </Link>
+                    )}
+                    <Button
+                      className="w-9 flex-none px-0"
+                      title="Create share link"
+                      aria-label="Create share link"
+                      onClick={() => setShareOpen(true)}
+                    >
+                      <Share2 size={15} />
+                    </Button>
+                    <Button
+                      variant="danger"
+                      className="w-9 flex-none px-0"
+                      disabled={!item.torrentId || deleting}
+                      title={!item.torrentId ? "No associated torrent" : deleting ? "Deleting…" : "Delete torrent"}
+                      aria-label="Delete torrent"
+                      onClick={() => setPendingDelete(item)}
+                    >
+                      <Trash2 size={15} />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))}
-          {visibleItems.length === 0 ? (
-            <EmptyState title="No media in filter">
-              {loading ? "Loading media records." : "Search and filters collapse to this state when no videos match."}
-            </EmptyState>
-          ) : null}
+              </article>
+            );
+          })}
         </div>
-
-        <aside className="panel">
-          <div className="panel-header">
-            <div>
-              <div className="panel-title">Operational states</div>
-              <p className="muted">The library updates from torrent file status, HLS readiness, and direct playback support.</p>
-            </div>
-          </div>
-          <div className="timeline-list">
-            <OperationalStateRow
-              tone="ready"
-              label="Ready"
-              count={stats.ready}
-              total={items.length}
-              headline="playable"
-              detail="HLS output or direct MP4 playback is available."
-            />
-            <OperationalStateRow
-              tone="processing"
-              label="Processing"
-              count={stats.processing}
-              total={items.length}
-              headline="active"
-              detail="Files are queued, downloading, transcoding, or awaiting playback output."
-            />
-            <OperationalStateRow
-              tone="failed"
-              label="Failed"
-              count={stats.failed}
-              total={items.length}
-              headline="needs retry"
-              detail="The file or parent torrent reported an API error state."
-            />
-          </div>
-        </aside>
-      </div>
+      )}
 
       <AddMagnetModal open={magnetOpen} onClose={() => setMagnetOpen(false)} onCreate={addTorrent} />
       <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} />
@@ -430,37 +385,6 @@ function mockMediaToLibraryItem(item: (typeof mediaItems)[number]): LibraryItem 
     playable: status === "ready",
     searchText: [item.title, item.status, ...item.meta].join(" ").toLowerCase(),
   };
-}
-
-function OperationalStateRow({
-  tone,
-  label,
-  count,
-  total,
-  headline,
-  detail,
-}: {
-  tone: LibraryStatus;
-  label: string;
-  count: number;
-  total: number;
-  headline: string;
-  detail: string;
-}) {
-  return (
-    <div className="timeline-item">
-      <div className="timeline-item-main">
-        <Badge tone={tone}>{label}</Badge>
-        <div className="timeline-copy">
-          <strong>
-            {count} {headline}
-          </strong>
-          <p className="muted">{detail}</p>
-        </div>
-      </div>
-      <Progress value={total > 0 ? (count / total) * 100 : 0} />
-    </div>
-  );
 }
 
 function statusLabel(status: string) {

@@ -86,9 +86,11 @@ export function AdminUsersPage() {
         <StatCard label="Storage quota" value="2.4 TB" detail="allocated" />
       </div>
 
-      <label className="inline-search">
-        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search users" />
-      </label>
+      <div className="toolbar">
+        <label className="inline-search">
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search users" />
+        </label>
+      </div>
 
       <div className="panel">
         <div className="table-wrap">

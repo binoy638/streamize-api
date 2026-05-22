@@ -52,21 +52,22 @@ export function SharesPage() {
         <StatCard label="Owners" value="2" detail="admin, mira" />
       </div>
 
-      <div className="filters">
-        {filters.map((status) => (
-          <button
-            key={status}
-            className={`filter-chip ${filter === status ? "active" : ""}`}
-            onClick={() => setFilter(status)}
-          >
-            {status === "all" ? "All" : status}
-          </button>
-        ))}
+      <div className="toolbar">
+        <div className="filters">
+          {filters.map((status) => (
+            <button
+              key={status}
+              className={`filter-chip ${filter === status ? "active" : ""}`}
+              onClick={() => setFilter(status)}
+            >
+              {status === "all" ? "All" : status}
+            </button>
+          ))}
+        </div>
+        <label className="inline-search">
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter shares" />
+        </label>
       </div>
-
-      <label className="inline-search">
-        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter shares" />
-      </label>
 
       <div className="panel">
         <div className="table-wrap">

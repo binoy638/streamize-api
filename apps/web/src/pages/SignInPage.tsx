@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../lib/auth";
 import { Button, Field, Input } from "../components/ui";
+import logoUrl from "../../assets/logo.png";
 
 export function SignInPage() {
   const { signIn, signInPrototype, apiUnavailable } = useAuth();
@@ -37,7 +38,7 @@ export function SignInPage() {
     <main className="auth-page">
       <section className="auth-card" aria-labelledby="signin-title">
         <div className="brand" style={{ padding: 0, border: 0 }}>
-          <div className="brand-mark">S</div>
+          <img className="brand-mark" src={logoUrl} alt="" />
           <div className="brand-copy">
             <strong>Streamize</strong>
             <span>Self-hosted media control</span>

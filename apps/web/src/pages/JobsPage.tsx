@@ -184,21 +184,22 @@ export function JobsPage() {
         <StatCard label="Failed" value={String(stats.failed)} detail="needs retry" />
       </div>
 
-      <div className="filters">
-        {filters.map((status) => (
-          <button
-            key={status}
-            className={`filter-chip ${filter === status ? "active" : ""}`}
-            onClick={() => setFilter(status)}
-          >
-            {status === "all" ? "All" : status}
-          </button>
-        ))}
+      <div className="toolbar">
+        <div className="filters">
+          {filters.map((status) => (
+            <button
+              key={status}
+              className={`filter-chip ${filter === status ? "active" : ""}`}
+              onClick={() => setFilter(status)}
+            >
+              {status === "all" ? "All" : status}
+            </button>
+          ))}
+        </div>
+        <label className="inline-search">
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter jobs" />
+        </label>
       </div>
-
-      <label className="inline-search">
-        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter jobs" />
-      </label>
 
       <div className="panel">
         <div className="table-wrap">

@@ -11,7 +11,6 @@ import { PlayerPage } from "./pages/PlayerPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SharesPage } from "./pages/SharesPage";
 import { SignInPage } from "./pages/SignInPage";
-import { StyleGuidePage } from "./pages/StyleGuidePage";
 import { TorrentDetailPage } from "./pages/TorrentDetailPage";
 import { TorrentsPage } from "./pages/TorrentsPage";
 import { WatchPartyPage } from "./pages/WatchPartyPage";
@@ -146,14 +145,6 @@ export function App() {
           element={
             <ShellRoute>
               <SettingsPage />
-            </ShellRoute>
-          }
-        />
-        <Route
-          path="/style-guide"
-          element={
-            <ShellRoute>
-              <StyleGuidePage />
             </ShellRoute>
           }
         />

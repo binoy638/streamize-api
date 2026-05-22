@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   Activity,
   Clapperboard,
@@ -7,12 +7,14 @@ import {
   LinkIcon,
   LogOut,
   Search,
-  Server,
   Users,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import { useAuth } from "../lib/auth";
+import * as api from "../lib/api";
+import { formatBytes } from "../lib/format";
+import logoUrl from "../../assets/logo.png";
 
 const pageCopy: Record<string, { title: string; subtitle: string; search: string }> = {
   "/library": {
@@ -45,11 +47,6 @@ const pageCopy: Record<string, { title: string; subtitle: string; search: string
     subtitle: "Server configuration",
     search: "Search settings",
   },
-  "/style-guide": {
-    title: "Style guide",
-    subtitle: "Reusable components",
-    search: "Search components",
-  },
 };
 
 function pageFromPath(pathname: string) {
@@ -74,12 +71,33 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const { user, signOut, apiUnavailable } = useAuth();
   const page = pageFromPath(pathname);
+  const [libraryBytes, setLibraryBytes] = useState<number | null>(null);
+
+  // Library size, recomputed on navigation so it reflects added/removed media.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listAllFiles()
+      .then((files) => {
+        if (!cancelled) {
+          setLibraryBytes(files.reduce((total, file) => total + (file.sizeBytes || 0), 0));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLibraryBytes(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Primary navigation">
         <NavLink className="brand" to="/library">
-          <div className="brand-mark">S</div>
+          <img className="brand-mark" src={logoUrl} alt="" />
           <div className="brand-copy">
             <strong>Streamize</strong>
             <span>media server</span>
@@ -112,9 +130,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <NavLink className="nav-item" to="/settings">
             <Cog /> Settings
           </NavLink>
-          <NavLink className="nav-item" to="/style-guide">
-            <Server /> Style guide
-          </NavLink>
         </nav>
 
         <div className="sidebar-footer">
@@ -125,8 +140,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </div>
           <div className="status-line">
-            <span>qBittorrent</span>
-            <span className="mono">32 MB/s</span>
+            <span>Storage</span>
+            <span className="mono">{libraryBytes === null ? "—" : formatBytes(libraryBytes)}</span>
           </div>
           <div className="status-line">
             <span>{user?.username}</span>

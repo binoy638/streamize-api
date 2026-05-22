@@ -210,25 +210,26 @@ export function TorrentsPage() {
         <StatCard label="Errors" value={String(stats.errors)} detail="manual attention" />
       </div>
 
-      <div className="filters">
-        {statusFilters.map((status) => (
-          <button
-            key={status}
-            className={`filter-chip ${filter === status ? "active" : ""}`}
-            onClick={() => setFilter(status)}
-          >
-            {status === "all" ? "All" : label(status)}
-          </button>
-        ))}
+      <div className="toolbar">
+        <div className="filters">
+          {statusFilters.map((status) => (
+            <button
+              key={status}
+              className={`filter-chip ${filter === status ? "active" : ""}`}
+              onClick={() => setFilter(status)}
+            >
+              {status === "all" ? "All" : label(status)}
+            </button>
+          ))}
+        </div>
+        <label className="inline-search">
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter torrent records"
+          />
+        </label>
       </div>
-
-      <label className="inline-search">
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Filter torrent records"
-        />
-      </label>
 
       <div className="panel">
         <div className="table-wrap">

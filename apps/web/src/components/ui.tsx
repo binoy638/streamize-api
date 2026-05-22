@@ -1,6 +1,8 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { X } from "lucide-react";
 
+import logoUrl from "../../assets/logo.png";
+
 export function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -138,7 +140,7 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
     <main className="auth-page">
       <div className="auth-card">
         <div className="brand" style={{ padding: 0, border: 0 }}>
-          <div className="brand-mark">S</div>
+          <img className="brand-mark" src={logoUrl} alt="" />
           <div className="brand-copy">
             <strong>Streamize</strong>
             <span>{label}</span>
