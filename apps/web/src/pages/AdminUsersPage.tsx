@@ -1,30 +1,28 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import * as api from "../lib/api";
-import { Badge, Button, EmptyState, Field, Input, Modal, Select, StatCard } from "../components/ui";
+import { Badge, Button, EmptyState, Field, Input, Modal, Select, StatCard, StatSkeletonGrid, TableSkeletonRows } from "../components/ui";
 import { formatBytes, formatDate, toBytes } from "../lib/format";
-import { mockUsers } from "../lib/mock-data";
 
 export function AdminUsersPage() {
   const [users, setUsers] = useState<api.User[]>([]);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
-  const [usingMock, setUsingMock] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
       .listUsers()
       .then((result) => {
         setUsers(result);
-        setUsingMock(false);
         setError("");
       })
       .catch((err: unknown) => {
-        setUsers(mockUsers);
-        setUsingMock(true);
+        setUsers([]);
         setError(err instanceof Error ? err.message : "Unable to load users");
-      });
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const visible = useMemo(() => {
@@ -32,23 +30,14 @@ export function AdminUsersPage() {
     return users.filter((user) => !normalized || [user.username, user.role].join(" ").toLowerCase().includes(normalized));
   }, [query, users]);
 
-  async function addUser(input: api.CreateUserInput) {
-    if (usingMock) {
-      const now = new Date().toISOString();
-      setUsers((current) => [
-        ...current,
-        {
-          id: `usr_${Date.now()}`,
-          username: input.username,
-          role: input.role,
-          storageQuotaBytes: input.storageQuotaBytes,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ]);
-      return;
-    }
+  const stats = useMemo(() => {
+    const admins = users.filter((user) => user.role === "admin").length;
+    const viewers = users.length - admins;
+    const quotaBytes = users.reduce((total, user) => total + (user.storageQuotaBytes || 0), 0);
+    return { admins, viewers, quotaBytes };
+  }, [users]);
 
+  async function addUser(input: api.CreateUserInput) {
     const user = await api.createUser(input);
     setUsers((current) => [...current, user]);
   }
@@ -74,17 +63,19 @@ export function AdminUsersPage() {
       </div>
 
       {error ? (
-        <div className="alert alert-warn is-visible">
-          Using prototype users because the admin API did not respond: {error}
-        </div>
+        <div className="alert alert-error is-visible">Unable to load users: {error}</div>
       ) : null}
 
-      <div className="stats-row">
-        <StatCard label="Total users" value={String(users.length)} detail={`${users.filter((user) => user.role === "admin").length} admins`} />
-        <StatCard label="Active now" value="3" detail="watching or managing" />
-        <StatCard label="Disabled" value="1" detail="audit hold" />
-        <StatCard label="Storage quota" value="2.4 TB" detail="allocated" />
-      </div>
+      {loading ? (
+        <StatSkeletonGrid />
+      ) : (
+        <div className="stats-row">
+          <StatCard label="Total users" value={String(users.length)} detail={`${stats.admins} admins`} />
+          <StatCard label="Admins" value={String(stats.admins)} detail="elevated access" />
+          <StatCard label="Viewers" value={String(stats.viewers)} detail="standard accounts" />
+          <StatCard label="Storage quota" value={formatBytes(stats.quotaBytes)} detail="allocated" />
+        </div>
+      )}
 
       <div className="toolbar">
         <label className="inline-search">
@@ -106,6 +97,7 @@ export function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
+              {loading ? <TableSkeletonRows rows={4} columns={6} /> : null}
               {visible.map((user) => (
                 <tr key={user.id}>
                   <td>
@@ -136,7 +128,9 @@ export function AdminUsersPage() {
             </tbody>
           </table>
         </div>
-        {visible.length === 0 ? <EmptyState title="No users">No users match this query.</EmptyState> : null}
+        {!loading && visible.length === 0 ? (
+          <EmptyState title="No users">{query ? "No users match this query." : "No user accounts were returned by the API."}</EmptyState>
+        ) : null}
       </div>
 
       <CreateUserModal open={open} onClose={() => setOpen(false)} onCreate={addUser} />

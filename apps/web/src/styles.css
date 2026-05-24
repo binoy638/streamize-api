@@ -823,10 +823,71 @@
   }
 
   .skeleton {
-    @apply h-[38px] rounded-lg;
+    @apply block h-[38px] rounded-lg;
     animation: shimmer 1200ms infinite linear;
     background: linear-gradient(90deg, var(--surface), var(--surface-2), var(--surface));
     background-size: 200% 100%;
+  }
+
+  .skeleton-label {
+    @apply h-3 w-24;
+  }
+
+  .skeleton-value {
+    @apply h-8 w-20;
+  }
+
+  .skeleton-heading {
+    @apply h-[54px] w-full max-w-[640px];
+  }
+
+  .skeleton-line {
+    @apply h-3 max-w-full;
+  }
+
+  .skeleton-subline {
+    @apply mt-2;
+  }
+
+  .skeleton-button {
+    @apply h-9;
+  }
+
+  .skeleton-icon {
+    @apply h-9 w-9 flex-none;
+  }
+
+  .skeleton-pill {
+    @apply h-[25px] w-24 rounded-full;
+  }
+
+  .skeleton-progress {
+    @apply mt-3 h-2 w-full max-w-[560px] rounded-full;
+  }
+
+  .stat-card-skeleton {
+    @apply grid gap-3;
+  }
+
+  .media-card-skeleton {
+    pointer-events: none;
+  }
+
+  .poster-skeleton {
+    @apply aspect-[16/9] h-auto min-h-[168px] rounded-none;
+  }
+
+  .file-row-skeleton {
+    @apply h-[68px];
+  }
+
+  .player-frame-skeleton {
+    @apply min-h-[min(62vh,640px)] w-full;
+  }
+
+  .skeleton-row:hover {
+    background: transparent;
+    box-shadow: none;
   }
 
   .alert {

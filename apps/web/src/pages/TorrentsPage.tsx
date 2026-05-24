@@ -3,23 +3,20 @@ import { Link } from "react-router-dom";
 
 import * as api from "../lib/api";
 import { DeleteTorrentModal } from "../components/DeleteTorrentModal";
-import { Badge, Button, EmptyState, Field, Input, Modal, Progress, StatCard, Textarea } from "../components/ui";
+import { Badge, Button, EmptyState, Field, Input, Modal, Progress, StatCard, StatSkeletonGrid, TableSkeletonRows, Textarea } from "../components/ui";
 import { formatBytes, formatDate, formatTransferRate } from "../lib/format";
-import { type Torrent as MockTorrent, torrents as initialTorrents } from "../lib/mock-data";
 
 const statusFilters = ["all", "added", "queued", "downloading", "processing", "done", "paused", "error"];
 const pollableStatuses = new Set(["added", "queued", "downloading", "processing"]);
 
 type LoadTorrentsOptions = {
   showLoading?: boolean;
-  fallbackToMock?: boolean;
 };
 
 type TorrentRow = {
   id: string;
-  source: "api" | "mock";
   name: string;
-  status: api.TorrentStatus | MockTorrent["status"];
+  status: api.TorrentStatus;
   size: string;
   progress: number;
   speed: string;
@@ -40,28 +37,25 @@ export function TorrentsPage() {
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [usingMock, setUsingMock] = useState(false);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [deletingId, setDeletingId] = useState("");
   const [pendingDelete, setPendingDelete] = useState<TorrentRow | null>(null);
 
-  const loadTorrents = useCallback(async ({ showLoading = true, fallbackToMock = true }: LoadTorrentsOptions = {}) => {
+  const loadTorrents = useCallback(async ({ showLoading = true }: LoadTorrentsOptions = {}) => {
     if (showLoading) {
       setLoading(true);
     }
     try {
       const result = await api.listTorrents();
       setTorrents(result.map(apiTorrentToRow));
-      setUsingMock(false);
       setError("");
     } catch (err) {
-      if (fallbackToMock) {
-        setTorrents(initialTorrents.map(mockTorrentToRow));
-        setUsingMock(true);
-        setError(err instanceof Error ? err.message : "Unable to load torrents");
+      if (showLoading) {
+        setTorrents([]);
       }
+      setError(err instanceof Error ? err.message : "Unable to load torrents");
     } finally {
       if (showLoading) {
         setLoading(false);
@@ -74,21 +68,17 @@ export function TorrentsPage() {
   }, [loadTorrents]);
 
   useEffect(() => {
-    if (usingMock) {
-      return;
-    }
-
-    const hasActiveAPITorrent = torrents.some((torrent) => torrent.source === "api" && pollableStatuses.has(torrent.status));
+    const hasActiveAPITorrent = torrents.some((torrent) => pollableStatuses.has(torrent.status));
     if (!hasActiveAPITorrent) {
       return;
     }
 
     const intervalID = window.setInterval(() => {
-      void loadTorrents({ showLoading: false, fallbackToMock: false });
+      void loadTorrents({ showLoading: false });
     }, 5000);
 
     return () => window.clearInterval(intervalID);
-  }, [loadTorrents, torrents, usingMock]);
+  }, [loadTorrents, torrents]);
 
   const visible = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -109,29 +99,7 @@ export function TorrentsPage() {
     };
   }, [torrents]);
 
-  function updateStatus(id: string, status: MockTorrent["status"]) {
-    setTorrents((current) =>
-      current.map((torrent) =>
-        torrent.id === id && torrent.source === "mock"
-          ? {
-              ...torrent,
-              status,
-              eta: status === "paused" ? "Paused" : status === "downloading" ? "18 min" : torrent.eta,
-              searchText: buildSearchText(torrent.name, status, torrent.size, torrent.eta),
-            }
-          : torrent,
-      ),
-    );
-  }
-
   async function removeTorrent(torrent: TorrentRow, options: Required<api.DeleteTorrentOptions>) {
-    if (torrent.source === "mock") {
-      setTorrents((current) => current.filter((item) => item.id !== torrent.id));
-      setNotice({ tone: "warn", text: "Prototype torrent removed locally." });
-      setPendingDelete(null);
-      return;
-    }
-
     setDeletingId(torrent.id);
     try {
       await api.deleteTorrent(torrent.id, options);
@@ -148,27 +116,6 @@ export function TorrentsPage() {
   async function addTorrent(input: api.CreateTorrentInput) {
     setFilter("all");
     setQuery("");
-    if (usingMock) {
-      const now = new Date().toISOString();
-      const local: TorrentRow = {
-        id: `tor_${Date.now()}`,
-        source: "mock",
-        name: input.name?.trim() || "New magnet",
-        status: "queued",
-        size: "Pending",
-        progress: 0,
-        speed: "0 B/s",
-        eta: "Queued",
-        peers: "0",
-        ratio: "0.0",
-        addedAt: formatDate(now),
-        searchText: buildSearchText(input.name || "New magnet", "queued", "Pending", "Queued"),
-      };
-      setTorrents((current) => [local, ...current]);
-      setNotice({ tone: "warn", text: "Prototype torrent added locally. Sign in through the API to persist magnet submissions." });
-      return;
-    }
-
     const created = await api.createTorrent(input);
     setTorrents((current) => [apiTorrentToRow(created), ...current]);
     setNotice({ tone: "success", text: "Magnet added and recorded by the API." });
@@ -197,18 +144,20 @@ export function TorrentsPage() {
       </div>
 
       {error ? (
-        <div className="alert alert-warn is-visible">
-          Using prototype torrents because the torrent API did not respond: {error}
-        </div>
+        <div className="alert alert-error is-visible">Unable to load torrents: {error}</div>
       ) : null}
       {notice ? <div className={`alert alert-${notice.tone} is-visible`}>{notice.text}</div> : null}
 
-      <div className="stats-row">
-        <StatCard label="Active" value={String(stats.active)} detail={usingMock ? "prototype queue" : "added or queued"} />
-        <StatCard label="Processing" value={String(stats.processing)} detail="HLS and thumbnails" />
-        <StatCard label="Done" value={String(stats.done)} detail="seeding or retained" />
-        <StatCard label="Errors" value={String(stats.errors)} detail="manual attention" />
-      </div>
+      {loading ? (
+        <StatSkeletonGrid />
+      ) : (
+        <div className="stats-row">
+          <StatCard label="Active" value={String(stats.active)} detail="added or queued" />
+          <StatCard label="Processing" value={String(stats.processing)} detail="HLS and thumbnails" />
+          <StatCard label="Done" value={String(stats.done)} detail="seeding or retained" />
+          <StatCard label="Errors" value={String(stats.errors)} detail="manual attention" />
+        </div>
+      )}
 
       <div className="toolbar">
         <div className="filters">
@@ -246,6 +195,7 @@ export function TorrentsPage() {
               </tr>
             </thead>
             <tbody>
+              {loading ? <TableSkeletonRows rows={5} columns={7} /> : null}
               {visible.map((torrent) => (
                 <tr key={torrent.id}>
                   <td>
@@ -268,15 +218,6 @@ export function TorrentsPage() {
                   <td>{torrent.peers}</td>
                   <td>
                     <div className="row-actions">
-                      <Button disabled={torrent.source === "api"} onClick={() => updateStatus(torrent.id, "paused")}>
-                        Pause
-                      </Button>
-                      <Button disabled={torrent.source === "api"} onClick={() => updateStatus(torrent.id, "downloading")}>
-                        Resume
-                      </Button>
-                      <Button disabled={torrent.source === "api"} onClick={() => updateStatus(torrent.id, "queued")}>
-                        Retry
-                      </Button>
                       <Button variant="danger" disabled={deletingId === torrent.id} onClick={() => setPendingDelete(torrent)}>
                         {deletingId === torrent.id ? "Deleting..." : "Delete"}
                       </Button>
@@ -287,8 +228,8 @@ export function TorrentsPage() {
             </tbody>
           </table>
         </div>
-        {visible.length === 0 ? (
-          <EmptyState title="No torrents">{loading ? "Loading torrent records." : "No records match this filter."}</EmptyState>
+        {!loading && visible.length === 0 ? (
+          <EmptyState title="No torrents">{query || filter !== "all" ? "No records match this filter." : "Add a magnet to create the first torrent record."}</EmptyState>
         ) : null}
       </div>
 
@@ -297,7 +238,6 @@ export function TorrentsPage() {
         onClose={() => setOpen(false)}
         onCreate={addTorrent}
         onRecordedFailure={refreshAfterSubmissionFailure}
-        usingMock={usingMock}
       />
       <DeleteTorrentModal
         open={pendingDelete !== null}
@@ -319,13 +259,11 @@ function AddMagnetModal({
   onClose,
   onCreate,
   onRecordedFailure,
-  usingMock,
 }: {
   open: boolean;
   onClose: () => void;
   onCreate: (input: api.CreateTorrentInput) => Promise<void>;
   onRecordedFailure: (message: string) => Promise<void>;
-  usingMock: boolean;
 }) {
   const [magnetUri, setMagnetUri] = useState("");
   const [name, setName] = useState("");
@@ -371,7 +309,7 @@ function AddMagnetModal({
             Cancel
           </Button>
           <Button variant="primary" type="submit" form="add-magnet-form" disabled={busy}>
-            {busy ? "Adding..." : usingMock ? "Add prototype row" : "Add magnet"}
+            {busy ? "Adding..." : "Add magnet"}
           </Button>
         </>
       }
@@ -399,7 +337,6 @@ function apiTorrentToRow(torrent: api.Torrent): TorrentRow {
 
   return {
     id: torrent.id,
-    source: "api",
     name,
     status: torrent.status,
     size,
@@ -410,23 +347,6 @@ function apiTorrentToRow(torrent: api.Torrent): TorrentRow {
     ratio,
     addedAt: formatDate(torrent.createdAt),
     searchText: buildSearchText(name, torrent.status, size, eta, speed, ratio, torrent.infoHash, torrent.qbittorrentHash, torrent.errorMessage),
-  };
-}
-
-function mockTorrentToRow(torrent: MockTorrent): TorrentRow {
-  return {
-    id: torrent.id,
-    source: "mock",
-    name: torrent.name,
-    status: torrent.status,
-    size: torrent.size,
-    progress: torrent.progress,
-    speed: torrent.speed,
-    eta: torrent.eta,
-    peers: String(torrent.peers),
-    ratio: torrent.ratio.toFixed(1),
-    addedAt: torrent.addedAt,
-    searchText: buildSearchText(torrent.name, torrent.status, torrent.size, torrent.eta),
   };
 }
 

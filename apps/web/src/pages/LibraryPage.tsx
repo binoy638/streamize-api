@@ -4,10 +4,9 @@ import { Layers, Play, Plus, Share2, Trash2 } from "lucide-react";
 
 import * as api from "../lib/api";
 import { DeleteTorrentModal } from "../components/DeleteTorrentModal";
-import { Badge, Button, EmptyState, Field, Input, Modal, Progress, Textarea } from "../components/ui";
+import { Badge, Button, EmptyState, Field, Input, MediaGridSkeleton, Modal, Progress, Textarea } from "../components/ui";
 import { CreateShareModal } from "../components/CreateShareModal";
 import { formatBytes } from "../lib/format";
-import { mediaItems } from "../lib/mock-data";
 
 const pollableTorrentStatuses = new Set<api.TorrentStatus>(["added", "queued", "downloading", "processing"]);
 const pollableFileStatuses = new Set<api.TorrentFileStatus>(["queued", "downloading", "processing"]);
@@ -16,7 +15,6 @@ type LibraryStatus = "ready" | "processing" | "failed";
 
 type LibraryItem = {
   id: string;
-  source: "api" | "mock";
   torrentId: string;
   target: string;
   title: string;
@@ -34,8 +32,8 @@ type LibraryItem = {
   posterHue: number;
   playable: boolean;
   fileCount: number;
-  mediaType: api.CatalogMediaType | "mock";
-  metadataStatus: api.MetadataStatus | "mock";
+  mediaType: api.CatalogMediaType;
+  metadataStatus: api.MetadataStatus;
   thumbnailUrl?: string;
   posterUrl?: string;
   searchText: string;
@@ -61,7 +59,6 @@ export function LibraryPage() {
   const [torrents, setTorrents] = useState<api.Torrent[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [usingMock, setUsingMock] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [deletingTorrentId, setDeletingTorrentId] = useState("");
@@ -69,7 +66,7 @@ export function LibraryPage() {
   const [magnetOpen, setMagnetOpen] = useState(false);
   const [shareTargetId, setShareTargetId] = useState<string | null>(null);
 
-  const loadLibrary = useCallback(async ({ showLoading = true, fallbackToMock = true } = {}) => {
+  const loadLibrary = useCallback(async ({ showLoading = true } = {}) => {
     if (showLoading) {
       setLoading(true);
     }
@@ -84,15 +81,13 @@ export function LibraryPage() {
 
       setTorrents(records);
       setItems(libraryItems.map((item) => apiCatalogItemToLibraryItem(item, progress)));
-      setUsingMock(false);
       setError("");
     } catch (err) {
-      if (fallbackToMock) {
+      if (showLoading) {
         setTorrents([]);
-        setItems(mediaItems.map(mockMediaToLibraryItem));
-        setUsingMock(true);
-        setError(err instanceof Error ? err.message : "Unable to load library");
+        setItems([]);
       }
+      setError(err instanceof Error ? err.message : "Unable to load library");
     } finally {
       if (showLoading) {
         setLoading(false);
@@ -105,22 +100,18 @@ export function LibraryPage() {
   }, [loadLibrary]);
 
   useEffect(() => {
-    if (usingMock) {
-      return;
-    }
-
     const hasActiveTorrent = torrents.some((torrent) => pollableTorrentStatuses.has(torrent.status));
-    const hasActiveFile = items.some((item) => item.source === "api" && item.pollable);
+    const hasActiveFile = items.some((item) => item.pollable);
     if (!hasActiveTorrent && !hasActiveFile) {
       return;
     }
 
     const intervalID = window.setInterval(() => {
-      void loadLibrary({ showLoading: false, fallbackToMock: false });
+      void loadLibrary({ showLoading: false });
     }, 5000);
 
     return () => window.clearInterval(intervalID);
-  }, [items, loadLibrary, torrents, usingMock]);
+  }, [items, loadLibrary, torrents]);
 
   // The library only surfaces videos that are ready to play; in-progress and
   // failed files are reachable from the Torrents tab instead.
@@ -136,34 +127,12 @@ export function LibraryPage() {
 
   async function addTorrent(input: api.CreateTorrentInput) {
     setQuery("");
-    if (usingMock) {
-      const local = mockMediaToLibraryItem({
-        ...mediaItems[0],
-        id: `mock_${Date.now()}`,
-        title: input.name?.trim() || "New magnet",
-        status: "processing",
-        progress: 0,
-        tags: ["processing", "recent"],
-        meta: ["Pending", "queued"],
-      });
-      setItems((current) => [local, ...current]);
-      setNotice({ tone: "warn", text: "Prototype media added locally. Sign in through the API to persist magnet submissions." });
-      return;
-    }
-
     await api.createTorrent(input);
-    await loadLibrary({ showLoading: false, fallbackToMock: false });
+    await loadLibrary({ showLoading: false });
     setNotice({ tone: "success", text: "Magnet added — track download progress in the Torrents tab." });
   }
 
   async function deleteLibraryItem(item: LibraryItem, options: Required<api.DeleteTorrentOptions>) {
-    if (item.source === "mock") {
-      setItems((current) => current.filter((record) => record.id !== item.id));
-      setNotice({ tone: "warn", text: "Prototype media removed locally." });
-      setPendingDelete(null);
-      return;
-    }
-
     if (!item.torrentId) {
       setNotice({ tone: "warn", text: "This file has no associated torrent." });
       setPendingDelete(null);
@@ -173,7 +142,7 @@ export function LibraryPage() {
     setDeletingTorrentId(item.torrentId);
     try {
       await api.deleteTorrent(item.torrentId, options);
-      await loadLibrary({ showLoading: false, fallbackToMock: false });
+      await loadLibrary({ showLoading: false });
       setNotice({ tone: "success", text: "Torrent deleted with selected cleanup options." });
       setPendingDelete(null);
     } catch (err) {
@@ -198,7 +167,7 @@ export function LibraryPage() {
         </div>
       </div>
 
-      {error ? <div className="alert alert-warn is-visible">Using prototype media because the API did not respond: {error}</div> : null}
+      {error ? <div className="alert alert-error is-visible">Unable to load library: {error}</div> : null}
       {notice ? <div className={`alert alert-${notice.tone} is-visible`}>{notice.text}</div> : null}
 
       <div className="toolbar">
@@ -215,13 +184,13 @@ export function LibraryPage() {
         </label>
       </div>
 
-      {visibleItems.length === 0 ? (
+      {loading ? (
+        <MediaGridSkeleton />
+      ) : visibleItems.length === 0 ? (
         <EmptyState title="Nothing ready to watch yet">
-          {loading
-            ? "Loading your library."
-            : query
-              ? "No ready videos match your search."
-              : "Videos appear here once they finish processing. Check the Torrents tab for downloads in progress."}
+          {query
+            ? "No ready videos match your search."
+            : "Videos appear here once they finish processing. Check the Torrents tab for downloads in progress."}
         </EmptyState>
       ) : (
         <div className="media-grid">
@@ -283,9 +252,8 @@ export function LibraryPage() {
                     )}
                     <Button
                       className="w-9 flex-none px-0"
-                      title={item.source === "mock" ? "Sign in to share" : "Create share link"}
+                      title="Create share link"
                       aria-label="Create share link"
-                      disabled={item.source === "mock"}
                       onClick={() => setShareTargetId(item.id)}
                     >
                       <Share2 size={15} />
@@ -367,7 +335,6 @@ function apiCatalogItemToLibraryItem(item: api.LibraryCatalogItem, watchProgress
 
   return {
     id: item.id,
-    source: "api",
     torrentId: primary?.torrentId || "",
     target,
     title: item.title,
@@ -443,34 +410,6 @@ function SpriteThumbnail({ src }: { src: string }) {
   );
 }
 
-function mockMediaToLibraryItem(item: (typeof mediaItems)[number]): LibraryItem {
-  const status = item.status === "failed" ? "failed" : item.status === "ready" ? "ready" : "processing";
-  return {
-    id: item.id,
-    source: "mock",
-    torrentId: item.torrentId,
-    target: status === "ready" ? `/player/${item.id}` : `/torrents/${item.torrentId}`,
-    title: item.title,
-    duration: item.duration,
-    meta: item.meta,
-    detail: item.meta.join(" · "),
-    status,
-    tags: item.tags,
-    progress: item.progress,
-    watchPercent: 0,
-    resumeFileId: undefined,
-    watched: false,
-    sizeBytes: sizeFromMeta(item.meta[0]),
-    pollable: status === "processing",
-    posterHue: item.posterHue,
-    playable: status === "ready",
-    fileCount: 1,
-    mediaType: "mock",
-    metadataStatus: "mock",
-    searchText: [item.title, item.status, ...item.meta].join(" ").toLowerCase(),
-  };
-}
-
 function watchLabel(item: LibraryItem): string {
   if (item.watched) {
     return "Watched";
@@ -521,27 +460,6 @@ function clampPercent(value: number): number {
     return 0;
   }
   return Math.round(Math.max(0, Math.min(100, value)));
-}
-
-function sizeFromMeta(value: string): number {
-  const [amountText, unit = "B"] = value.split(" ");
-  const amount = Number(amountText);
-  if (!Number.isFinite(amount)) {
-    return 0;
-  }
-
-  switch (unit.toUpperCase()) {
-    case "TB":
-      return amount * 1024 ** 4;
-    case "GB":
-      return amount * 1024 ** 3;
-    case "MB":
-      return amount * 1024 ** 2;
-    case "KB":
-      return amount * 1024;
-    default:
-      return amount;
-  }
 }
 
 function AddMagnetModal({

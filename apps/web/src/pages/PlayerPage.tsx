@@ -2,18 +2,16 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link, useParams } from "react-router-dom";
 
 import * as api from "../lib/api";
-import { Badge, Button, Field, Input, Modal, Select } from "../components/ui";
+import { Badge, Button, EmptyState, Field, Input, Modal, PlayerSkeleton, Select } from "../components/ui";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { formatBytes } from "../lib/format";
-import { filesForTorrent, findMedia, torrentFiles } from "../lib/mock-data";
 
 type PlayerFile = {
   id: string;
-  source: "api" | "mock";
   torrentId: string;
   name: string;
   size: string;
-  status: api.TorrentFileStatus | "ready" | "processing" | "failed";
+  status: api.TorrentFileStatus;
   codec: string;
   subtitles: number | string;
   playable: boolean;
@@ -28,16 +26,11 @@ const RESUME_SKIP_AT_END_SECONDS = 8;
 export function PlayerPage() {
   const { fileId } = useParams();
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const initialMedia = findMedia(fileId);
-  const mockRelated = useMemo(() => {
-    const files = filesForTorrent(initialMedia.torrentId);
-    return (files.length ? files : torrentFiles.slice(0, 3)).map(mockFileToPlayerFile);
-  }, [initialMedia.torrentId]);
-  const [related, setRelated] = useState<PlayerFile[]>(mockRelated);
-  const [selectedFileId, setSelectedFileId] = useState(fileId || related[0]?.id);
+  const [related, setRelated] = useState<PlayerFile[]>([]);
+  const [selectedFileId, setSelectedFileId] = useState(fileId || "");
   const selectedFile = related.find((file) => file.id === selectedFileId) || related[0];
   const [durationSeconds, setDurationSeconds] = useState(0);
-  const [usingMock, setUsingMock] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [subtitles, setSubtitles] = useState<api.Subtitle[]>([]);
   const [savedProgress, setSavedProgress] = useState<api.VideoProgress | null>(null);
@@ -50,40 +43,36 @@ export function PlayerPage() {
   const [activeParty, setActiveParty] = useState<api.WatchPartyResponse | null>(null);
   const resumeAppliedRef = useRef("");
   const lastProgressSaveRef = useRef({ fileId: "", positionSeconds: 0, savedAt: 0 });
-  const hlsSource = selectedFile?.source === "api" && selectedFile.playable ? hlsPlaylistURL(selectedFile.id) : "";
-  const directSource = selectedFile?.source === "api" && !hlsSource && selectedFile.directPlayable ? originalFileURL(selectedFile.id) : "";
+  const hlsSource = selectedFile?.playable ? hlsPlaylistURL(selectedFile.id) : "";
+  const directSource = selectedFile && !hlsSource && selectedFile.directPlayable ? originalFileURL(selectedFile.id) : "";
   const playbackSource = hlsSource || directSource;
-  const previewVTT = selectedFile?.source === "api" && selectedFile.previewReady ? previewVTTURL(selectedFile.id) : undefined;
+  const previewVTT = selectedFile?.previewReady ? previewVTTURL(selectedFile.id) : undefined;
 
   const loadAPIFile = useCallback(async () => {
-    if (!fileId) {
-      return;
-    }
+    setLoading(true);
 
     try {
-      const torrents = await api.listTorrents();
-      for (const torrent of torrents) {
-        const files = await api.listTorrentFiles(torrent.id);
-        const match = files.find((file) => file.id === fileId);
-        if (!match) {
-          continue;
-        }
-
-        setRelated(files.map((file) => apiFileToPlayerFile(file, torrent.id)));
-        setSelectedFileId(match.id);
-        setUsingMock(false);
-        setError("");
-        return;
+      if (!fileId) {
+        throw new Error("File id is missing.");
       }
 
-      throw new Error("File was not found in the API.");
+      const files = await api.listAllFiles();
+      const match = files.find((file) => file.id === fileId);
+      if (!match) {
+        throw new Error("File was not found in the API.");
+      }
+
+      setRelated(files.filter((file) => file.torrentId === match.torrentId).map(apiFileToPlayerFile));
+      setSelectedFileId(match.id);
+      setError("");
     } catch (err) {
-      setRelated(mockRelated);
-      setSelectedFileId(fileId || mockRelated[0]?.id);
-      setUsingMock(true);
+      setRelated([]);
+      setSelectedFileId(fileId || "");
       setError(err instanceof Error ? err.message : "Unable to load file.");
+    } finally {
+      setLoading(false);
     }
-  }, [fileId, mockRelated]);
+  }, [fileId]);
 
   useEffect(() => {
     void loadAPIFile();
@@ -94,7 +83,7 @@ export function PlayerPage() {
     resumeAppliedRef.current = "";
     lastProgressSaveRef.current = { fileId: selectedFile?.id || "", positionSeconds: 0, savedAt: 0 };
 
-    if (selectedFile?.source !== "api" || !playbackSource) {
+    if (!selectedFile || !playbackSource) {
       return;
     }
 
@@ -115,11 +104,11 @@ export function PlayerPage() {
     return () => {
       canceled = true;
     };
-  }, [selectedFile?.id, selectedFile?.source, playbackSource]);
+  }, [selectedFile?.id, playbackSource]);
 
   useEffect(() => {
     setSubtitles([]);
-    if (selectedFile?.source !== "api") {
+    if (!selectedFile) {
       return;
     }
 
@@ -140,11 +129,11 @@ export function PlayerPage() {
     return () => {
       canceled = true;
     };
-  }, [selectedFile?.id, selectedFile?.source]);
+  }, [selectedFile?.id]);
 
   const persistProgress = useCallback(
     (positionValue: number, durationValue: number, force = false) => {
-      if (!selectedFile || selectedFile.source !== "api" || !playbackSource) {
+      if (!selectedFile || !playbackSource) {
         return;
       }
 
@@ -168,14 +157,13 @@ export function PlayerPage() {
         durationSeconds: nextDuration,
       }).catch(() => undefined);
     },
-    [playbackSource, selectedFile?.id, selectedFile?.source],
+    [playbackSource, selectedFile?.id],
   );
 
   const applySavedProgress = useCallback(
     (video: HTMLVideoElement) => {
       if (
         !selectedFile ||
-        selectedFile.source !== "api" ||
         !savedProgress ||
         savedProgress.torrentFileId !== selectedFile.id ||
         resumeAppliedRef.current === selectedFile.id
@@ -205,7 +193,7 @@ export function PlayerPage() {
       video.currentTime = duration > 0 ? Math.min(savedSeconds, Math.max(duration - 1, 0)) : savedSeconds;
       resumeAppliedRef.current = selectedFile.id;
     },
-    [savedProgress, selectedFile?.id, selectedFile?.source],
+    [savedProgress, selectedFile?.id],
   );
 
   useEffect(() => {
@@ -232,8 +220,8 @@ export function PlayerPage() {
     event.preventDefault();
     setPartyError("");
     setPartyLink("");
-    if (!selectedFile || selectedFile.source !== "api") {
-      setPartyError("Watch parties can be created after this file loads from the API.");
+    if (!selectedFile) {
+      setPartyError("Watch parties can be created after this file loads.");
       return;
     }
     if (!selectedFile.playable && !selectedFile.directPlayable) {
@@ -264,12 +252,22 @@ export function PlayerPage() {
 
   const sourceLabel = hlsSource ? "HLS stream" : directSource ? "Direct file" : "Not ready";
 
+  if (loading) {
+    return <PlayerSkeleton />;
+  }
+
+  if (!selectedFile) {
+    return (
+      <section className="content player-content">
+        {error ? <div className="alert alert-error is-visible">{error}</div> : null}
+        <EmptyState title="File unavailable">The requested file could not be loaded from the API.</EmptyState>
+      </section>
+    );
+  }
+
   return (
     <section className="content player-content">
-      {usingMock && error ? (
-        <div className="alert alert-warn is-visible">Using prototype player data because the API file could not load: {error}</div>
-      ) : null}
-      {!usingMock && error ? <div className="alert alert-error is-visible">{error}</div> : null}
+      {error ? <div className="alert alert-error is-visible">{error}</div> : null}
       {activeParty ? (
         <div className="watch-party-banner">
           <div className="watch-party-banner-copy">
@@ -302,7 +300,7 @@ export function PlayerPage() {
             <div className="player-frame">
               <div className="player-gradient">
                 <span className="eyebrow">Playback</span>
-                <strong>{selectedFile?.name || initialMedia.title}</strong>
+                <strong>{selectedFile.name}</strong>
                 <p>HLS output is not ready and the original file is not directly playable yet.</p>
               </div>
             </div>
@@ -354,10 +352,10 @@ export function PlayerPage() {
             ))}
           </div>
           <div className="player-side-actions">
-            <Link className="btn flex-1" to={`/torrents/${selectedFile?.torrentId || initialMedia.torrentId}`}>
+            <Link className="btn flex-1" to={`/torrents/${selectedFile.torrentId}`}>
               Torrent detail
             </Link>
-            <Button variant="primary" className="flex-1" onClick={() => setPartyOpen(true)}>
+            <Button variant="primary" className="flex-1" onClick={() => setPartyOpen(true)} disabled={!selectedFile}>
               Watch party
             </Button>
           </div>
@@ -456,11 +454,10 @@ function watchPartyURL(slug: string): string {
   return `${window.location.origin}${watchPartyPath(slug)}`;
 }
 
-function apiFileToPlayerFile(file: api.TorrentFile, torrentId: string): PlayerFile {
+function apiFileToPlayerFile(file: api.TorrentFile): PlayerFile {
   return {
     id: file.id,
-    source: "api",
-    torrentId,
+    torrentId: file.torrentId,
     name: file.name,
     size: file.sizeBytes > 0 ? formatBytes(file.sizeBytes) : "Pending",
     status: file.status,
@@ -469,22 +466,6 @@ function apiFileToPlayerFile(file: api.TorrentFile, torrentId: string): PlayerFi
     playable: (file.status === "done" || file.status === "processing") && Boolean(file.hlsPath),
     directPlayable: file.directPlayable,
     previewReady: file.progressPreview,
-  };
-}
-
-function mockFileToPlayerFile(file: (typeof torrentFiles)[number]): PlayerFile {
-  return {
-    id: file.id,
-    source: "mock",
-    torrentId: file.torrentId,
-    name: file.name,
-    size: file.size,
-    status: file.status,
-    codec: file.codec,
-    subtitles: file.subtitles,
-    playable: false,
-    directPlayable: false,
-    previewReady: false,
   };
 }
 

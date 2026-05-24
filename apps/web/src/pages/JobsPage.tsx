@@ -1,25 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import * as api from "../lib/api";
-import { Badge, Button, EmptyState, Input, Progress, StatCard } from "../components/ui";
+import { Badge, Button, EmptyState, Input, Progress, StatCard, StatSkeletonGrid, TableSkeletonRows } from "../components/ui";
 import { formatDate } from "../lib/format";
-import { type Job as MockJob, jobs as initialJobs } from "../lib/mock-data";
 
 const filters = ["all", "queued", "running", "succeeded", "failed", "canceled"];
 const pollableStatuses = new Set(["queued", "running"]);
 
 type LoadJobsOptions = {
   showLoading?: boolean;
-  fallbackToMock?: boolean;
 };
 
 type JobRow = {
   id: string;
-  source: "api" | "mock";
   type: string;
   typeTone: string;
   target: string;
-  status: api.JobStatus | MockJob["status"];
+  status: api.JobStatus;
   progress: number;
   attempts: string;
   worker: string;
@@ -40,26 +37,23 @@ export function JobsPage() {
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [usingMock, setUsingMock] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busyJobId, setBusyJobId] = useState("");
 
-  const loadJobs = useCallback(async ({ showLoading = true, fallbackToMock = true }: LoadJobsOptions = {}) => {
+  const loadJobs = useCallback(async ({ showLoading = true }: LoadJobsOptions = {}) => {
     if (showLoading) {
       setLoading(true);
     }
     try {
       const result = await api.listJobs();
       setJobs(result.map(apiJobToRow));
-      setUsingMock(false);
       setError("");
     } catch (err) {
-      if (fallbackToMock) {
-        setJobs(initialJobs.map(mockJobToRow));
-        setUsingMock(true);
-        setError(err instanceof Error ? err.message : "Unable to load jobs");
+      if (showLoading) {
+        setJobs([]);
       }
+      setError(err instanceof Error ? err.message : "Unable to load jobs");
     } finally {
       if (showLoading) {
         setLoading(false);
@@ -72,21 +66,17 @@ export function JobsPage() {
   }, [loadJobs]);
 
   useEffect(() => {
-    if (usingMock) {
-      return;
-    }
-
-    const hasActiveJob = jobs.some((job) => job.source === "api" && pollableStatuses.has(job.status));
+    const hasActiveJob = jobs.some((job) => pollableStatuses.has(job.status));
     if (!hasActiveJob) {
       return;
     }
 
     const intervalID = window.setInterval(() => {
-      void loadJobs({ showLoading: false, fallbackToMock: false });
+      void loadJobs({ showLoading: false });
     }, 5000);
 
     return () => window.clearInterval(intervalID);
-  }, [jobs, loadJobs, usingMock]);
+  }, [jobs, loadJobs]);
 
   const visible = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -107,29 +97,7 @@ export function JobsPage() {
     };
   }, [jobs]);
 
-  function updateMockJob(id: string, status: MockJob["status"]) {
-    setJobs((current) =>
-      current.map((job) =>
-        job.id === id && job.source === "mock"
-          ? {
-              ...job,
-              status,
-              progress: status === "queued" ? 0 : job.progress,
-              updatedAt: status === "queued" ? "retry queued" : job.updatedAt,
-              searchText: buildSearchText(job.type, job.target, status, job.worker, job.error),
-            }
-          : job,
-      ),
-    );
-  }
-
   async function retryJob(job: JobRow) {
-    if (job.source === "mock") {
-      updateMockJob(job.id, "queued");
-      setNotice({ tone: "warn", text: "Prototype job queued locally." });
-      return;
-    }
-
     setBusyJobId(job.id);
     try {
       const updated = await api.retryJob(job.id);
@@ -143,12 +111,6 @@ export function JobsPage() {
   }
 
   async function cancelJob(job: JobRow) {
-    if (job.source === "mock") {
-      updateMockJob(job.id, "canceled");
-      setNotice({ tone: "warn", text: "Prototype job canceled locally." });
-      return;
-    }
-
     setBusyJobId(job.id);
     try {
       const updated = await api.cancelJob(job.id);
@@ -172,18 +134,20 @@ export function JobsPage() {
       </div>
 
       {error ? (
-        <div className="alert alert-warn is-visible">
-          Using prototype jobs because the job API did not respond: {error}
-        </div>
+        <div className="alert alert-error is-visible">Unable to load jobs: {error}</div>
       ) : null}
       {notice ? <div className={`alert alert-${notice.tone} is-visible`}>{notice.text}</div> : null}
 
-      <div className="stats-row">
-        <StatCard label="Running" value={String(stats.running)} detail="workers claimed leases" />
-        <StatCard label="Queued" value={String(stats.queued)} detail={usingMock ? "prototype queue" : "available now"} />
-        <StatCard label="Succeeded" value={String(stats.succeeded)} detail="completed jobs" />
-        <StatCard label="Failed" value={String(stats.failed)} detail="needs retry" />
-      </div>
+      {loading ? (
+        <StatSkeletonGrid />
+      ) : (
+        <div className="stats-row">
+          <StatCard label="Running" value={String(stats.running)} detail="workers claimed leases" />
+          <StatCard label="Queued" value={String(stats.queued)} detail="available now" />
+          <StatCard label="Succeeded" value={String(stats.succeeded)} detail="completed jobs" />
+          <StatCard label="Failed" value={String(stats.failed)} detail="needs retry" />
+        </div>
+      )}
 
       <div className="toolbar">
         <div className="filters">
@@ -219,6 +183,7 @@ export function JobsPage() {
               </tr>
             </thead>
             <tbody>
+              {loading ? <TableSkeletonRows rows={5} columns={9} /> : null}
               {visible.map((job) => (
                 <tr key={job.id}>
                   <td>
@@ -254,7 +219,9 @@ export function JobsPage() {
             </tbody>
           </table>
         </div>
-        {visible.length === 0 ? <EmptyState title="No jobs">{loading ? "Loading queue records." : "No queue items match this view."}</EmptyState> : null}
+        {!loading && visible.length === 0 ? (
+          <EmptyState title="No jobs">{query || filter !== "all" ? "No queue items match this view." : "No processing jobs have been queued yet."}</EmptyState>
+        ) : null}
       </div>
     </section>
   );
@@ -270,7 +237,6 @@ function apiJobToRow(job: api.Job): JobRow {
 
   return {
     id: job.id,
-    source: "api",
     type,
     typeTone,
     target,
@@ -283,28 +249,6 @@ function apiJobToRow(job: api.Job): JobRow {
     updatedAt: formatDate(job.updatedAt),
     error: job.lastError,
     searchText: buildSearchText(type, job.type, target, job.status, worker, attempts, job.lastError),
-  };
-}
-
-function mockJobToRow(job: MockJob): JobRow {
-  const type = jobTypeLabel(job.type);
-  const typeTone = jobTypeTone(job.type);
-
-  return {
-    id: job.id,
-    source: "mock",
-    type,
-    typeTone,
-    target: job.target,
-    status: job.status,
-    progress: job.progress,
-    attempts: job.attempts,
-    worker: job.worker,
-    startedAt: job.status === "queued" ? "Not started" : job.updatedAt,
-    finishedAt: job.status === "succeeded" || job.status === "failed" || job.status === "canceled" ? job.updatedAt : "Not finished",
-    updatedAt: job.updatedAt,
-    error: job.error,
-    searchText: buildSearchText(type, job.type, job.target, job.status, job.worker, job.error),
   };
 }
 

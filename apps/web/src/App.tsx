@@ -67,7 +67,7 @@ function NotFoundRoute() {
       <section className="content">
         <div className="empty-state roomy">
           <strong>Screen not found</strong>
-          <p className="muted">The requested Streamize route does not exist in this prototype.</p>
+          <p className="muted">The requested Streamize route does not exist.</p>
           <button className="btn btn-primary" onClick={() => navigate("/library")}>
             Back to library
           </button>

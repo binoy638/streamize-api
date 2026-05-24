@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import * as api from "../lib/api";
-import { Badge, Button, EmptyState, Progress } from "../components/ui";
+import { Badge, Button, DetailSkeleton, EmptyState, Progress } from "../components/ui";
 import { formatBytes } from "../lib/format";
 
 export function LibraryDetailPage() {
@@ -40,6 +40,10 @@ export function LibraryDetailPage() {
     } finally {
       setBusyFileId("");
     }
+  }
+
+  if (loading && !item) {
+    return <DetailSkeleton />;
   }
 
   if (error) {

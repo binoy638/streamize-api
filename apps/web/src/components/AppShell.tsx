@@ -171,7 +171,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </label>
           <div className="topbar-actions">
             <span className={`badge ${apiUnavailable ? "offline" : "online"}`}>
-              {apiUnavailable ? "Prototype" : "Online"}
+              {apiUnavailable ? "Offline" : "Online"}
             </span>
             <span className="badge">{user?.role === "admin" ? "Admin" : "Viewer"}</span>
           </div>

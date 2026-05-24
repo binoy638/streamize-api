@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 
 import * as api from "../lib/api";
-import { Badge, Button, Field, Input, Progress, Select, StatCard } from "../components/ui";
-import { settings } from "../lib/mock-data";
+import { Badge, EmptyState, Field, Input, StatCard, StatSkeletonGrid } from "../components/ui";
 
 export function SettingsPage() {
   const [health, setHealth] = useState<api.Health | null>(null);
   const [healthError, setHealthError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
@@ -18,7 +18,8 @@ export function SettingsPage() {
       .catch((error: unknown) => {
         setHealth(null);
         setHealthError(error instanceof Error ? error.message : "API unavailable");
-      });
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -27,65 +28,56 @@ export function SettingsPage() {
         <div>
           <span className="eyebrow">System settings</span>
           <h1>Server paths, qBittorrent connection, retention, and processing defaults.</h1>
-          <p>Mock settings mirror the backend roadmap while health reads the current API if it is running.</p>
+          <p>Runtime health is read from the API. Server configuration is managed by the backend environment.</p>
         </div>
       </div>
 
-      <div className="stats-row">
-        <StatCard label="API health" value={health ? "Online" : "Prototype"} detail={healthError || "reachable"} />
-        <StatCard label="qBittorrent" value={settings.qbittorrent} detail="Web API session" />
-        <StatCard label="Workers" value={String(settings.workers)} detail="processing slots" />
-        <StatCard label="Storage" value={settings.storageUsed} detail={`${settings.storagePercent}% used`} />
-      </div>
+      {healthError ? <div className="alert alert-error is-visible">Unable to load API health: {healthError}</div> : null}
+
+      {loading ? (
+        <StatSkeletonGrid />
+      ) : (
+        <div className="stats-row">
+          <StatCard label="API health" value={health ? "Online" : "Offline"} detail={health?.status || healthError || "unreachable"} />
+          <StatCard label="Database" value={health?.database || "Unknown"} detail="health endpoint" />
+          <StatCard label="Service" value={health?.service || "Streamize"} detail="reported by API" />
+          <StatCard label="Version" value={health?.version || "Not reported"} detail="build metadata" />
+        </div>
+      )}
 
       <div className="layout-grid equal">
         <section className="panel">
           <div className="panel-header">
             <div>
-              <div className="panel-title">Storage</div>
-              <p className="muted">Local media roots and database path.</p>
+              <div className="panel-title">API Status</div>
+              <p className="muted">Health endpoint response.</p>
             </div>
-            <Badge tone={health ? "online" : "offline"}>{health ? "Online" : "Prototype"}</Badge>
+            <Badge tone={health ? "online" : "offline"}>{health ? "Online" : "Offline"}</Badge>
           </div>
           <div className="form-grid">
-            <Field label="Media root">
-              <Input readOnly value={settings.mediaRoot} />
+            <Field label="Service">
+              <Input readOnly value={health?.service || ""} placeholder={loading ? "Loading" : "Unavailable"} />
             </Field>
-            <Field label="SQLite path">
-              <Input readOnly value={settings.databasePath} />
+            <Field label="Database">
+              <Input readOnly value={health?.database || ""} placeholder={loading ? "Loading" : "Unavailable"} />
             </Field>
-            <div className="progress-row">
-              <Progress value={settings.storagePercent} />
-              <span>{settings.storagePercent}%</span>
-            </div>
+            <Field label="Version">
+              <Input readOnly value={health?.version || ""} placeholder={loading ? "Loading" : "Not reported"} />
+            </Field>
           </div>
         </section>
 
         <section className="panel">
           <div className="panel-header">
             <div>
-              <div className="panel-title">Processing</div>
-              <p className="muted">Defaults for HLS, subtitles, thumbnails, and retention.</p>
+              <div className="panel-title">Configuration</div>
+              <p className="muted">Server-managed values.</p>
             </div>
           </div>
-          <div className="form-grid">
-            <Field label="Retention policy">
-              <Select defaultValue="keep">
-                <option value="keep">Keep originals after HLS</option>
-                <option value="delete_after_hls">Delete originals after HLS</option>
-              </Select>
-            </Field>
-            <Field label="Worker slots">
-              <Input defaultValue={settings.workers} type="number" min="1" max="8" />
-            </Field>
-            <Field label="Subtitle extraction">
-              <Select defaultValue="auto">
-                <option value="auto">Extract embedded tracks automatically</option>
-                <option value="manual">Manual only</option>
-              </Select>
-            </Field>
-            <Button variant="primary">Save mock settings</Button>
-          </div>
+          <EmptyState title="No editable settings">
+            Configuration values are not exposed by the API yet. This page no longer renders placeholder server paths,
+            worker counts, or storage usage.
+          </EmptyState>
         </section>
       </div>
     </section>

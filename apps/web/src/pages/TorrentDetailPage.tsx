@@ -4,17 +4,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import * as api from "../lib/api";
 import { DeleteTorrentModal } from "../components/DeleteTorrentModal";
-import { Badge, Button, EmptyState, Progress, StatCard } from "../components/ui";
+import { Badge, Button, DetailSkeleton, EmptyState, Progress, StatCard } from "../components/ui";
 import { formatBytes, formatDate } from "../lib/format";
-import {
-  filesForTorrent,
-  findTorrent,
-  jobs as mockJobs,
-  shares,
-  type Job as MockJob,
-  type Torrent as MockTorrent,
-  type TorrentFile as MockTorrentFile,
-} from "../lib/mock-data";
 
 const tabs = ["files", "jobs", "subtitles", "shares", "overview"];
 const pollableStatuses = new Set(["added", "queued", "downloading", "processing"]);
@@ -24,7 +15,7 @@ const pollableJobStatuses = new Set(["queued", "running"]);
 type TorrentDetail = {
   id: string;
   name: string;
-  status: api.TorrentStatus | MockTorrent["status"];
+  status: api.TorrentStatus;
   size: string;
   progress: number;
   peers: string;
@@ -40,7 +31,7 @@ type FileRow = {
   id: string;
   name: string;
   size: string;
-  status: api.TorrentFileStatus | MockTorrentFile["status"];
+  status: api.TorrentFileStatus;
   progress: number;
   codec: string;
   subtitles: string;
@@ -51,7 +42,7 @@ type JobRow = {
   id: string;
   type: string;
   target: string;
-  status: api.JobStatus | MockJob["status"];
+  status: api.JobStatus;
   progress: number;
   worker: string;
   startedAt: string;
@@ -59,25 +50,29 @@ type JobRow = {
   updatedAt: string;
 };
 
+type SubtitleRow = {
+  id: string;
+  fileName: string;
+  title: string;
+  language: string;
+};
+
 export function TorrentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const mockTorrent = useMemo(() => findTorrent(id), [id]);
-  const mockFiles = useMemo(() => filesForTorrent(mockTorrent.id).map(mockFileToRow), [mockTorrent.id]);
-  const mockDetailJobs = useMemo(() => mockJobs.slice(0, 4).map(mockJobToDetailRow), []);
-  const [torrent, setTorrent] = useState<TorrentDetail>(() => mockTorrentToDetail(mockTorrent));
-  const [files, setFiles] = useState<FileRow[]>(() => mockFiles);
-  const [detailJobs, setDetailJobs] = useState<JobRow[]>(() => mockDetailJobs);
+  const [torrent, setTorrent] = useState<TorrentDetail | null>(null);
+  const [files, setFiles] = useState<FileRow[]>([]);
+  const [detailJobs, setDetailJobs] = useState<JobRow[]>([]);
+  const [subtitles, setSubtitles] = useState<SubtitleRow[]>([]);
   const [activeTab, setActiveTab] = useState("files");
   const [loading, setLoading] = useState(true);
-  const [usingMock, setUsingMock] = useState(true);
   const [error, setError] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
   const loadDetail = useCallback(
-    async ({ showLoading = true, fallbackToMock = true }: { showLoading?: boolean; fallbackToMock?: boolean } = {}) => {
+    async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
       if (showLoading) {
         setLoading(true);
       }
@@ -89,28 +84,41 @@ export function TorrentDetailPage() {
           throw new Error("Torrent was not found in the API.");
         }
 
-        const apiFiles = await api.listTorrentFiles(apiTorrent.id);
-        const apiJobs = await api.listJobs();
+        const [apiFiles, apiJobs] = await Promise.all([
+          api.listTorrentFiles(apiTorrent.id),
+          api.listJobs(),
+        ]);
+        const subtitleResults = await Promise.allSettled(
+          apiFiles.map(async (file) => {
+            const records = await api.listSubtitles(file.id);
+            return records.map((subtitle): SubtitleRow => ({
+              id: subtitle.id,
+              fileName: file.name,
+              title: subtitle.title || subtitle.fileName,
+              language: subtitle.language,
+            }));
+          }),
+        );
         setTorrent(apiTorrentToDetail(apiTorrent));
         setFiles(apiFiles.map(apiFileToRow));
         setDetailJobs(apiJobs.filter((job) => job.torrentId === apiTorrent.id).map(apiJobToDetailRow));
-        setUsingMock(false);
+        setSubtitles(subtitleResults.flatMap((result) => (result.status === "fulfilled" ? result.value : [])));
         setError("");
       } catch (err) {
-        if (fallbackToMock) {
-          setTorrent(mockTorrentToDetail(mockTorrent));
-          setFiles(mockFiles);
-          setDetailJobs(mockDetailJobs);
-          setUsingMock(true);
-          setError(err instanceof Error ? err.message : "Unable to load torrent detail.");
+        if (showLoading) {
+          setTorrent(null);
+          setFiles([]);
+          setDetailJobs([]);
+          setSubtitles([]);
         }
+        setError(err instanceof Error ? err.message : "Unable to load torrent detail.");
       } finally {
         if (showLoading) {
           setLoading(false);
         }
       }
     },
-    [id, mockDetailJobs, mockFiles, mockTorrent],
+    [id],
   );
 
   useEffect(() => {
@@ -120,16 +128,16 @@ export function TorrentDetailPage() {
   useEffect(() => {
     const hasActiveFiles = files.some((file) => pollableFileStatuses.has(file.status));
     const hasActiveJobs = detailJobs.some((job) => pollableJobStatuses.has(job.status));
-    if (usingMock || (!pollableStatuses.has(torrent.status) && !hasActiveFiles && !hasActiveJobs)) {
+    if (!torrent || (!pollableStatuses.has(torrent.status) && !hasActiveFiles && !hasActiveJobs)) {
       return;
     }
 
     const intervalID = window.setInterval(() => {
-      void loadDetail({ showLoading: false, fallbackToMock: false });
+      void loadDetail({ showLoading: false });
     }, 5000);
 
     return () => window.clearInterval(intervalID);
-  }, [detailJobs, files, loadDetail, torrent.status, usingMock]);
+  }, [detailJobs, files, loadDetail, torrent]);
 
   const jobStats = useMemo(() => {
     const failed = detailJobs.filter((job) => job.status === "failed").length;
@@ -141,12 +149,13 @@ export function TorrentDetailPage() {
   }, [detailJobs]);
 
   async function deleteCurrentTorrent(options: Required<api.DeleteTorrentOptions>) {
+    if (!torrent) {
+      return;
+    }
     setDeleteBusy(true);
     setDeleteError("");
     try {
-      if (!usingMock) {
-        await api.deleteTorrent(torrent.id, options);
-      }
+      await api.deleteTorrent(torrent.id, options);
       navigate("/torrents");
     } catch (err) {
       setDeleteOpen(false);
@@ -156,11 +165,22 @@ export function TorrentDetailPage() {
     }
   }
 
+  if (loading && !torrent) {
+    return <DetailSkeleton />;
+  }
+
+  if (!torrent) {
+    return (
+      <section className="content">
+        {error ? <div className="alert alert-error is-visible">{error}</div> : null}
+        <EmptyState title="Torrent not found">The torrent detail could not be loaded from the API.</EmptyState>
+      </section>
+    );
+  }
+
   return (
     <section className="content">
-      {usingMock && error ? (
-        <div className="alert alert-warn is-visible">Using prototype torrent detail because the API detail could not load: {error}</div>
-      ) : null}
+      {error ? <div className="alert alert-error is-visible">Unable to refresh torrent detail: {error}</div> : null}
       {deleteError ? <div className="alert alert-error is-visible">{deleteError}</div> : null}
 
       <div className="detail-hero">
@@ -199,7 +219,7 @@ export function TorrentDetailPage() {
       <div className="stats-row">
         <StatCard label="Files" value={String(files.length)} detail={loading ? "loading candidates" : "video candidates"} />
         <StatCard label="Jobs" value={String(detailJobs.length)} detail={jobStats} />
-        <StatCard label="Subtitles" value="6" detail="detected or extracted" />
+        <StatCard label="Subtitles" value={String(subtitles.length)} detail="detected or extracted" />
         <StatCard label="Retention" value={torrent.retention} detail="originals retained" />
       </div>
 
@@ -297,29 +317,22 @@ export function TorrentDetailPage() {
         ) : null}
 
         {activeTab === "subtitles" ? (
-          <div className="overview-grid">
-            <Info title="English" value="Embedded SRT extracted" />
-            <Info title="Spanish" value="Uploaded VTT" />
-            <Info title="Japanese" value="Queued for extraction" />
-            <Info title="Default" value="English forced off" />
+          <div className="timeline-list">
+            {subtitles.map((subtitle) => (
+              <div className="timeline-item" key={subtitle.id}>
+                <Badge tone="done">{subtitle.language || "track"}</Badge>
+                <div>
+                  <strong>{subtitle.title}</strong>
+                  <p className="muted">{subtitle.fileName}</p>
+                </div>
+              </div>
+            ))}
+            {subtitles.length === 0 ? <EmptyState title="No subtitles">No subtitle tracks are attached to these files yet.</EmptyState> : null}
           </div>
         ) : null}
 
         {activeTab === "shares" ? (
-          <div className="timeline-list">
-            {shares.slice(0, 2).map((share) => (
-              <div className="timeline-item" key={share.id}>
-                <Badge tone={share.status}>{share.status}</Badge>
-                <div>
-                  <strong>{share.title}</strong>
-                  <p className="muted">
-                    {share.scope} · expires {share.expiresAt}
-                  </p>
-                </div>
-                <Button>Copy</Button>
-              </div>
-            ))}
-          </div>
+          <EmptyState title="Shares are managed separately">Open the Shares page to create, copy, or revoke public links.</EmptyState>
         ) : null}
       </div>
 
@@ -357,23 +370,6 @@ function apiTorrentToDetail(torrent: api.Torrent): TorrentDetail {
   };
 }
 
-function mockTorrentToDetail(torrent: MockTorrent): TorrentDetail {
-  return {
-    id: torrent.id,
-    name: torrent.name,
-    status: torrent.status,
-    size: torrent.size,
-    progress: torrent.progress,
-    peers: String(torrent.peers),
-    addedAt: torrent.addedAt,
-    eta: torrent.eta,
-    infoHash: "a91d72cf",
-    qbittorrentHash: "QBT-7A91D2",
-    retention: "Keep",
-    posterHue: hueFromString(torrent.id),
-  };
-}
-
 function apiFileToRow(file: api.TorrentFile): FileRow {
   return {
     id: file.id,
@@ -384,19 +380,6 @@ function apiFileToRow(file: api.TorrentFile): FileRow {
     codec: codecLabel(file),
     subtitles: file.progressPreview ? "Preview ready" : "Pending",
     canOpen: ((file.status === "done" || file.status === "processing") && Boolean(file.hlsPath)) || file.directPlayable,
-  };
-}
-
-function mockFileToRow(file: MockTorrentFile): FileRow {
-  return {
-    id: file.id,
-    name: file.name,
-    size: file.size,
-    status: file.status,
-    progress: file.progress,
-    codec: file.codec,
-    subtitles: `${file.subtitles} tracks`,
-    canOpen: true,
   };
 }
 
@@ -411,20 +394,6 @@ function apiJobToDetailRow(job: api.Job): JobRow {
     startedAt: formatJobTime(job.startedAt, "not started"),
     finishedAt: formatJobTime(job.finishedAt, job.status === "running" ? "running" : "not finished"),
     updatedAt: formatDate(job.updatedAt),
-  };
-}
-
-function mockJobToDetailRow(job: MockJob): JobRow {
-  return {
-    id: job.id,
-    type: job.type,
-    target: job.target,
-    status: job.status,
-    progress: job.progress,
-    worker: job.worker,
-    startedAt: job.status === "queued" ? "not started" : job.updatedAt,
-    finishedAt: job.status === "succeeded" || job.status === "failed" || job.status === "canceled" ? job.updatedAt : "not finished",
-    updatedAt: job.updatedAt,
   };
 }
 

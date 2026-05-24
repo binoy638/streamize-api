@@ -9,14 +9,12 @@ import {
 } from "react";
 
 import * as api from "./api";
-import { demoUser } from "./mock-data";
 
 type AuthContextValue = {
   user: api.User | null;
   loading: boolean;
   apiUnavailable: boolean;
   signIn: (username: string, password: string) => Promise<void>;
-  signInPrototype: () => void;
   signOut: () => Promise<void>;
 };
 
@@ -28,13 +26,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [apiUnavailable, setApiUnavailable] = useState(false);
 
   useEffect(() => {
-    const localDemo = window.localStorage.getItem("streamize:prototype-user");
-    if (localDemo) {
-      setUser(demoUser);
-      setLoading(false);
-      return;
-    }
-
     api
       .getMe()
       .then((currentUser) => {
@@ -50,22 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleSignIn = useCallback(async (username: string, password: string) => {
     const currentUser = await api.signIn(username, password);
-    window.localStorage.removeItem("streamize:prototype-user");
     setUser(currentUser);
     setApiUnavailable(false);
   }, []);
 
-  const signInPrototype = useCallback(() => {
-    window.localStorage.setItem("streamize:prototype-user", "admin");
-    setUser(demoUser);
-  }, []);
-
   const handleSignOut = useCallback(async () => {
-    window.localStorage.removeItem("streamize:prototype-user");
     try {
       await api.signOut();
     } catch {
-      // Prototype sessions can sign out without a running backend.
+      // A stale browser session can still be cleared locally if the API is unreachable.
     }
     setUser(null);
   }, []);
@@ -76,10 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       apiUnavailable,
       signIn: handleSignIn,
-      signInPrototype,
       signOut: handleSignOut,
     }),
-    [apiUnavailable, handleSignIn, handleSignOut, loading, signInPrototype, user],
+    [apiUnavailable, handleSignIn, handleSignOut, loading, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

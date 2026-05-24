@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Badge, Button, EmptyState, Input, LoadingScreen, StatCard } from "../components/ui";
+import { Badge, Button, EmptyState, Input, StatCard, StatSkeletonGrid, TableSkeletonRows } from "../components/ui";
 import { CreateShareModal } from "../components/CreateShareModal";
 import * as api from "../lib/api";
 
@@ -63,10 +63,6 @@ export function SharesPage() {
     }
   }
 
-  if (loading) {
-    return <LoadingScreen label="Loading shares" />;
-  }
-
   return (
     <section className="content">
       <div className="screen-header">
@@ -85,11 +81,15 @@ export function SharesPage() {
       {error ? <div className="alert alert-error is-visible">{error}</div> : null}
       {notice ? <div className="alert alert-success is-visible">{notice}</div> : null}
 
-      <div className="stats-row">
-        <StatCard label="Active shares" value={String(stats.active)} detail="publicly reachable" />
-        <StatCard label="Expired" value={String(stats.expired)} detail="no longer working" />
-        <StatCard label="Total" value={String(stats.total)} detail="links created" />
-      </div>
+      {loading ? (
+        <StatSkeletonGrid count={3} />
+      ) : (
+        <div className="stats-row">
+          <StatCard label="Active shares" value={String(stats.active)} detail="publicly reachable" />
+          <StatCard label="Expired" value={String(stats.expired)} detail="no longer working" />
+          <StatCard label="Total" value={String(stats.total)} detail="links created" />
+        </div>
+      )}
 
       <div className="toolbar">
         <div className="filters">
@@ -121,6 +121,7 @@ export function SharesPage() {
               </tr>
             </thead>
             <tbody>
+              {loading ? <TableSkeletonRows rows={4} columns={5} /> : null}
               {visible.map((share) => (
                 <tr key={share.id}>
                   <td>
@@ -153,7 +154,7 @@ export function SharesPage() {
             </tbody>
           </table>
         </div>
-        {visible.length === 0 ? (
+        {!loading && visible.length === 0 ? (
           <EmptyState title="No shares">
             {shares.length === 0
               ? "Create a share link to let anyone watch a video without signing in."

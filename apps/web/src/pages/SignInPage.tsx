@@ -6,7 +6,7 @@ import { Button, Field, Input } from "../components/ui";
 import logoUrl from "../../assets/logo.png";
 
 export function SignInPage() {
-  const { signIn, signInPrototype, apiUnavailable } = useAuth();
+  const { signIn, apiUnavailable } = useAuth();
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -29,11 +29,6 @@ export function SignInPage() {
     }
   }
 
-  function openPrototype() {
-    signInPrototype();
-    navigate("/library", { replace: true });
-  }
-
   return (
     <main className="auth-page">
       <section className="auth-card" aria-labelledby="signin-title">
@@ -53,7 +48,7 @@ export function SignInPage() {
           {message ? <div className="alert alert-error is-visible">{message}</div> : null}
           {apiUnavailable ? (
             <div className="alert alert-warn is-visible">
-              API is not reachable. The prototype button opens the full UI with mock media data.
+              API is not reachable. Start the Streamize API, then sign in with a server account.
             </div>
           ) : null}
           <Field label="Username">
@@ -75,9 +70,6 @@ export function SignInPage() {
           </Field>
           <Button variant="primary" type="submit" disabled={busy}>
             {busy ? "Signing in..." : "Sign in"}
-          </Button>
-          <Button type="button" onClick={openPrototype}>
-            Open library prototype
           </Button>
         </form>
       </section>
